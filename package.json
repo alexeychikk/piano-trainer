@@ -1,0 +1,117 @@
+{
+  "name": "piano-trainer",
+  "version": "1.0.0",
+  "description": "Learn notes and chords with your MIDI keyboard",
+  "author": {
+    "email": "alexdarkmm@gmail.com",
+    "name": "Alex Zinkevych",
+    "url": "https://alexeychikk.github.io"
+  },
+  "scripts": {
+    "start": "electron-esbuild dev",
+    "build": "electron-esbuild build",
+    "package": "electron-builder",
+    "prepare": "husky install",
+    "lint": "run-s lint:ts lint:fix",
+    "lint:fix": "run-s lint:eslint lint:prettier",
+    "lint:eslint": "eslint ./ --fix",
+    "lint:prettier": "prettier ./ --write",
+    "lint:ts": "tsc",
+    "lint:staged": "lint-staged",
+    "lint:commit": "commitlint --edit"
+  },
+  "dependencies": {
+    "@material-ui/core": "^4.12.1",
+    "@material-ui/icons": "^4.11.2",
+    "@material-ui/styles": "^4.11.4",
+    "clsx": "^1.1.1",
+    "easymidi": "^2.0.5",
+    "react": "^17.0.2",
+    "react-dom": "^17.0.2",
+    "react-router-dom": "^5.2.0",
+    "unstated-next": "^1.1.0"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^12.1.4",
+    "@commitlint/config-conventional": "^12.1.4",
+    "@esbuild-plugins/tsconfig-paths": "0.0.4",
+    "@types/node": "^14.17.5",
+    "@types/react": "^17.0.14",
+    "@types/react-dom": "^17.0.9",
+    "@types/react-router-dom": "^5.1.8",
+    "@typescript-eslint/eslint-plugin": "^4.28.2",
+    "@typescript-eslint/parser": "^4.28.2",
+    "@vitejs/plugin-react-refresh": "^1.3.5",
+    "electron": "^12.0.14",
+    "electron-builder": "^22.11.8",
+    "electron-esbuild": "^1.5.1",
+    "electron-util": "^0.17.0",
+    "esbuild": "^0.12.15",
+    "eslint": "^7.30.0",
+    "eslint-config-prettier": "^8.3.0",
+    "eslint-plugin-eslint-comments": "^3.2.0",
+    "eslint-plugin-import": "^2.23.4",
+    "eslint-plugin-react": "^7.24.0",
+    "husky": "^7.0.1",
+    "jest": "^27.0.6",
+    "lint-staged": "^11.0.0",
+    "npm-run-all": "^4.1.5",
+    "prettier": "^2.3.2",
+    "ts-jest": "^27.0.3",
+    "typescript": "^4.3.5",
+    "vite": "^2.4.1",
+    "vite-tsconfig-paths": "^3.3.13"
+  },
+  "lint-staged": {
+    "**/*.{js,jsx,ts,tsx}": [
+      "eslint --fix",
+      "prettier --write",
+      "git add"
+    ],
+    "**/*.{json,md,html,css}": [
+      "prettier --write",
+      "git add"
+    ]
+  },
+  "build": {
+    "appId": "alex.zinkevych.pianotrainer",
+    "productName": "piano-trainer",
+    "extraMetadata": {
+      "name": "piano-trainer",
+      "main": "main.js"
+    },
+    "files": [
+      {
+        "from": ".",
+        "filter": [
+          "package.json"
+        ]
+      },
+      {
+        "from": "dist/main"
+      },
+      {
+        "from": "dist/renderer"
+      }
+    ],
+    "win": {
+      "target": [
+        "zip"
+      ]
+    },
+    "mac": {
+      "target": [
+        "zip"
+      ]
+    },
+    "linux": {
+      "target": [
+        "zip"
+      ]
+    },
+    "directories": {
+      "buildResources": "resources"
+    },
+    "publish": null
+  }
+}
