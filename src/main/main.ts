@@ -1,27 +1,29 @@
 import path from 'path';
 import { format } from 'url';
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, Menu } from 'electron';
 import { is } from 'electron-util';
-
-let win: BrowserWindow | null = null;
+import { ServiceRegistry } from '@src/services/main';
 
 async function createWindow() {
   const isDev = is.development;
 
-  win = new BrowserWindow({
+  const win = new BrowserWindow({
     width: 800,
     height: 820,
     minHeight: 600,
-    minWidth: 650,
+    minWidth: 480,
     webPreferences: {
       nodeIntegration: true,
       devTools: true,
-      enableRemoteModule: false,
+      enableRemoteModule: true,
       contextIsolation: false,
     },
     show: false,
     darkTheme: true,
+    center: true,
   });
+
+  if (!isDev) Menu.setApplicationMenu(null);
 
   if (isDev) {
     void win.loadURL('http://localhost:9080');
@@ -36,7 +38,7 @@ async function createWindow() {
   }
 
   win.on('closed', () => {
-    win = null;
+    // do something
   });
 
   win.webContents.on('devtools-opened', () => {
@@ -47,22 +49,26 @@ async function createWindow() {
     win!.show();
     win!.focus();
 
-    if (isDev) {
-      win!.webContents.openDevTools({ mode: 'bottom' });
-    }
+    if (isDev) win!.webContents.openDevTools({ mode: 'bottom' });
+  });
+
+  return win;
+}
+
+function bootstrap() {
+  const serviceRegistry = new ServiceRegistry();
+
+  const init = async () => {
+    const win = await createWindow();
+    await serviceRegistry.init({ app, win });
+  };
+
+  app.on('ready', init);
+
+  app.on('window-all-closed', async () => {
+    await serviceRegistry.destroy();
+    app.quit();
   });
 }
 
-app.on('ready', createWindow);
-
-app.on('window-all-closed', () => {
-  if (!is.macos) {
-    app.quit();
-  }
-});
-
-app.on('activate', () => {
-  if (win === null && app.isReady()) {
-    void createWindow();
-  }
-});
+bootstrap();

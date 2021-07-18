@@ -1,13 +1,6 @@
-import {
-  AppBar,
-  Hidden,
-  IconButton,
-  Toolbar,
-  Typography,
-} from '@material-ui/core';
+import { AppBar, Hidden, IconButton, Toolbar } from '@material-ui/core';
 import { Menu as MenuIcon } from '@material-ui/icons';
 import React from 'react';
-import { Link } from 'react-router-dom';
 import { Navigation } from '../Navigation';
 import { useStyles } from './MainAppBar.styles';
 
@@ -23,7 +16,7 @@ const MainAppBarBase: React.FC<MainAppBarProps> = (props) => {
     <AppBar position="fixed" className={classes.appBar} elevation={0}>
       <Toolbar className={classes.toolbar}>
         <div className={classes.headingWrapper}>
-          <Hidden mdUp>
+          <Hidden smUp>
             <IconButton
               color="inherit"
               aria-label="open navigation drawer"
@@ -32,11 +25,8 @@ const MainAppBarBase: React.FC<MainAppBarProps> = (props) => {
               <MenuIcon />
             </IconButton>
           </Hidden>
-          <Typography className={classes.myName} variant="subtitle1">
-            <Link to="/">Piano Trainer</Link>
-          </Typography>
         </div>
-        <Hidden smDown>
+        <Hidden xsDown>
           <Navigation className={classes.navigation} />
         </Hidden>
       </Toolbar>

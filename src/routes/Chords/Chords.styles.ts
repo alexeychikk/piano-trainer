@@ -1,7 +1,9 @@
 import { createStyles, makeStyles } from '@material-ui/core';
 
-export const useStyles = makeStyles(() =>
+export const useStyles = makeStyles((theme) =>
   createStyles({
-    block: {},
+    chords: {
+      padding: theme.spacing(0, 2),
+    },
   }),
 );

@@ -11,7 +11,11 @@ module.exports = {
   bundle: true,
   target: 'node14.16.0', // electron version target
   loader: {
-    '.ts': 'ts',
+    '.png': 'dataurl',
+    '.svg': 'dataurl',
   },
+  sourcemap: false,
+  minify: true,
   plugins: [TsconfigPathsPlugin({ tsconfig: 'tsconfig.json' })],
+  external: ['easymidi'],
 };

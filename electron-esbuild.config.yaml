@@ -6,5 +6,5 @@ mainConfig:
 rendererConfig:
   type: vite
   path: vite.config.js
-  src: src/renderer/main.ts
+  src: src/renderer/index.tsx
   output: dist/renderer

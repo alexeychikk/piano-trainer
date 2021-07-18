@@ -1,7 +1,7 @@
 import { Drawer, Hidden } from '@material-ui/core';
 import clsx from 'clsx';
 import React from 'react';
-import { MobileDrawer } from '@src/components/MobileDrawer';
+import { MobileDrawer } from '@src/components/common/MobileDrawer';
 import { useStyles } from './ResponsiveDrawer.styles';
 
 export interface ResponsiveDrawerProps {
@@ -17,7 +17,7 @@ const ResponsiveDrawerBase: React.FC<ResponsiveDrawerProps> = (props) => {
 
   return (
     <nav className={clsx(classes.responsiveDrawer, props.className)}>
-      <Hidden mdUp>
+      <Hidden smUp>
         <MobileDrawer
           open={props.isMobileOpen}
           onOpen={props.onMobileOpen}
@@ -27,7 +27,7 @@ const ResponsiveDrawerBase: React.FC<ResponsiveDrawerProps> = (props) => {
         </MobileDrawer>
       </Hidden>
 
-      <Hidden smDown implementation="css">
+      <Hidden xsDown implementation="css">
         <Drawer
           classes={{
             paper: classes.drawerPaper,

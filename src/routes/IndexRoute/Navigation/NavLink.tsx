@@ -1,6 +1,6 @@
 import { Typography } from '@material-ui/core';
 import React from 'react';
-import { NavLink as BaseNavLink } from '@src/components/NavLink';
+import { NavLink as BaseNavLink } from '@src/components/common/NavLink';
 import { useStyles } from './NavLink.styles';
 
 interface NavLinkProps {

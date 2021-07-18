@@ -1,8 +1,8 @@
 import type { ListItemProps } from '@material-ui/core';
 import { ListItem } from '@material-ui/core';
 import React from 'react';
-import type { NavLinkProps } from '@src/components/NavLink';
-import { NavLink } from '@src/components/NavLink';
+import type { NavLinkProps } from '@src/components/common/NavLink';
+import { NavLink } from '@src/components/common/NavLink';
 import { useStyles } from './ListItemLink.styles';
 
 export interface ListItemLinkProps extends NavLinkProps {

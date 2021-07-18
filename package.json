@@ -11,7 +11,9 @@
     "start": "electron-esbuild dev",
     "build": "electron-esbuild build",
     "package": "electron-builder",
+    "make": "run-s build package",
     "prepare": "husky install",
+    "postinstall": "electron-builder install-app-deps",
     "lint": "run-s lint:ts lint:fix",
     "lint:fix": "run-s lint:eslint lint:prettier",
     "lint:eslint": "eslint ./ --fix",
@@ -21,46 +23,51 @@
     "lint:commit": "commitlint --edit"
   },
   "dependencies": {
-    "@material-ui/core": "^4.12.1",
-    "@material-ui/icons": "^4.11.2",
-    "@material-ui/styles": "^4.11.4",
-    "clsx": "^1.1.1",
-    "easymidi": "^2.0.5",
-    "react": "^17.0.2",
-    "react-dom": "^17.0.2",
-    "react-router-dom": "^5.2.0",
-    "unstated-next": "^1.1.0"
+    "easymidi": "^2.0.5"
   },
   "devDependencies": {
     "@commitlint/cli": "^12.1.4",
     "@commitlint/config-conventional": "^12.1.4",
     "@esbuild-plugins/tsconfig-paths": "0.0.4",
+    "@material-ui/core": "^4.12.1",
+    "@material-ui/icons": "^4.11.2",
+    "@material-ui/styles": "^4.11.4",
+    "@tonaljs/tonal": "^4.6.2",
     "@types/node": "^14.17.5",
-    "@types/react": "^17.0.14",
     "@types/react-dom": "^17.0.9",
     "@types/react-router-dom": "^5.1.8",
+    "@types/react": "^17.0.14",
     "@typescript-eslint/eslint-plugin": "^4.28.2",
     "@typescript-eslint/parser": "^4.28.2",
     "@vitejs/plugin-react-refresh": "^1.3.5",
-    "electron": "^12.0.14",
+    "clsx": "^1.1.1",
     "electron-builder": "^22.11.8",
     "electron-esbuild": "^1.5.1",
+    "electron-store": "^8.0.0",
     "electron-util": "^0.17.0",
+    "electron": "^12.0.14",
     "esbuild": "^0.12.15",
-    "eslint": "^7.30.0",
     "eslint-config-prettier": "^8.3.0",
     "eslint-plugin-eslint-comments": "^3.2.0",
     "eslint-plugin-import": "^2.23.4",
     "eslint-plugin-react": "^7.24.0",
+    "eslint": "^7.30.0",
     "husky": "^7.0.1",
     "jest": "^27.0.6",
     "lint-staged": "^11.0.0",
     "npm-run-all": "^4.1.5",
     "prettier": "^2.3.2",
+    "react-dom": "^17.0.2",
+    "react-piano": "^3.1.3",
+    "react-router-dom": "^5.2.0",
+    "react-use": "^17.2.4",
+    "react": "^17.0.2",
     "ts-jest": "^27.0.3",
     "typescript": "^4.3.5",
-    "vite": "^2.4.1",
-    "vite-tsconfig-paths": "^3.3.13"
+    "unstated-next": "^1.1.0",
+    "vite-plugin-svgr": "^0.3.0",
+    "vite-tsconfig-paths": "^3.3.13",
+    "vite": "^2.4.1"
   },
   "lint-staged": {
     "**/*.{js,jsx,ts,tsx}": [
@@ -96,17 +103,17 @@
     ],
     "win": {
       "target": [
-        "zip"
+        "nsis"
       ]
     },
     "mac": {
       "target": [
-        "zip"
+        "dmg"
       ]
     },
     "linux": {
       "target": [
-        "zip"
+        "AppImage"
       ]
     },
     "directories": {

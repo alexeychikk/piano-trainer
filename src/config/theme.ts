@@ -3,7 +3,6 @@ import createBreakpoints from '@material-ui/core/styles/createBreakpoints';
 import createPalette from '@material-ui/core/styles/createPalette';
 
 const palette = createPalette({
-  divider: '#585858',
   primary: {
     main: '#cc7832',
     light: '#ffc66d',
@@ -11,14 +10,6 @@ const palette = createPalette({
   secondary: {
     main: '#9876aa',
     light: '#6a8759',
-  },
-  text: {
-    primary: '#cccccc',
-    secondary: 'rgba(255,255,255,0.5)',
-  },
-  background: {
-    default: '#212122',
-    paper: '#1e1e1f',
   },
   type: 'dark',
 });

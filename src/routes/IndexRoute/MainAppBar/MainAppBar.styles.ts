@@ -15,16 +15,14 @@ export const useStyles = makeStyles((theme) =>
       color: '#fff',
       lineHeight: 1,
       textTransform: 'uppercase',
-      paddingLeft: theme.spacing(2.5),
       backgroundColor: theme.palette.background.paper,
       height: '46px',
-      width: '320px',
       flexShrink: 0,
       '& a': {
         color: '#fff',
         textDecoration: 'none',
       },
-      [theme.breakpoints.down('sm')]: {
+      [theme.breakpoints.down('xs')]: {
         boxShadow: 'none',
         backgroundColor: 'rgb(37, 37, 38)',
         width: '100%',

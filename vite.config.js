@@ -2,6 +2,7 @@
 const path = require('path');
 const reactRefresh = require('@vitejs/plugin-react-refresh');
 const { defineConfig } = require('vite');
+const svgr = require('vite-plugin-svgr');
 const tsconfigPaths = require('vite-tsconfig-paths').default;
 
 const rendererPath = path.resolve(__dirname, './src/renderer');
@@ -10,7 +11,7 @@ const rendererPath = path.resolve(__dirname, './src/renderer');
 module.exports = defineConfig({
   base: './',
   root: rendererPath,
-  plugins: [tsconfigPaths(), reactRefresh()],
+  plugins: [tsconfigPaths(), reactRefresh(), svgr()],
   build: {
     target: 'chrome89',
   },

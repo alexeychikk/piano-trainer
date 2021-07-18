@@ -1,0 +1,43 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Electron: Main",
+      "protocol": "inspector",
+      "cwd": "${workspaceFolder}",
+      "port": 9223,
+      "runtimeExecutable": "${workspaceFolder}/node_modules/.bin/electron-esbuild",
+      "runtimeArgs": ["dev", "--", "--remote-debugging-port=9222"],
+      "presentation": {
+        "hidden": false,
+        "group": "electron-esbuild",
+        "order": 2
+      }
+    },
+    {
+      "name": "Electron: Renderer",
+      "type": "chrome",
+      "request": "attach",
+      "port": 9222,
+      "webRoot": "${workspaceFolder}",
+      "presentation": {
+        "hidden": false,
+        "group": "electron-esbuild",
+        "order": 3
+      }
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Electron: All",
+      "configurations": ["Electron: Main", "Electron: Renderer"],
+      "presentation": {
+        "hidden": false,
+        "group": "electron-esbuild",
+        "order": 1
+      }
+    }
+  ]
+}
