@@ -29,7 +29,6 @@ export function compileSchema<Schema extends IpcSchema>(schema: Schema) {
 
       Object.keys(schema.methods || {}).forEach((methodName) => {
         ipcMain.handle(`${schema.name}.${methodName}`, async (event, ...args) =>
-          // eslint-disable-next-line @typescript-eslint/ban-ts-comment
           // @ts-ignore
           this[methodName](...args),
         );

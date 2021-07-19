@@ -12,6 +12,7 @@
     "moduleResolution": "node",
     "isolatedModules": true,
     "importsNotUsedAsValues": "error",
+    "noUnusedLocals": true,
     "noEmit": true,
     "sourceMap": true,
     "jsx": "react",

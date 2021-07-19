@@ -16,7 +16,7 @@ export interface MidiInputProps {
   onDisconnect?(input: string): void;
 }
 
-export const MidiInput: React.FC<MidiInputProps> = (props) => {
+const MidiInputBase: React.FC<MidiInputProps> = (props) => {
   const classes = useStyles();
   const loading = props.connectState.loading || props.disconnectState?.loading;
   const event = props.disconnectState ? props.onDisconnect : props.onConnect;
@@ -43,3 +43,5 @@ export const MidiInput: React.FC<MidiInputProps> = (props) => {
     </ListItem>
   );
 };
+
+export const MidiInput = React.memo(MidiInputBase);
