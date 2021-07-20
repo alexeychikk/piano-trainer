@@ -14,6 +14,7 @@ export interface MidiInputProps {
   onConnect?(input: string): void;
   disconnectState?: AsyncState<void>;
   onDisconnect?(input: string): void;
+  onReset?(): void;
 }
 
 const MidiInputBase: React.FC<MidiInputProps> = (props) => {
@@ -30,6 +31,7 @@ const MidiInputBase: React.FC<MidiInputProps> = (props) => {
     <ListItem className={classes.midiInput} selected={connected} dense>
       <ListItemText primary={props.input} />
       <ListItemSecondaryAction>
+        {props.onReset && <Button onClick={props.onReset}>Reset</Button>}
         <Button disabled={loading} onClick={handleEvent}>
           {loading
             ? props.disconnectState

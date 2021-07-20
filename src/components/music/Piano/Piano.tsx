@@ -1,7 +1,6 @@
 import { Box, Typography } from '@material-ui/core';
-import { Note } from '@tonaljs/tonal';
 import clsx from 'clsx';
-import React, { useMemo } from 'react';
+import React from 'react';
 import { Piano as ReactPiano } from 'react-piano';
 import 'react-piano/dist/styles.css';
 import { useMidi } from '@src/components/providers/MidiProvider';
@@ -16,22 +15,19 @@ const noopFn = () => undefined;
 
 const PianoBase: React.FC<PianoProps> = (props) => {
   const classes = useStyles();
-  const { connectedInput } = useMidi();
+  const { isInputReady, midiRange } = useMidi();
   const midiNotes = useActiveMidiNotes();
-
-  const noteRange = useMemo(
-    () => ({ first: Note.midi('A0')!, last: Note.midi('C8')! }),
-    [],
-  );
 
   return (
     <Box className={clsx(classes.piano, props.className)}>
-      {!connectedInput && (
-        <Typography variant="subtitle1">Connect midi keyboard first</Typography>
+      {!isInputReady && (
+        <Typography variant="subtitle1">
+          Midi keyboard is not configured
+        </Typography>
       )}
-      {connectedInput && (
+      {isInputReady && (
         <ReactPiano
-          noteRange={noteRange}
+          noteRange={midiRange!}
           playNote={noopFn}
           stopNote={noopFn}
           activeNotes={midiNotes}

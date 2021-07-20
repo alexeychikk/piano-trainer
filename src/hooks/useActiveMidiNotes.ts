@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useMidi } from '@src/components/providers/MidiProvider';
 import { midiService } from '@src/services/render';
 
-export function useActiveMidiNotes() {
+export function useActiveMidiNotes(): number[] {
   const { connectedInput } = useMidi();
   const [midiNotes, setMidiNotes] = useState<number[]>([]);
 

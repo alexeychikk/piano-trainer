@@ -4,18 +4,27 @@ import type { AsyncState } from 'react-use/lib/useAsyncFn';
 import { createContainer } from 'unstated-next';
 import { midiService } from '@src/services/render';
 
+export type MidiRange = {
+  first: number;
+  last: number;
+};
+
 export interface MidiContext {
-  connectedInput?: string;
-  inputs: AsyncState<string[]>;
-  fetchInputs: () => Promise<string[]>;
   connect: (input: string) => Promise<void>;
+  connectedInput?: string;
   connectState: AsyncState<void>;
   disconnect: () => Promise<void>;
   disconnectState: AsyncState<void>;
+  fetchInputs: () => Promise<string[]>;
+  inputs: AsyncState<string[]>;
+  isInputReady: boolean;
+  midiRange?: MidiRange;
+  setMidiRange: (range?: MidiRange) => void;
 }
 
 function useMidiContext(): MidiContext {
   const [connectedInput, setConnectedInput] = useState<string>();
+  const [midiRange, setMidiRange] = useState<MidiRange>();
   const [inputs, fetchInputs] = useAsyncFn(
     () => midiService.invoke.getInputs(),
     [connectedInput],
@@ -44,15 +53,18 @@ function useMidiContext(): MidiContext {
 
   return useMemo(
     () => ({
-      inputs,
-      fetchInputs,
-      connectedInput,
       connect,
+      connectedInput,
       connectState,
       disconnect,
       disconnectState,
+      fetchInputs,
+      inputs,
+      isInputReady: !!(connectedInput && midiRange),
+      midiRange,
+      setMidiRange,
     }),
-    [connectedInput, inputs, connectState, disconnectState],
+    [connectedInput, connectState, disconnectState, inputs, midiRange],
   );
 }
 

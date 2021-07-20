@@ -9,8 +9,6 @@ export const useStyles = makeStyles((theme) =>
       flexDirection: 'column',
     },
     devices: {},
-    piano: {
-      flex: 1,
-    },
+    piano: {},
   }),
 );
