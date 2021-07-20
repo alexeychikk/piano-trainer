@@ -27,7 +27,7 @@ function useMidiContext(): MidiContext {
   const [midiRange, setMidiRange] = useState<MidiRange>();
   const [inputs, fetchInputs] = useAsyncFn(
     () => midiService.invoke.getInputs(),
-    [connectedInput],
+    [],
   );
 
   const [connectState, connect] = useAsyncFn(
@@ -48,6 +48,7 @@ function useMidiContext(): MidiContext {
 
     await midiService.invoke.disconnect(connectedInput);
     setConnectedInput(undefined);
+    setMidiRange(undefined);
     console.debug('disconnect', connectedInput);
   }, [connectedInput]);
 
