@@ -1,10 +1,12 @@
 import { Box, Typography } from '@material-ui/core';
 import clsx from 'clsx';
-import React from 'react';
+import React, { useCallback } from 'react';
+import type { NoteLabelProps } from 'react-piano';
 import { Piano as ReactPiano } from 'react-piano';
 import 'react-piano/dist/styles.css';
 import { useMidi } from '@src/components/providers/MidiProvider';
 import { useActiveMidiNotes } from '@src/hooks';
+import { NoteLabel } from './NoteLabel';
 import { useStyles } from './Piano.styles';
 
 export interface PianoProps {
@@ -17,6 +19,11 @@ const PianoBase: React.FC<PianoProps> = (props) => {
   const classes = useStyles();
   const { isInputReady, midiRange } = useMidi();
   const midiNotes = useActiveMidiNotes();
+
+  const renderNoteLabel = useCallback((labelProps: NoteLabelProps) => {
+    if (!labelProps.isActive) return null;
+    return <NoteLabel {...labelProps} />;
+  }, []);
 
   return (
     <Box className={clsx(classes.piano, props.className)}>
@@ -31,6 +38,7 @@ const PianoBase: React.FC<PianoProps> = (props) => {
           playNote={noopFn}
           stopNote={noopFn}
           activeNotes={midiNotes}
+          renderNoteLabel={renderNoteLabel}
         />
       )}
     </Box>

@@ -10,5 +10,14 @@ export const useStyles = makeStyles((theme) =>
       minHeight: '60px',
       height: '10vw',
     },
+    noteLabel: {
+      textAlign: 'center',
+      lineHeight: 1,
+      marginBottom: theme.spacing(1),
+    },
+    accidental: {},
+    octave: {
+      fontSize: '0.7em',
+    },
   }),
 );

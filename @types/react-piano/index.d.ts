@@ -4,25 +4,26 @@ declare module 'react-piano' {
     midiNumber: number;
   }
 
+  export type NoteInputEvent = (
+    midiNumber: number,
+    params: { prevActiveNotes: number[] },
+  ) => void;
+
+  export interface NoteLabelProps {
+    keyboardShortcut: KeyboardShortcut;
+    midiNumber: number;
+    isActive: boolean;
+    isAccidental: boolean;
+  }
+
   export interface PianoProps {
     noteRange: { first: number; last: number };
     activeNotes?: number[];
     playNote: (midiNumber: number) => void;
     stopNote: (midiNumber: number) => void;
-    onPlayNoteInput?: (
-      midiNumber: number,
-      params: { prevActiveNotes: number[] },
-    ) => void;
-    onStopNoteInput?: (
-      midiNumber: number,
-      params: { prevActiveNotes: number[] },
-    ) => void;
-    renderNoteLabel?: (params: {
-      keyboardShortcut: KeyboardShortcut;
-      midiNumber: number;
-      isActive: boolean;
-      isAccidental: boolean;
-    }) => React.ReactNode;
+    onPlayNoteInput?: NoteInputEvent;
+    onStopNoteInput?: NoteInputEvent;
+    renderNoteLabel?: (params: NoteLabelProps) => React.ReactNode;
     className?: string;
     disabled?: boolean;
     width?: number;
