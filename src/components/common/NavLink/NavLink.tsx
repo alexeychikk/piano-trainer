@@ -28,7 +28,6 @@ const NavLinkBase: React.FC<NavLinkProps> = (props) => {
   const Component = props.isExternal ? 'a' : Link;
 
   return (
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
     // @ts-ignore
     <Component
       className={clsx(

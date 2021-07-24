@@ -15,3 +15,8 @@ export const MidiSchema = {
 } as const;
 
 export type MidiMethods = typeof MidiSchema['methods'];
+
+export type MidiRange = {
+  first: number;
+  last: number;
+};

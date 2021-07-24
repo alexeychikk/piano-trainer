@@ -1,6 +1,6 @@
 import { Toolbar } from '@material-ui/core';
 import React, { useCallback, useState } from 'react';
-import { MidiConnection } from '@src/components/music/MidiConnection';
+import { useMidiConnection } from '@src/hooks';
 import { ContentRoutes } from './ContentRoutes';
 import { useStyles } from './IndexRoute.styles';
 import { MainAppBar } from './MainAppBar';
@@ -8,6 +8,7 @@ import { NavigationDrawer } from './NavigationDrawer';
 
 export const IndexRoute: React.FC = () => {
   const classes = useStyles();
+  useMidiConnection();
 
   const [isDrawerOpen, setDrawerOpen] = useState(false);
 
@@ -27,8 +28,6 @@ export const IndexRoute: React.FC = () => {
         onOpen={openDrawer}
         onClose={closeDrawer}
       />
-
-      <MidiConnection />
 
       <div className={classes.content}>
         <Toolbar /> {/* For proper top gap */}

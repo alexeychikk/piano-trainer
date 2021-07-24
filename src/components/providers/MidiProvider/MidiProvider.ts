@@ -2,12 +2,8 @@ import { useMemo, useState } from 'react';
 import { useAsyncFn } from 'react-use';
 import type { AsyncState } from 'react-use/lib/useAsyncFn';
 import { createContainer } from 'unstated-next';
-import { midiService } from '@src/services/render';
-
-export type MidiRange = {
-  first: number;
-  last: number;
-};
+import type { MidiRange } from '@src/services/Midi/shared';
+import { midiService, settingsService } from '@src/services/render';
 
 export interface MidiContext {
   connect: (input: string) => Promise<void>;
@@ -36,7 +32,10 @@ function useMidiContext(): MidiContext {
       if (connectedInput) await disconnect();
 
       await midiService.invoke.connect(inputName);
+      await settingsService.invoke.setLastConnectedInput(inputName);
+      const settings = await settingsService.invoke.getInputSettings(inputName);
       setConnectedInput(inputName);
+      if (settings) setMidiRange(settings.midiRange);
       console.debug('connected', inputName);
     },
     [connectedInput],
