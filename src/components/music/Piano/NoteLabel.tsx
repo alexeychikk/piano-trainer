@@ -14,7 +14,9 @@ const NoteLabelBase: React.FC<NoteLabelProps> = (props) => {
     <div
       className={clsx(
         classes.noteLabel,
-        props.isAccidental && classes.accidental,
+        props.isAccidental && classes.noteAccidental,
+        props.isActive && classes.noteActive,
+        pitch === 'C' && classes.pitchC,
       )}
     >
       <div>{pitch}</div>

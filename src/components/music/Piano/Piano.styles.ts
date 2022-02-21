@@ -14,10 +14,15 @@ export const useStyles = makeStyles((theme) =>
       textAlign: 'center',
       lineHeight: 1,
       marginBottom: theme.spacing(1),
+      '&$pitchC:not($noteActive)': {
+        color: '#555',
+      },
     },
-    accidental: {},
     octave: {
       fontSize: '0.7em',
     },
+    noteAccidental: {},
+    noteActive: {},
+    pitchC: {},
   }),
 );
