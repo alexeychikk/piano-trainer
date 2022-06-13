@@ -35,6 +35,10 @@ export class SettingsService extends Service implements SettingsMethods {
     this.store.set(`inputs.${name}`, settings);
   }
 
+  async deleteInputSettings(name: string) {
+    this.store.delete(`inputs.${name}` as keyof Settings);
+  }
+
   async getLastConnectedInputSettings() {
     const name = this.lastConnectedInput;
     return name ? this.getInputSettings(name) : undefined;

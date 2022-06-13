@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useAsyncFn } from 'react-use';
 import type { AsyncState } from 'react-use/lib/useAsyncFn';
 import { createContainer } from 'unstated-next';
-import type { MidiRange } from '@src/services/Midi/shared';
+import type { InputSettings } from '@src/services/Settings/shared';
 import { midiService, settingsService } from '@src/services/render';
 
 export interface MidiContext {
@@ -14,13 +14,14 @@ export interface MidiContext {
   fetchInputs: () => Promise<string[]>;
   inputs: AsyncState<string[]>;
   isInputReady: boolean;
-  midiRange?: MidiRange;
-  setMidiRange: (range?: MidiRange) => void;
+  inputSettings?: InputSettings;
+  updateInputSettings: (settings?: Partial<InputSettings>) => Promise<void>;
+  updateInputSettingsState: AsyncState<void>;
 }
 
 function useMidiContext(): MidiContext {
   const [connectedInput, setConnectedInput] = useState<string>();
-  const [midiRange, setMidiRange] = useState<MidiRange>();
+  const [inputSettings, setInputSettings] = useState<InputSettings>();
   const [inputs, fetchInputs] = useAsyncFn(
     () => midiService.invoke.getInputs(),
     [],
@@ -35,7 +36,7 @@ function useMidiContext(): MidiContext {
       await settingsService.invoke.setLastConnectedInput(inputName);
       const settings = await settingsService.invoke.getInputSettings(inputName);
       setConnectedInput(inputName);
-      if (settings) setMidiRange(settings.midiRange);
+      if (settings) setInputSettings(settings);
       console.debug('connected', inputName);
     },
     [connectedInput],
@@ -47,9 +48,28 @@ function useMidiContext(): MidiContext {
 
     await midiService.invoke.disconnect(connectedInput);
     setConnectedInput(undefined);
-    setMidiRange(undefined);
+    setInputSettings(undefined);
     console.debug('disconnect', connectedInput);
   }, [connectedInput]);
+
+  const [updateInputSettingsState, updateInputSettings] = useAsyncFn(
+    async (settings?: Partial<InputSettings>) => {
+      if (!connectedInput) return;
+      const newSettings = settings
+        ? { ...inputSettings!, ...settings }
+        : undefined;
+      if (newSettings) {
+        await settingsService.invoke.setInputSettings(
+          connectedInput,
+          newSettings,
+        );
+      } else {
+        await settingsService.invoke.deleteInputSettings(connectedInput);
+      }
+      setInputSettings(newSettings);
+    },
+    [connectedInput, inputSettings],
+  );
 
   return useMemo(
     () => ({
@@ -60,11 +80,19 @@ function useMidiContext(): MidiContext {
       disconnectState,
       fetchInputs,
       inputs,
-      isInputReady: !!(connectedInput && midiRange),
-      midiRange,
-      setMidiRange,
+      isInputReady: !!(connectedInput && inputSettings?.midiRange),
+      inputSettings,
+      updateInputSettings,
+      updateInputSettingsState,
     }),
-    [connectedInput, connectState, disconnectState, inputs, midiRange],
+    [
+      connectedInput,
+      connectState,
+      disconnectState,
+      inputs,
+      inputSettings,
+      updateInputSettingsState,
+    ],
   );
 }
 

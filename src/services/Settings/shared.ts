@@ -8,6 +8,7 @@ export const SettingsSchema = {
       ipcFn<(name: string) => Promise<InputSettings | undefined>>(),
     setInputSettings:
       ipcFn<(name: string, settings: InputSettings) => Promise<void>>(),
+    deleteInputSettings: ipcFn<(name: string) => Promise<void>>(),
     getLastConnectedInputSettings:
       ipcFn<() => Promise<InputSettings | undefined>>(),
     setLastConnectedInput: ipcFn<(name: string) => Promise<void>>(),
@@ -24,4 +25,6 @@ export type Settings = {
 export type InputSettings = {
   name: string;
   midiRange: MidiRange;
+  noteLabelsVisible: boolean;
+  usePianoPlayer: boolean;
 };

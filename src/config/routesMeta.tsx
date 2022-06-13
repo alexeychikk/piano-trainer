@@ -14,4 +14,8 @@ export const ROUTES_META: { [key: string]: RouteMeta } = {
     label: 'Chords',
     activeOnlyWhenExact: true,
   },
+  '/ear-training': {
+    to: '/ear-training',
+    label: 'Ear Training',
+  },
 };

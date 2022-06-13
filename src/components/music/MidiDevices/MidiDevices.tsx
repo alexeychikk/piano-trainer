@@ -20,11 +20,13 @@ const MidiDevicesBase: React.FC<MidiDevicesProps> = (props) => {
     connectState,
     disconnect,
     disconnectState,
-    midiRange,
-    setMidiRange,
+    inputSettings,
+    updateInputSettings,
   } = useMidi();
 
-  const handleReset = useCallback(() => setMidiRange(), []);
+  const handleReset = useCallback(async () => {
+    await updateInputSettings();
+  }, [inputSettings]);
 
   return (
     <Paper
@@ -68,7 +70,7 @@ const MidiDevicesBase: React.FC<MidiDevicesProps> = (props) => {
             connectState={connectState}
             disconnectState={disconnectState}
             onDisconnect={disconnect}
-            onReset={midiRange ? handleReset : undefined}
+            onReset={inputSettings?.midiRange ? handleReset : undefined}
           />
         )}
       </List>

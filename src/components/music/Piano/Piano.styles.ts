@@ -14,8 +14,11 @@ export const useStyles = makeStyles((theme) =>
       textAlign: 'center',
       lineHeight: 1,
       marginBottom: theme.spacing(1),
-      '&$pitchC:not($noteActive)': {
+      '&$pitchC:not($noteActive):not($noteHighlighted)': {
         color: '#555',
+      },
+      '&$noteHighlighted': {
+        color: theme.palette.primary.main,
       },
     },
     octave: {
@@ -23,6 +26,7 @@ export const useStyles = makeStyles((theme) =>
     },
     noteAccidental: {},
     noteActive: {},
+    noteHighlighted: {},
     pitchC: {},
   }),
 );
