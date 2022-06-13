@@ -11,6 +11,9 @@ export const useStyles = makeStyles((theme) =>
       },
     },
     piano: {},
+    instrumentSelect: {
+      minWidth: '180px',
+    },
     pianoActions: {
       borderRadius: 0,
       padding: theme.spacing(1),

@@ -1,3 +1,4 @@
+import type { InstrumentName } from 'soundfont-player';
 import { ipcFn } from '@src/services/Ipc/shared';
 import type { MidiRange } from '../Midi/shared';
 
@@ -27,4 +28,5 @@ export type InputSettings = {
   midiRange: MidiRange;
   noteLabelsVisible: boolean;
   usePianoPlayer: boolean;
+  instrument: InstrumentName;
 };

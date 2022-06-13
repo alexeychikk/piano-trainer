@@ -1,17 +1,21 @@
 import { useAsync } from 'react-use';
 import Soundfont from 'soundfont-player';
+import { useMidi } from '@src/components/providers/MidiProvider';
 
 export const audioContext = new AudioContext();
 
-export function usePianoPlayer(
-  instrument: Soundfont.InstrumentName = 'electric_guitar_jazz',
-) {
+export function usePianoPlayer() {
+  const { inputSettings } = useMidi();
   const player = useAsync(
     () =>
-      Soundfont.instrument(audioContext, instrument, {
-        format: 'mp3',
-      }),
-    [],
+      Soundfont.instrument(
+        audioContext,
+        inputSettings?.instrument || 'acoustic_grand_piano',
+        {
+          format: 'mp3',
+        },
+      ),
+    [inputSettings?.instrument],
   );
   return { player, audioContext };
 }

@@ -24,6 +24,7 @@ export function useMidiWizard(): Partial<MidiRange> {
       midiRange: newMidiRange,
       noteLabelsVisible: true,
       usePianoPlayer: false,
+      instrument: 'acoustic_grand_piano',
     });
   }, [connectedInput, isInputReady, midiNotes, firstNote]);
 

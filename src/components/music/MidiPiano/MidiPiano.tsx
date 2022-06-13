@@ -6,11 +6,13 @@ import {
 } from '@material-ui/icons';
 import clsx from 'clsx';
 import React, { useCallback } from 'react';
+import type { InstrumentName } from 'soundfont-player';
 import { MidiDevices } from '@src/components/music/MidiDevices';
 import { MidiWizard } from '@src/components/music/MidiWizard';
 import type { PianoProps } from '@src/components/music/Piano';
 import { Piano } from '@src/components/music/Piano';
 import { useMidi } from '@src/components/providers/MidiProvider';
+import { InstrumentSelect } from '../InstrumentSelect';
 import { useStyles } from './MidiPiano.styles';
 
 export interface MidiPianoProps
@@ -38,6 +40,13 @@ const MidiPianoBase: React.FC<MidiPianoProps> = (props) => {
       usePianoPlayer: !inputSettings?.usePianoPlayer,
     });
   }, [connectedInput, inputSettings]);
+
+  const handleInstrumentChange = useCallback(
+    async (instrument: InstrumentName) => {
+      await updateInputSettings({ instrument });
+    },
+    [connectedInput, inputSettings],
+  );
 
   return (
     <Box
@@ -71,6 +80,12 @@ const MidiPianoBase: React.FC<MidiPianoProps> = (props) => {
                 )}
               </IconButton>
             </Tooltip>
+
+            <InstrumentSelect
+              className={classes.instrumentSelect}
+              instrument={inputSettings!.instrument}
+              onChange={handleInstrumentChange}
+            />
           </Paper>
 
           <Piano
