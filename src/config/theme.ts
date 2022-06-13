@@ -48,6 +48,9 @@ export const THEME = createTheme({
         '::-webkit-scrollbar-thumb:hover': {
           background: '#646464b3',
         },
+        '.ReactPiano__NoteLabelContainer': {
+          height: '100%',
+        },
       },
     },
     MuiAppBar: {

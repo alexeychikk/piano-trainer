@@ -22,7 +22,8 @@ const NoteLabelBase: React.FC<NoteLabelProps & { isHighlighted?: boolean }> = (
         pitch === 'C' && classes.pitchC,
       )}
     >
-      <div>{pitch}</div>
+      <div className={classes.labelSpacing} />
+      <div className={classes.pitch}>{pitch}</div>
       <div className={classes.octave}>{octave}</div>
     </div>
   );

@@ -11,16 +11,32 @@ export const useStyles = makeStyles((theme) =>
       height: '10vw',
     },
     noteLabel: {
+      display: 'flex',
+      flexDirection: 'column',
       textAlign: 'center',
       lineHeight: 1,
-      marginBottom: theme.spacing(1),
+      height: '100%',
+      paddingBottom: theme.spacing(1),
       '&$pitchC:not($noteActive):not($noteHighlighted)': {
         color: '#555',
       },
       '&$noteHighlighted': {
-        color: theme.palette.primary.main,
+        backgroundColor: theme.palette.primary.main,
+        '&$noteActive': {
+          backgroundColor: theme.palette.primary.light,
+        },
+        '&$noteAccidental': {
+          backgroundColor: theme.palette.secondary.dark,
+          '&$noteActive': {
+            backgroundColor: theme.palette.secondary.main,
+          },
+        },
       },
     },
+    labelSpacing: {
+      flex: 1,
+    },
+    pitch: {},
     octave: {
       fontSize: '0.7em',
     },
