@@ -11,7 +11,7 @@ import { useStyles } from './EarTraining.styles';
 
 export const EarTraining: React.FC = () => {
   const classes = useStyles();
-  const { isInputReady } = useMidi();
+  const { isInputReady, inputSettings } = useMidi();
   const activeNotes = useActiveNotes();
   const { player, audioContext } = usePianoPlayer();
   const isPlayerLoading = isInputReady && player.loading;
@@ -31,7 +31,10 @@ export const EarTraining: React.FC = () => {
 
   const playNote = () => {
     if (!player.value) return;
-    player.value.play(randomNote, audioContext.currentTime, { duration: 1 });
+    player.value.play(randomNote, audioContext.currentTime, {
+      duration: 1,
+      gain: inputSettings?.volume || 1,
+    });
   };
   const handlePlayNoteClick = useCallback(playNote, [player.value, randomNote]);
 

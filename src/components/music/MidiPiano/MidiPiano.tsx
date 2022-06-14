@@ -1,25 +1,19 @@
 import { Box, IconButton, Paper, Tooltip } from '@material-ui/core';
-import {
-  MusicNote as MusicNoteIcon,
-  VolumeMute as VolumeMuteIcon,
-  VolumeUp as VolumeUpIcon,
-} from '@material-ui/icons';
+import { MusicNote as MusicNoteIcon } from '@material-ui/icons';
 import clsx from 'clsx';
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
+import { useDebounce } from 'react-use';
 import type { InstrumentName } from 'soundfont-player';
+import { InstrumentSelect } from '@src/components/music/InstrumentSelect';
 import { MidiDevices } from '@src/components/music/MidiDevices';
 import { MidiWizard } from '@src/components/music/MidiWizard';
 import type { PianoProps } from '@src/components/music/Piano';
 import { Piano } from '@src/components/music/Piano';
+import { VolumeSlider } from '@src/components/music/VolumeSlider';
 import { useMidi } from '@src/components/providers/MidiProvider';
-import { InstrumentSelect } from '../InstrumentSelect';
 import { useStyles } from './MidiPiano.styles';
 
-export interface MidiPianoProps
-  extends Pick<
-    PianoProps,
-    'highlightedNotes' | 'noteLabelsVisible' | 'usePianoPlayer'
-  > {
+export interface MidiPianoProps extends Pick<PianoProps, 'highlightedNotes'> {
   className?: string;
   children?: React.ReactNode;
 }
@@ -28,6 +22,19 @@ const MidiPianoBase: React.FC<MidiPianoProps> = (props) => {
   const classes = useStyles();
   const { connectedInput, isInputReady, inputSettings, updateInputSettings } =
     useMidi();
+  const [volume, setVolume] = useState(inputSettings?.volume || 0);
+
+  useEffect(() => {
+    if (inputSettings?.volume === undefined || volume !== 0) return;
+    setVolume(inputSettings.volume);
+  }, [inputSettings?.volume]);
+
+  const handleInstrumentChange = useCallback(
+    async (instrument: InstrumentName) => {
+      await updateInputSettings({ instrument });
+    },
+    [connectedInput, inputSettings],
+  );
 
   const handleNoteButtonClick = useCallback(async () => {
     await updateInputSettings({
@@ -35,17 +42,16 @@ const MidiPianoBase: React.FC<MidiPianoProps> = (props) => {
     });
   }, [connectedInput, inputSettings]);
 
-  const handleVolumeButtonClick = useCallback(async () => {
-    await updateInputSettings({
-      usePianoPlayer: !inputSettings?.usePianoPlayer,
-    });
-  }, [connectedInput, inputSettings]);
+  const handleVolumeChange = useCallback((newVolume: number) => {
+    setVolume(newVolume);
+  }, []);
 
-  const handleInstrumentChange = useCallback(
-    async (instrument: InstrumentName) => {
-      await updateInputSettings({ instrument });
+  useDebounce(
+    async () => {
+      await updateInputSettings({ volume });
     },
-    [connectedInput, inputSettings],
+    500,
+    [volume],
   );
 
   return (
@@ -61,7 +67,19 @@ const MidiPianoBase: React.FC<MidiPianoProps> = (props) => {
       {isInputReady && (
         <>
           <Paper className={classes.pianoActions}>
-            <Tooltip title="Show/hide note labels">
+            <InstrumentSelect
+              className={classes.instrumentSelect}
+              instrument={inputSettings!.instrument}
+              onChange={handleInstrumentChange}
+            />
+
+            <Tooltip
+              title={
+                inputSettings!.noteLabelsVisible
+                  ? 'Hide note labels'
+                  : 'Show note labels'
+              }
+            >
               <IconButton size="small" onClick={handleNoteButtonClick}>
                 <MusicNoteIcon
                   color={
@@ -71,20 +89,10 @@ const MidiPianoBase: React.FC<MidiPianoProps> = (props) => {
               </IconButton>
             </Tooltip>
 
-            <Tooltip title="Play piano sounds">
-              <IconButton size="small" onClick={handleVolumeButtonClick}>
-                {inputSettings!.usePianoPlayer ? (
-                  <VolumeUpIcon />
-                ) : (
-                  <VolumeMuteIcon />
-                )}
-              </IconButton>
-            </Tooltip>
-
-            <InstrumentSelect
-              className={classes.instrumentSelect}
-              instrument={inputSettings!.instrument}
-              onChange={handleInstrumentChange}
+            <VolumeSlider
+              className={classes.volumeSlider}
+              value={volume}
+              onChange={handleVolumeChange}
             />
           </Paper>
 
@@ -92,7 +100,7 @@ const MidiPianoBase: React.FC<MidiPianoProps> = (props) => {
             className={classes.piano}
             highlightedNotes={props.highlightedNotes}
             noteLabelsVisible={inputSettings!.noteLabelsVisible}
-            usePianoPlayer={inputSettings!.usePianoPlayer}
+            volume={volume}
           />
         </>
       )}

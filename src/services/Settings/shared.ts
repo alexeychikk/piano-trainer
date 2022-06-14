@@ -27,6 +27,6 @@ export type InputSettings = {
   name: string;
   midiRange: MidiRange;
   noteLabelsVisible: boolean;
-  usePianoPlayer: boolean;
   instrument: InstrumentName;
+  volume: number;
 };

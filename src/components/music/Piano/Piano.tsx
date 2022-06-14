@@ -15,7 +15,7 @@ export interface PianoProps {
   className?: string;
   highlightedNotes?: number[];
   noteLabelsVisible?: boolean;
-  usePianoPlayer?: boolean;
+  volume?: number;
 }
 
 const PianoBase: React.FC<PianoProps> = (props) => {
@@ -42,12 +42,16 @@ const PianoBase: React.FC<PianoProps> = (props) => {
   const playNote = useCallback(
     (midi: number) => {
       if (!player.value) return;
-      // wrong typings in soundfont-player, it accepts midi number as well
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const notePlayer = player.value.play(midi as any);
+      const notePlayer = player.value.play(
+        // wrong typings in soundfont-player, it accepts midi number as well
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        midi as any,
+        audioContext.currentTime,
+        { gain: props.volume },
+      );
       setPlayedNotes((notes) => ({ ...notes, [midi]: notePlayer }));
     },
-    [player.value, playedNotes],
+    [player.value, playedNotes, props.volume],
   );
 
   const stopNote = useCallback(
@@ -73,14 +77,14 @@ const PianoBase: React.FC<PianoProps> = (props) => {
           Midi keyboard is not configured
         </Typography>
       )}
-      {props.usePianoPlayer && player.loading && (
+      {props.volume! > 0 && player.loading && (
         <Typography variant="subtitle1">Loading sound player...</Typography>
       )}
-      {isInputReady && (!props.usePianoPlayer || !player.loading) && (
+      {isInputReady && (!props.volume || !player.loading) && (
         <ReactPiano
           noteRange={inputSettings!.midiRange}
-          playNote={props.usePianoPlayer ? playNote : noop}
-          stopNote={props.usePianoPlayer ? stopNote : noop}
+          playNote={props.volume ? playNote : noop}
+          stopNote={props.volume ? stopNote : noop}
           activeNotes={midiNotes}
           renderNoteLabel={
             props.noteLabelsVisible ? renderNoteLabel : undefined

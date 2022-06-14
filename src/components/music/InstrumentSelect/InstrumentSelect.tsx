@@ -25,7 +25,9 @@ const InstrumentSelectBase: React.FC<InstrumentSelectProps> = (props) => {
   return (
     <Select
       className={clsx(classes.instrumentSelect, props.className)}
+      classes={{ select: classes.innerSelect }}
       id="instrument-select"
+      variant="outlined"
       value={props.instrument}
       onChange={handleInstrumentChange}
     >

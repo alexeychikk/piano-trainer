@@ -23,8 +23,8 @@ export function useMidiWizard(): Partial<MidiRange> {
       name: connectedInput,
       midiRange: newMidiRange,
       noteLabelsVisible: true,
-      usePianoPlayer: false,
       instrument: 'acoustic_grand_piano',
+      volume: 0,
     });
   }, [connectedInput, isInputReady, midiNotes, firstNote]);
 
