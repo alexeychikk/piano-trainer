@@ -30,13 +30,14 @@ const PianoBase: React.FC<PianoProps> = (props) => {
       return (
         <NoteLabel
           {...labelProps}
+          isNotationVisible={props.noteLabelsVisible}
           isHighlighted={props.highlightedNotes?.includes(
             labelProps.midiNumber,
           )}
         />
       );
     },
-    [props.highlightedNotes],
+    [props.highlightedNotes, props.noteLabelsVisible],
   );
 
   const playNote = useCallback(
@@ -86,9 +87,7 @@ const PianoBase: React.FC<PianoProps> = (props) => {
           playNote={props.volume ? playNote : noop}
           stopNote={props.volume ? stopNote : noop}
           activeNotes={midiNotes}
-          renderNoteLabel={
-            props.noteLabelsVisible ? renderNoteLabel : undefined
-          }
+          renderNoteLabel={renderNoteLabel}
         />
       )}
     </Box>

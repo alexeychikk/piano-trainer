@@ -4,9 +4,9 @@ import React from 'react';
 import type { NoteLabelProps } from 'react-piano';
 import { useStyles } from './Piano.styles';
 
-const NoteLabelBase: React.FC<NoteLabelProps & { isHighlighted?: boolean }> = (
-  props,
-) => {
+const NoteLabelBase: React.FC<
+  NoteLabelProps & { isHighlighted?: boolean; isNotationVisible?: boolean }
+> = (props) => {
   const classes = useStyles();
   const note = Note.fromMidi(props.midiNumber);
   const octave = Note.octave(note);
@@ -22,9 +22,13 @@ const NoteLabelBase: React.FC<NoteLabelProps & { isHighlighted?: boolean }> = (
         pitch === 'C' && classes.pitchC,
       )}
     >
-      <div className={classes.labelSpacing} />
-      <div className={classes.pitch}>{pitch}</div>
-      <div className={classes.octave}>{octave}</div>
+      {props.isNotationVisible && (
+        <>
+          <div className={classes.labelSpacing} />
+          <div className={classes.pitch}>{pitch}</div>
+          <div className={classes.octave}>{octave}</div>
+        </>
+      )}
     </div>
   );
 };

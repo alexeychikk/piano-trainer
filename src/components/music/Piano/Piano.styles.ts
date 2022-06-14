@@ -18,7 +18,6 @@ export const useStyles = makeStyles((theme) =>
       height: '100%',
       paddingBottom: theme.spacing(1),
       '&$pitchC:not($noteActive):not($noteHighlighted)': {
-        fontWeight: 'bold',
         color: '#555',
       },
       '&:not($pitchC):not($noteAccidental):not($noteActive):not($noteHighlighted)':
@@ -48,6 +47,8 @@ export const useStyles = makeStyles((theme) =>
     noteAccidental: {},
     noteActive: {},
     noteHighlighted: {},
-    pitchC: {},
+    pitchC: {
+      fontWeight: 'bold',
+    },
   }),
 );
