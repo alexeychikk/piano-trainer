@@ -21,9 +21,7 @@ export const useStyles = makeStyles((theme) =>
         marginRight: theme.spacing(2),
       },
     },
-    instrumentSelect: {
-      minWidth: '180px',
-    },
+    instrumentSelect: {},
     volumeSlider: {
       flex: 1,
       maxWidth: '250px',

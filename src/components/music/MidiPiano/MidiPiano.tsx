@@ -67,12 +67,6 @@ const MidiPianoBase: React.FC<MidiPianoProps> = (props) => {
       {isInputReady && (
         <>
           <Paper className={classes.pianoActions}>
-            <InstrumentSelect
-              className={classes.instrumentSelect}
-              instrument={inputSettings!.instrument}
-              onChange={handleInstrumentChange}
-            />
-
             <Tooltip
               title={
                 inputSettings!.noteLabelsVisible
@@ -88,6 +82,12 @@ const MidiPianoBase: React.FC<MidiPianoProps> = (props) => {
                 />
               </IconButton>
             </Tooltip>
+
+            <InstrumentSelect
+              className={classes.instrumentSelect}
+              instrument={inputSettings!.instrument}
+              onChange={handleInstrumentChange}
+            />
 
             <VolumeSlider
               className={classes.volumeSlider}
