@@ -36,7 +36,11 @@ export const EarTraining: React.FC = () => {
       gain: inputSettings?.volume || 1,
     });
   };
-  const handlePlayNoteClick = useCallback(playNote, [player.value, randomNote]);
+  const handlePlayNoteClick = useCallback(playNote, [
+    player.value,
+    randomNote,
+    inputSettings?.volume,
+  ]);
 
   const getNewNote = () => {
     setCorrectNotePressed(false);
