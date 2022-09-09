@@ -8,14 +8,28 @@ export const useStyles = makeStyles((theme) =>
       display: 'flex',
       flexDirection: 'column',
     },
-    newNoteButton: {},
+    formWrapper: {
+      marginTop: theme.spacing(3),
+    },
+    selectsWrapper: {
+      marginBottom: theme.spacing(1),
+      '& > *:first-child': {
+        marginRight: theme.spacing(2),
+      },
+    },
     buttonsWrapper: {
       display: 'flex',
       flexDirection: 'row',
       justifyContent: 'space-between',
+      maxWidth: '500px',
+      marginTop: theme.spacing(2),
       '& > *': {
         flex: 1,
       },
     },
+    playNoteButton: {
+      marginRight: theme.spacing(2),
+    },
+    newNoteButton: {},
   }),
 );

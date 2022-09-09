@@ -4,6 +4,7 @@ import { range } from 'lodash-es';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useKeyPressEvent } from 'react-use';
 import { MidiPiano } from '@src/components/music/MidiPiano';
+import { NoteSelect } from '@src/components/music/NoteSelect';
 import { useMidi } from '@src/components/providers/MidiProvider';
 import { useActiveNotes, usePianoPlayer, useUniqueValue } from '@src/hooks';
 import { getExactRandomNote } from '@src/utils';
@@ -20,7 +21,7 @@ export const EarTraining: React.FC = () => {
   const [noteTo, setNoteTo] = useState<string>('C5');
   const [correctNotePressed, setCorrectNotePressed] = useState<boolean>(false);
 
-  const [randomNote, getNewRandomNote] = useUniqueValue(() =>
+  const [randomNote, updateRandomNote] = useUniqueValue(() =>
     getExactRandomNote(noteFrom, noteTo),
   );
 
@@ -44,9 +45,23 @@ export const EarTraining: React.FC = () => {
 
   const getNewNote = () => {
     setCorrectNotePressed(false);
-    getNewRandomNote();
+    updateRandomNote();
   };
   const handleNewNoteClick = useCallback(getNewNote, [randomNote]);
+
+  const handleNoteFromChange = useCallback(
+    (note: number) => {
+      setNoteFrom(Note.fromMidi(note));
+    },
+    [noteFrom],
+  );
+
+  const handleNoteToChange = useCallback(
+    (note: number) => {
+      setNoteTo(Note.fromMidi(note));
+    },
+    [noteTo],
+  );
 
   useEffect(() => {
     if (!isInputReady) return;
@@ -85,25 +100,29 @@ export const EarTraining: React.FC = () => {
         <Typography variant="h4">Loading player...</Typography>
       )}
       {isInputReady && !isPlayerLoading && (
-        <>
-          <Typography variant="h5">
-            From:{' '}
-            <Typography display="inline" variant="inherit" color="primary">
-              {noteFrom}
-            </Typography>
-          </Typography>
-          <Typography variant="h5">
-            To:{' '}
-            <Typography display="inline" variant="inherit" color="primary">
-              {noteTo}
-            </Typography>
-          </Typography>
+        <div className={classes.formWrapper}>
+          <div className={classes.selectsWrapper}>
+            <NoteSelect
+              id="note-select-from"
+              label="Note from"
+              noteTo={Note.midi(noteTo)! - 1}
+              value={Note.midi(noteFrom)!}
+              onChange={handleNoteFromChange}
+            />
+            <NoteSelect
+              id="note-select-to"
+              label="Note to"
+              noteFrom={Note.midi(noteFrom)! + 1}
+              value={Note.midi(noteTo)!}
+              onChange={handleNoteToChange}
+            />
+          </div>
           <Typography variant="h5">
             Current: {correctNotePressed ? randomNote : '?'}
           </Typography>
           <div className={classes.buttonsWrapper}>
             <Button
-              className={classes.newNoteButton}
+              className={classes.playNoteButton}
               color="primary"
               variant="contained"
               onClick={handlePlayNoteClick}
@@ -119,7 +138,7 @@ export const EarTraining: React.FC = () => {
               New Note
             </Button>
           </div>
-        </>
+        </div>
       )}
     </Box>
   );
