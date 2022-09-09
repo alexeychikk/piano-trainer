@@ -85,7 +85,7 @@ const MidiPianoBase: React.FC<MidiPianoProps> = (props) => {
 
             <InstrumentSelect
               className={classes.instrumentSelect}
-              instrument={inputSettings!.instrument}
+              value={inputSettings!.instrument}
               onChange={handleInstrumentChange}
             />
 

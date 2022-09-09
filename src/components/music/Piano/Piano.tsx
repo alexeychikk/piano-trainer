@@ -7,7 +7,7 @@ import { Piano as ReactPiano } from 'react-piano';
 import 'react-piano/dist/styles.css';
 import type { Player } from 'soundfont-player';
 import { useMidi } from '@src/components/providers/MidiProvider';
-import { useActiveMidiNotes, usePianoPlayer } from '@src/hooks';
+import { usePianoPlayer } from '@src/hooks';
 import { NoteLabel } from './NoteLabel';
 import { useStyles } from './Piano.styles';
 
@@ -20,8 +20,7 @@ export interface PianoProps {
 
 const PianoBase: React.FC<PianoProps> = (props) => {
   const classes = useStyles();
-  const { isInputReady, inputSettings } = useMidi();
-  const midiNotes = useActiveMidiNotes();
+  const { isInputReady, inputSettings, midiNotes, setMidiNotes } = useMidi();
   const { player, audioContext } = usePianoPlayer();
   const [playedNotes, setPlayedNotes] = useState<Record<number, Player>>({});
 
@@ -71,6 +70,23 @@ const PianoBase: React.FC<PianoProps> = (props) => {
       25,
   );
 
+  const handlePlayInput = useCallback(
+    (midi: number) => {
+      setMidiNotes((notes) =>
+        notes.includes(midi) ? notes : notes.concat(midi),
+      );
+    },
+    [midiNotes],
+  );
+
+  const handleStopInput = useCallback(
+    (midi: number, params: { prevActiveNotes: number[] }) => {
+      if (!params.prevActiveNotes.length) return;
+      setMidiNotes((notes) => notes.filter((n) => n !== midi));
+    },
+    [midiNotes],
+  );
+
   return (
     <Box className={clsx(classes.piano, props.className)} maxWidth={maxWidth}>
       {!isInputReady && (
@@ -88,6 +104,8 @@ const PianoBase: React.FC<PianoProps> = (props) => {
           stopNote={props.volume ? stopNote : noop}
           activeNotes={midiNotes}
           renderNoteLabel={renderNoteLabel}
+          onPlayNoteInput={handlePlayInput}
+          onStopNoteInput={handleStopInput}
         />
       )}
     </Box>

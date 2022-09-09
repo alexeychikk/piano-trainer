@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import type React from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAsyncFn } from 'react-use';
 import type { AsyncState } from 'react-use/lib/useAsyncFn';
 import { createContainer } from 'unstated-next';
@@ -17,6 +18,8 @@ export interface MidiContext {
   inputSettings?: InputSettings;
   updateInputSettings: (settings?: Partial<InputSettings>) => Promise<void>;
   updateInputSettingsState: AsyncState<void>;
+  midiNotes: number[];
+  setMidiNotes: React.Dispatch<React.SetStateAction<number[]>>;
 }
 
 function useMidiContext(): MidiContext {
@@ -71,6 +74,24 @@ function useMidiContext(): MidiContext {
     [connectedInput, inputSettings],
   );
 
+  const [midiNotes, setMidiNotes] = useState<number[]>([]);
+
+  useEffect(() => {
+    if (!connectedInput) return;
+    const { off } = midiService.onNoteDown(connectedInput, ({ note }) => {
+      setMidiNotes((notes) => notes.concat(note));
+    });
+    return off;
+  }, [connectedInput]);
+
+  useEffect(() => {
+    if (!connectedInput) return;
+    const { off } = midiService.onNoteUp(connectedInput, ({ note }) => {
+      setMidiNotes((notes) => notes.filter((n) => n !== note));
+    });
+    return off;
+  }, [connectedInput]);
+
   return useMemo(
     () => ({
       connect,
@@ -84,6 +105,8 @@ function useMidiContext(): MidiContext {
       inputSettings,
       updateInputSettings,
       updateInputSettingsState,
+      midiNotes,
+      setMidiNotes,
     }),
     [
       connectedInput,
@@ -92,6 +115,7 @@ function useMidiContext(): MidiContext {
       inputs,
       inputSettings,
       updateInputSettingsState,
+      midiNotes,
     ],
   );
 }

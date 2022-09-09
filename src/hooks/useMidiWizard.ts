@@ -2,12 +2,15 @@ import { useMemo, useState } from 'react';
 import { useAsync } from 'react-use';
 import { useMidi } from '@src/components/providers/MidiProvider';
 import type { MidiRange } from '@src/services/Midi/shared';
-import { useActiveMidiNotes } from './useActiveMidiNotes';
 
 export function useMidiWizard(): Partial<MidiRange> {
-  const { connectedInput, isInputReady, inputSettings, updateInputSettings } =
-    useMidi();
-  const midiNotes = useActiveMidiNotes();
+  const {
+    connectedInput,
+    isInputReady,
+    inputSettings,
+    updateInputSettings,
+    midiNotes,
+  } = useMidi();
   const [firstNote, setFirstNote] = useState<number>();
 
   useAsync(async () => {

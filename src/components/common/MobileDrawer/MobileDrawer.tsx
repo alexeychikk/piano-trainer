@@ -2,7 +2,7 @@ import type { SwipeableDrawerProps } from '@material-ui/core';
 import { Button, SwipeableDrawer, Toolbar } from '@material-ui/core';
 import { ArrowBackIos } from '@material-ui/icons';
 import clsx from 'clsx';
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useStyles } from './MobileDrawer.styles';
 
 export interface MobileDrawerProps {
@@ -17,12 +17,14 @@ export interface MobileDrawerProps {
 
 export const MobileDrawer: React.FC<MobileDrawerProps> = (props) => {
   const classes = useStyles();
+  const drawerClasses = useMemo(
+    () => ({ paper: clsx(classes.mobileDrawerPaper, props.className) }),
+    [classes],
+  );
 
   return (
     <SwipeableDrawer
-      classes={{
-        paper: clsx(classes.mobileDrawerPaper, props.className),
-      }}
+      classes={drawerClasses}
       variant="temporary"
       open={props.open}
       onOpen={props.onOpen}
