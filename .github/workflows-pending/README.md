@@ -9,9 +9,13 @@ refusing to allow a GitHub App to create or update workflow `.github/workflows/c
 without `workflows` permission
 ```
 
-## To activate them (a human with write access, one command)
+## To activate them (a human with write access)
+
+`.github/workflows/` does not exist yet, so create it first — `git mv` into a missing directory
+fails with `fatal: renaming ... failed: No such file or directory`.
 
 ```bash
+mkdir -p .github/workflows
 git mv .github/workflows-pending/ci.yml     .github/workflows/ci.yml
 git mv .github/workflows-pending/deploy.yml .github/workflows/deploy.yml
 git rm .github/workflows-pending/README.md
