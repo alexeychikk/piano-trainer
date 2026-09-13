@@ -29,12 +29,15 @@ publishing `master` to Pages). The required status check is the job name
 `lint · check · test · build · e2e` (U+00B7 middots — copy it verbatim); the `WIP` check on pull
 requests comes from a third-party marketplace app and must never be a required check.
 
-**Pages was enabled by hand and stays that way.** `configure-pages@v5`'s `enablement: true` cannot
+**Pages' source is set by hand and stays that way.** `configure-pages@v5`'s `enablement: true` cannot
 create the site — that needs repo admin, which neither `GITHUB_TOKEN` nor an app token has, so the
-first deploy died on `Create Pages site failed. Error: Resource not accessible by integration`. The
-owner set *Settings → Pages → Build and deployment → Source: `GitHub Actions`* once. Never "fix" a
-Pages problem with the platform's `enable_pages` tool: it sets a **branch** source, which is the
-wrong source for an Actions deploy.
+first deploy died on `Create Pages site failed. Error: Resource not accessible by integration`. A repo
+admin must therefore set *Settings → Pages → Build and deployment → Source: `GitHub Actions`* once.
+**Owner action, pending as of 2026-09-13**: until it is done, `deploy.yml` fails at `configure-pages`
+and https://alexeychikk.github.io/piano-trainer/ stays a 404 — a red deploy run on `master` means
+this, not a workflow bug. Once it is set, no code change is needed; re-run the deploy workflow. Never
+"fix" a Pages problem with the platform's `enable_pages` tool: it sets a **branch** source, which is
+the wrong source for an Actions deploy.
 
 ## Stack (decided — do not re-litigate, amend the ADR instead)
 

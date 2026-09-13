@@ -36,11 +36,11 @@ jobs:
       # which needs repo admin — GITHUB_TOKEN and GitHub App installation tokens
       # do not have it. On this repo it failed with
       #   Create Pages site failed. Error: Resource not accessible by integration
-      # so the owner enabled Pages by hand, once:
+      # so the Pages source must be set by hand, once, by a repo admin:
       #   Settings -> Pages -> Build and deployment -> Source: GitHub Actions
-      # It is kept `true` because it is a no-op once the site exists (and lets a
-      # fork with an admin token bootstrap itself). If this step ever fails with
-      # "Resource not accessible by integration" again, that setting is the fix.
+      # Still pending as of 2026-09-13 — until it is set this step fails here
+      # and nothing is published. It is kept `true` because it is a no-op once
+      # the site exists (and lets a fork with an admin token bootstrap itself).
       - uses: actions/configure-pages@v5
         with:
           enablement: true
