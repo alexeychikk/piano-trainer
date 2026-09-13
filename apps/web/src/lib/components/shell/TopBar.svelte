@@ -3,6 +3,7 @@
   import { page } from '$app/state';
   import { NAV_ITEMS, isActive } from './nav';
   import StatusChip from './StatusChip.svelte';
+  import { midiInput } from '$lib/midi/input.svelte';
 </script>
 
 <header class="topbar">
@@ -26,13 +27,14 @@
   </nav>
 
   <div class="status">
-    <!-- Static until slice 2 (MIDI) and slice 3 (audio) wire real state in. -->
     <StatusChip
       href="/settings#midi"
-      glyph="○"
-      label="No MIDI device"
-      srLabel="MIDI: no device connected"
+      glyph={midiInput.chip.glyph}
+      label={midiInput.chip.label}
+      srLabel={midiInput.chip.srLabel}
+      tone={midiInput.chip.tone}
     />
+    <!-- Static until slice 3 wires the audio engine in. -->
     <StatusChip
       href="/settings#sound"
       glyph="🔇"

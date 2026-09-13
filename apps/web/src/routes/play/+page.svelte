@@ -1,13 +1,133 @@
 <script lang="ts">
-  import Placeholder from '$lib/components/shell/Placeholder.svelte';
+  /**
+   * Free play (UX spec §2, route `/play`): the keyboard, what you are holding
+   * and the chord it spells. Silent by design — the audio engine arrives in
+   * slice 3 — so this screen answers one question: does my hardware work?
+   */
+  import NoMidiStrip from '$lib/components/midi/NoMidiStrip.svelte';
+  import PianoKeyboard from '$lib/components/piano/PianoKeyboard.svelte';
+  import type { KeyHighlight } from '$lib/components/piano/highlights';
+  import { computerKeyboard } from '$lib/midi/computer-keys.svelte';
+  import { midiInput } from '$lib/midi/input.svelte';
+  import { COMPUTER_KEY_HINT } from '$lib/midi/keymap';
+  import { settings } from '$lib/storage/settings.svelte';
+  import { detectChords, midiToName, type Midi } from '$lib/theory';
+
+  const held = $derived(midiInput.held);
+
+  const highlights = $derived(
+    new Map<Midi, KeyHighlight>(held.map((midi) => [midi, 'played'])),
+  );
+
+  const noteNames = $derived(held.map((midi) => midiToName(midi)));
+  const chords = $derived(detectChords(held));
+  const octaveLabel = $derived(midiToName(computerKeyboard.lowestMidi));
 </script>
 
 <svelte:head>
   <title>Free play · piano-trainer</title>
 </svelte:head>
 
-<Placeholder
-  title="Free play"
-  note="The piano keyboard, your held notes and the chord they spell — also the page that tells you whether your hardware works."
-  slice={2}
+<h1>Free play</h1>
+<p class="lede">
+  Play anything — your notes light up here. No sound yet; the audio engine
+  arrives with the next slice.
+</p>
+
+<NoMidiStrip />
+
+<section class="readout" aria-live="polite">
+  <p class="chord" data-testid="chord">
+    {#if chords.length > 0}
+      {chords[0].name}
+    {:else if held.length > 0}
+      {noteNames.join(' ')}
+    {:else}
+      <span class="idle">Play a chord</span>
+    {/if}
+  </p>
+  <p class="notes" data-testid="held-notes">
+    {#if held.length > 0}
+      <span class="tabular">{noteNames.join(' · ')}</span>
+      {#if chords.length > 1}
+        <span class="alternatives">
+          also {chords
+            .slice(1, 4)
+            .map((chord) => chord.name)
+            .join(' · ')}
+        </span>
+      {/if}
+    {:else}
+      &nbsp;
+    {/if}
+  </p>
+</section>
+
+<PianoKeyboard
+  layout={61}
+  {highlights}
+  labels={settings.value.noteLabels}
+  onNoteOn={(midi) => midiInput.noteOn(midi, 'onscreen')}
+  onNoteOff={(midi) => midiInput.noteOff(midi, 'onscreen')}
 />
+
+<p class="hint">
+  Computer keys <kbd>{COMPUTER_KEY_HINT}</kbd> play from {octaveLabel} upwards;
+  <kbd>Z</kbd> / <kbd>X</kbd> shift the octave.
+</p>
+
+<style>
+  .lede {
+    margin-top: var(--space-2);
+    margin-bottom: var(--space-5);
+    color: var(--text-2);
+  }
+
+  .readout {
+    margin: var(--space-6) 0;
+    text-align: center;
+  }
+
+  .chord {
+    /* Reserved height, so the line never pushes the keyboard around. */
+    min-height: calc(var(--fs-display) * var(--lh-tight));
+    font-size: var(--fs-display);
+    line-height: var(--lh-tight);
+    font-weight: var(--fw-bold);
+  }
+
+  .idle {
+    color: var(--text-3);
+    font-size: var(--fs-h1);
+    font-weight: var(--fw-regular);
+  }
+
+  .notes {
+    min-height: calc(var(--fs-body-lg) * var(--lh-base));
+    color: var(--text-2);
+    font-size: var(--fs-body-lg);
+  }
+
+  .alternatives {
+    margin-left: var(--space-3);
+    color: var(--text-3);
+    font-size: var(--fs-small);
+  }
+
+  .hint {
+    margin-top: var(--space-5);
+    text-align: center;
+    color: var(--text-3);
+    font-size: var(--fs-small);
+  }
+
+  kbd {
+    padding: 0 var(--space-1);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg-1);
+    color: var(--text-2);
+    font-family: var(--font-mono);
+    font-size: var(--fs-micro);
+  }
+</style>

@@ -37,8 +37,10 @@ export default ts.config(
     },
   },
   {
-    // The layering rule from the ADR (§9): non-UI modules never import Svelte
-    // components, and `theory` imports nothing local.
+    // Layering, part 1 (ADR §9): non-UI modules never import Svelte
+    // *components*. Components are PascalCase `.svelte` files; the runes state
+    // modules (`foo.svelte.ts`, imported as `./foo.svelte`) are plain TS and
+    // are exactly what shared reactive state is supposed to live in.
     files: ['apps/web/src/lib/**/*.ts'],
     ignores: ['apps/web/src/lib/components/**'],
     rules: {
@@ -47,9 +49,29 @@ export default ts.config(
         {
           patterns: [
             {
-              group: ['**/*.svelte'],
+              regex: '(^|/)[A-Z][A-Za-z0-9]*\\.svelte$',
+              caseSensitive: true,
               message:
                 'Non-UI modules must not import Svelte components (ADR 0001 §9).',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    // Layering, part 2 (ADR §4): `theory` is pure TypeScript that imports
+    // nothing local — no DOM, no Svelte, no app modules.
+    files: ['apps/web/src/lib/theory/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['$lib/**', '$app/**', '../**'],
+              message:
+                '$lib/theory must not import anything local (ADR 0001 §4).',
             },
           ],
         },
