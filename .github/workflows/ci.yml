@@ -36,6 +36,7 @@ jobs:
       - name: Install Playwright browsers
         run: pnpm --filter web exec playwright install --with-deps chromium
 
+      # Reuses the build above — playwright.config.ts only previews when CI=true.
       - run: pnpm test:e2e
 
       - if: failure()
