@@ -1,5 +1,20 @@
 # piano-trainer codebase overview (pre-rewrite)
 
+> **Status / canonicality.** Ticket c6e743a3 asked for this content as a knowledge-base entry
+> titled *"piano-trainer codebase overview (pre-rewrite)"*. `upsert_knowledge` is exposed only to
+> the **product** role — architect, reviewer and QA all confirmed they cannot call it — so the
+> content lives here instead.
+>
+> **Product: upsert everything below the horizontal rule verbatim as that entry.** Once it exists,
+> the KB entry is canonical and this file should be cut down to a one-line pointer to it (reviewer's
+> and QA's agreed option (a)). Until then **this file is canonical** — it is the only copy, so do
+> not delete it before the KB entry lands.
+>
+> Downstream tickets that say "read the knowledge entry" should read this file until that swap
+> happens.
+
+---
+
 Survey of `alexeychikk/piano-trainer` @ `master` as it stands before the Svelte rewrite.
 Ticket c6e743a3 — a map, not an inventory.
 
@@ -18,6 +33,11 @@ Two screens only:
 - **Ear training** (`/ear-training`) — single-note recognition: plays a random note inside a
   user-chosen range, you find it on the keyboard, spacebar replays / advances. This is roughly
   curriculum item #1 and nothing beyond it.
+  **Note the input ergonomics** (`EarTraining.tsx` L79–88): once you have answered correctly, you
+  advance to the next question by *playing either boundary note of the range on the piano* — not by
+  clicking. Hands never leave the keys. That is already an instance of the product's
+  "hands-on-keys / minimal mouse" non-negotiable and is the single best behavioural reference in
+  this repo for the drill-engine design.
 
 Plus: MIDI device picker, a two-keypress "wizard" to learn your keyboard's note range,
 selectable soundfont instrument, volume, note-label toggle.
@@ -59,10 +79,22 @@ src/utils/notes.ts            random-note helpers
 
 ## Tests, CI, docs
 
-- **No tests.** Jest/ts-jest are in `devDependencies` and `tsconfig` includes `__tests__/**/*`,
-  but no config and no test files exist.
-- **No CI** — nothing under `.github/` at any conventional path. Releases were built by hand.
-- **No `CLAUDE.md`, no `docs/decisions/`.** This file is the first doc.
+- **No tests, and the project was never wired to run any.** Jest/ts-jest are in `devDependencies`
+  and `tsconfig` includes `__tests__/**/*` (plus a `@tests/*` path alias), but there is no jest
+  config, no test files, and — decisively — **no `test` script in `package.json`**; `scripts` has
+  only `start`/`build`/`package`/`make`/`lint:*`. Nothing ever invoked jest.
+- **No CI** — nothing under `.github/` at any conventional path. Releases were built by hand
+  (`"publish": null` in the `build` block).
+- **No `CLAUDE.md` and no `docs/decisions/` existed in the surveyed repo.** This file was the first
+  doc; a root `CLAUDE.md` pointing at it was added alongside. `docs/decisions/` is still empty —
+  the first architecture ticket creates it.
+
+> **How this was verified.** This sandbox has no working shell (`Bash` → "No suitable shell found")
+> and no `Glob`/`Grep`, so the survey was done by traversing the import graph with `Read` from the
+> two entry points. Every *positive* finding above is read directly from source. The three
+> *absence* claims — no tests, no CI, no `CLAUDE.md` — are **probe-based** (conventional paths
+> checked and found missing), not directory-listing-exhaustive. Treat them as high-confidence but
+> not proven; a single `git ls-files` in any sandbox that has a shell would settle them.
 
 ## Reuse vs replace
 
@@ -73,7 +105,9 @@ src/utils/notes.ts            random-note helpers
   `Note.sortedNames`, `Chord.detect`). Keep tonal; it is current and does the theory work.
 - `soundfont-player` as the playback approach (browser-native already).
 - `@types/react-piano/index.d.ts` as a spec of the keyboard component's API surface.
-- The EarTraining drill *flow* as a behavioural reference for drill #1.
+- The EarTraining drill *flow* as a behavioural reference for drill #1 — specifically its
+  answer-and-advance loop driven entirely from the keys (see above). Port the *interaction*, not
+  the code.
 
 **Replace (everything else)**
 
