@@ -51,6 +51,9 @@ test('free play shows what is held, from the computer keys and the mouse', async
 
   await expect(page.getByTestId('chord')).toHaveText('CM');
   await expect(page.getByTestId('held-notes')).toContainText('C4 · E4 · G4');
+  // Screen readers hear one settled summary, never a note-by-note flood
+  // (UX spec §5.5): the visible readout is not a live region.
+  await expect(page.getByTestId('spoken')).toContainText('CM — C 4, E 4, G 4');
   await expect(page.getByRole('button', { name: 'C 4' })).toHaveAttribute(
     'aria-pressed',
     'true',

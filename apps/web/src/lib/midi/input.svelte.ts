@@ -149,18 +149,22 @@ export class MidiInput {
       this.status = 'unsupported';
       return;
     }
+    let permission: PermissionStatus | undefined;
     try {
-      const permissions = navigator.permissions;
-      const permission = await permissions?.query({
+      permission = await navigator.permissions?.query({
         name: 'midi' as PermissionName,
       });
-      if (permission && permission.state !== 'granted') {
-        if (permission.state === 'denied') this.status = 'denied';
-        return;
-      }
     } catch {
-      // Browsers that do not expose the `midi` permission would prompt here;
-      // leave that to the user's gesture instead.
+      // The query itself failed (some browsers reject the unknown `midi`
+      // permission name); fall through to the same "ask nothing" branch.
+      permission = undefined;
+    }
+    // Without a definite `granted` we must not touch `requestMIDIAccess`:
+    // ADR §3 forbids prompting on page load, and a browser that exposes no
+    // `navigator.permissions` at all would do exactly that. Stay `idle` and
+    // wait for the user's gesture (`connect()`).
+    if (permission?.state !== 'granted') {
+      if (permission?.state === 'denied') this.status = 'denied';
       return;
     }
     await this.connect();

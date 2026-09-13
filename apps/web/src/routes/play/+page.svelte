@@ -11,7 +11,23 @@
   import { midiInput } from '$lib/midi/input.svelte';
   import { COMPUTER_KEY_HINT } from '$lib/midi/keymap';
   import { settings } from '$lib/storage/settings.svelte';
-  import { detectChords, midiToName, type Midi } from '$lib/theory';
+  import {
+    detectChords,
+    midiToName,
+    spokenNoteName,
+    type Midi,
+  } from '$lib/theory';
+
+  /**
+   * How long the held set must stay still before we announce it. UX spec §5.5:
+   * highlight changes are announced "as summaries, not per key — never per
+   * note-on, which would flood a screen reader during play". So the visible
+   * readout is *not* a live region; this settling window is, and a run of
+   * note-ons while playing only ever produces one announcement at the end.
+   * Deliberately far longer than the runner's `CHORD_SETTLE_MS` (90 ms, §4.4):
+   * that one captures an answer, this one waits for a hand to come to rest.
+   */
+  const ANNOUNCE_SETTLE_MS = 700;
 
   const held = $derived(midiInput.held);
 
@@ -22,6 +38,26 @@
   const noteNames = $derived(held.map((midi) => midiToName(midi)));
   const chords = $derived(detectChords(held));
   const octaveLabel = $derived(midiToName(computerKeyboard.lowestMidi));
+
+  /** What a screen reader hears once the hand settles (empty = say nothing). */
+  const spokenSummary = $derived(
+    held.length === 0
+      ? ''
+      : [chords[0]?.name, held.map((midi) => spokenNoteName(midi)).join(', ')]
+          .filter(Boolean)
+          .join(' — '),
+  );
+
+  let announcement = $state('');
+
+  $effect(() => {
+    const summary = spokenSummary;
+    const timer = setTimeout(() => {
+      announcement = summary;
+    }, ANNOUNCE_SETTLE_MS);
+    // Each change restarts the window, so only the settled set is announced.
+    return () => clearTimeout(timer);
+  });
 </script>
 
 <svelte:head>
@@ -36,7 +72,8 @@
 
 <NoMidiStrip />
 
-<section class="readout" aria-live="polite">
+<!-- Visual only: see `ANNOUNCE_SETTLE_MS` for what is announced instead. -->
+<section class="readout">
   <p class="chord" data-testid="chord">
     {#if chords.length > 0}
       {chords[0].name}
@@ -62,6 +99,15 @@
     {/if}
   </p>
 </section>
+
+<p
+  class="visually-hidden"
+  role="status"
+  aria-live="polite"
+  data-testid="spoken"
+>
+  {announcement}
+</p>
 
 <PianoKeyboard
   layout={61}

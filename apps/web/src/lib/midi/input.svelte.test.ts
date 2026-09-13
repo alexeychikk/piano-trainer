@@ -190,6 +190,65 @@ describe('MidiInput', () => {
     expect(input.status).toBe('idle');
   });
 
+  it('never prompts on load when the browser has no permissions API', async () => {
+    // A browser with `requestMIDIAccess` but no `navigator.permissions` must
+    // not be probed: `requestMIDIAccess` there *is* the prompt (ADR §3).
+    const requestSpy = vi.fn();
+    installWebMidi(new FakeAccess([piano()]));
+    Object.defineProperty(navigator, 'requestMIDIAccess', {
+      configurable: true,
+      writable: true,
+      value: requestSpy,
+    });
+    Object.defineProperty(navigator, 'permissions', {
+      configurable: true,
+      writable: true,
+      value: undefined,
+    });
+
+    const input = new MidiInput();
+    await input.autoConnect();
+    expect(requestSpy).not.toHaveBeenCalled();
+    expect(input.status).toBe('idle');
+  });
+
+  it('never prompts on load when the permission query throws', async () => {
+    const requestSpy = vi.fn();
+    installWebMidi(new FakeAccess([piano()]));
+    Object.defineProperty(navigator, 'requestMIDIAccess', {
+      configurable: true,
+      writable: true,
+      value: requestSpy,
+    });
+    Object.defineProperty(navigator, 'permissions', {
+      configurable: true,
+      writable: true,
+      value: {
+        query: vi.fn().mockRejectedValue(new TypeError('unknown permission')),
+      },
+    });
+
+    const input = new MidiInput();
+    await input.autoConnect();
+    expect(requestSpy).not.toHaveBeenCalled();
+    expect(input.status).toBe('idle');
+  });
+
+  it('records a blocked permission found on load without prompting', async () => {
+    const requestSpy = vi.fn();
+    installWebMidi(new FakeAccess([piano()]), 'denied');
+    Object.defineProperty(navigator, 'requestMIDIAccess', {
+      configurable: true,
+      writable: true,
+      value: requestSpy,
+    });
+
+    const input = new MidiInput();
+    await input.autoConnect();
+    expect(requestSpy).not.toHaveBeenCalled();
+    expect(input.status).toBe('denied');
+  });
+
   it('reconnects silently when the permission is already granted', async () => {
     installWebMidi(new FakeAccess([piano()]));
     const input = new MidiInput();

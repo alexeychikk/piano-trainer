@@ -96,6 +96,10 @@ Everything runs from the root and is filtered into `apps/web`; never run a packa
   [`docs/design/tokens.css`](docs/design/tokens.css)) — **no raw hex or magic px outside that file**.
   Dark-first. Correct/wrong/target states always pair colour with a glyph (never colour alone), and
   **no modal dialogs while an exercise is running** — use the banner/strip patterns in the UX spec.
+  *One exemption*: hairlines, press offsets, insets and one-off keyframe distances that the UX spec
+  fixes literally (the piano key's 3 px black-key radius, 2 px press offset, 4 px edge bar, …) stay
+  literal in the component that draws them — tokenising a single-use 2 px only hides where it came
+  from. Cite the spec section in a comment; everything reusable still becomes a token.
 - Prettier: single quotes, width 80, trailing commas, LF, 2 spaces. Commits follow **Conventional
   Commits** (`feat:`, `fix:`, `docs:`, `chore:`) — enforced by commitlint.
 - Tests: pure logic (theory, grading, scheduler, MIDI parsing) always gets a Vitest test; glue and

@@ -77,3 +77,26 @@ export function mergeHighlights(
 export function isPressable(state: KeyHighlight | null): boolean {
   return state !== 'dim';
 }
+
+/**
+ * The next key roving focus may land on, searching from `from` towards `step`
+ * (+1 up, -1 down) and skipping keys that cannot take focus — `dim` keys are
+ * rendered `disabled`, so focusing one is a no-op and arrow navigation would
+ * dead-end on it (UX §5.5: the group is one tab stop, arrows walk the keys).
+ *
+ * `from` is clamped into `bounds` first. Returns `null` when there is nothing
+ * focusable in that direction, which means "stay where you are".
+ */
+export function nextFocusableMidi(
+  from: Midi,
+  step: 1 | -1,
+  bounds: { low: Midi; high: Midi },
+  focusable: (midi: Midi) => boolean,
+): Midi | null {
+  let midi = Math.min(Math.max(from, bounds.low), bounds.high);
+  while (midi >= bounds.low && midi <= bounds.high) {
+    if (focusable(midi)) return midi;
+    midi += step;
+  }
+  return null;
+}

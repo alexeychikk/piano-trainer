@@ -26,6 +26,7 @@
   import {
     HIGHLIGHT_GLYPHS,
     isPressable,
+    nextFocusableMidi,
     type KeyHighlight,
   } from './highlights';
 
@@ -78,16 +79,34 @@
 
   /** Roving focus: the group is one tab stop (UX §5.5). */
   let focusMidi = $state<Midi | null>(null);
-  const rovingMidi = $derived(
-    focusMidi !== null &&
-      focusMidi >= keyRange.low &&
-      focusMidi <= keyRange.high
-      ? focusMidi
-      : defaultFocus(keyRange),
-  );
+  const rovingMidi = $derived(resolveRoving());
 
   function defaultFocus(bounds: KeyRange): Midi {
     return Math.min(Math.max(60, bounds.low), bounds.high);
+  }
+
+  /** A key can only hold focus while it is rendered pressable (not `dim`). */
+  function isFocusableKey(midi: Midi): boolean {
+    return interactive && isPressable(highlightOf(midi));
+  }
+
+  /**
+   * The single tab stop. Prefer the last focused key, else middle C clamped
+   * into range — but never a key that renders `disabled`, or tabbing into the
+   * keyboard would land nowhere.
+   */
+  function resolveRoving(): Midi {
+    const preferred =
+      focusMidi !== null &&
+      focusMidi >= keyRange.low &&
+      focusMidi <= keyRange.high
+        ? focusMidi
+        : defaultFocus(keyRange);
+    return (
+      nextFocusableMidi(preferred, 1, keyRange, isFocusableKey) ??
+      nextFocusableMidi(preferred, -1, keyRange, isFocusableKey) ??
+      preferred
+    );
   }
 
   function highlightOf(midi: Midi): KeyHighlight | null {
@@ -150,20 +169,20 @@
       case 'ArrowRight':
       case 'ArrowUp':
         event.preventDefault();
-        moveFocus(midi + 1);
+        moveFocus(midi + 1, 1);
         return;
       case 'ArrowLeft':
       case 'ArrowDown':
         event.preventDefault();
-        moveFocus(midi - 1);
+        moveFocus(midi - 1, -1);
         return;
       case 'Home':
         event.preventDefault();
-        moveFocus(keyRange.low);
+        moveFocus(keyRange.low, 1);
         return;
       case 'End':
         event.preventDefault();
-        moveFocus(keyRange.high);
+        moveFocus(keyRange.high, -1);
         return;
       case 'Enter':
       case ' ':
@@ -178,8 +197,12 @@
     if (event.key === 'Enter' || event.key === ' ') release(-1);
   }
 
-  function moveFocus(midi: Midi) {
-    const next = Math.min(Math.max(midi, keyRange.low), keyRange.high);
+  /** Move roving focus to the next key that can actually take it. */
+  function moveFocus(midi: Midi, step: 1 | -1) {
+    const next = nextFocusableMidi(midi, step, keyRange, isFocusableKey);
+    // Nothing focusable that way (the edge, or only `dim` keys left): stay put,
+    // so DOM focus and `focusMidi` never disagree.
+    if (next === null) return;
     focusMidi = next;
     document.getElementById(keyId(next))?.focus();
   }
@@ -255,6 +278,12 @@
 </div>
 
 <style>
+  /*
+   * The raw px below (black-key radius, press offset, target outline, ghost
+   * inset, edge bar, shake distance/duration) are spec-fixed literals from UX
+   * §5.3 — see the tokens exemption in the root `CLAUDE.md`. Everything
+   * reusable — colours, spacing, easing, key sizes — is a token.
+   */
   .frame {
     display: flex;
     align-items: stretch;

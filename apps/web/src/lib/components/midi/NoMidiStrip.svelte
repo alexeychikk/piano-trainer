@@ -4,6 +4,7 @@
    * strip, never a dialog. Copy comes from `$lib/midi/status` so every screen
    * says the same thing.
    */
+  import { goto } from '$app/navigation';
   import { base } from '$app/paths';
   import { onMount } from 'svelte';
   import { midiInput } from '$lib/midi/input.svelte';
@@ -32,14 +33,30 @@
 
   async function connect() {
     await midiInput.connect();
+    // §4.6: if access resolves with no inputs there is nothing more to do here,
+    // so take the user where the device list and the troubleshooting copy live.
+    if (midiInput.status === 'granted' && midiInput.devices.length === 0) {
+      await goto(`${base}/settings#midi`);
+    }
   }
+
+  /**
+   * Once access is blocked, `requestMIDIAccess` is rejected instantly by the
+   * browser and the button would change nothing — §4.6 asks for the settings
+   * link instead. Same for `unsupported`, where there is nothing to request.
+   */
+  const canRequest = $derived(
+    midiInput.supported &&
+      midiInput.status !== 'granted' &&
+      midiInput.status !== 'denied',
+  );
 </script>
 
 {#if midiInput.explanation && !dismissed}
   <div class="strip">
     <span class="glyph" aria-hidden="true">⌨</span>
     <p class="message">{midiInput.explanation}</p>
-    {#if midiInput.supported && midiInput.status !== 'granted'}
+    {#if canRequest}
       <button type="button" class="action" onclick={connect}
         >Connect MIDI</button
       >

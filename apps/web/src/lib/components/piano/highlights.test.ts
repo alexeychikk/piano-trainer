@@ -3,6 +3,7 @@ import {
   HIGHLIGHT_GLYPHS,
   isPressable,
   mergeHighlights,
+  nextFocusableMidi,
   strongestHighlight,
   type KeyHighlight,
 } from './highlights';
@@ -61,5 +62,33 @@ describe('cues', () => {
     expect(isPressable('dim')).toBe(false);
     expect(isPressable(null)).toBe(true);
     expect(isPressable('played')).toBe(true);
+  });
+});
+
+describe('nextFocusableMidi', () => {
+  const bounds = { low: 60, high: 72 };
+  /** 62-64 dimmed, as an exercise range would dim them. */
+  const focusable = (midi: number) => midi < 62 || midi > 64;
+
+  it('returns the key itself when it can take focus', () => {
+    expect(nextFocusableMidi(67, 1, bounds, focusable)).toBe(67);
+  });
+
+  it('skips dimmed keys in the direction of travel', () => {
+    expect(nextFocusableMidi(62, 1, bounds, focusable)).toBe(65);
+    expect(nextFocusableMidi(64, -1, bounds, focusable)).toBe(61);
+  });
+
+  it('clamps into range, so Home/End land on a pressable key', () => {
+    expect(nextFocusableMidi(0, 1, bounds, focusable)).toBe(60);
+    expect(nextFocusableMidi(127, -1, bounds, focusable)).toBe(72);
+    expect(nextFocusableMidi(1, 1, { low: 62, high: 72 }, focusable)).toBe(65);
+  });
+
+  it('stays put when nothing in that direction can take focus', () => {
+    expect(nextFocusableMidi(73, 1, bounds, () => false)).toBeNull();
+    expect(
+      nextFocusableMidi(64, 1, { low: 60, high: 64 }, focusable),
+    ).toBeNull();
   });
 });

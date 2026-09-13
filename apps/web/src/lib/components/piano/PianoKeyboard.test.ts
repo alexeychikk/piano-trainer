@@ -107,4 +107,20 @@ describe('PianoKeyboard input', () => {
     );
     expect(played).toEqual([]);
   });
+
+  it('never puts the tab stop on a dimmed key', () => {
+    // Middle C is the default tab stop; dimmed keys render `disabled`, so
+    // focus has to rove on to the next key that can actually take it.
+    const body = html({
+      highlights: new Map<number, KeyHighlight>([
+        [60, 'dim'],
+        [61, 'dim'],
+      ]),
+    });
+    expect(body).toMatch(/tabindex="-1" aria-label="C 4"/);
+    expect(body).toMatch(/tabindex="-1" aria-label="C sharp 4"/);
+    expect(body).toMatch(/tabindex="0" aria-label="D 4"/);
+    // Exactly one tab stop, whatever is dimmed.
+    expect((body.match(/tabindex="0"/g) ?? []).length).toBe(1);
+  });
 });
