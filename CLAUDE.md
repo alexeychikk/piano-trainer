@@ -7,6 +7,10 @@ backend, static hosting. Desktop browser first.
 — it fixes the stack, the internal music vocabulary, the exercise contract and the slice order.
 Anything below is the short version; the ADR wins on detail.
 
+**Before building any UI**: [`docs/design/core-practice-ux.md`](docs/design/core-practice-ux.md) —
+routes, app shell, exercise-runner states and timing, piano-keyboard spec, tokens, a11y rules and the
+copy deck. It is authoritative for layout, states, copy and visuals; do not invent UX.
+
 ## Repository layout
 
 | Path | What |
@@ -56,6 +60,10 @@ pnpm test:e2e     # playwright
 - Audio is scheduled on `AudioContext.currentTime` through the shared lookahead scheduler, never with
   `setTimeout`. The `AudioContext` starts on a user gesture.
 - Links and assets go through `base` from `$app/paths` (GitHub Pages serves under `/piano-trainer/`).
+- **UI**: all colours, sizes, spacing and durations come from `$lib/styles/tokens.css` (copied from
+  [`docs/design/tokens.css`](docs/design/tokens.css)) — **no raw hex or magic px outside that file**.
+  Dark-first. Correct/wrong/target states always pair colour with a glyph (never colour alone), and
+  **no modal dialogs while an exercise is running** — use the banner/strip patterns in the UX spec.
 - Prettier: single quotes, width 80, trailing commas, LF, 2 spaces. Commits follow **Conventional
   Commits** (`feat:`, `fix:`, `docs:`, `chore:`) — enforced by commitlint.
 - Tests: pure logic (theory, grading, scheduler, MIDI parsing) always gets a Vitest test; glue and
