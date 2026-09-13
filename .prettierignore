@@ -1,9 +1,13 @@
-packages
-dist
-node_modules
-coverage
-.eslintignore
-.gitignore
-.prettierignore
-CHANGELOG.md
-*.svg
+legacy/
+node_modules/
+pnpm-lock.yaml
+apps/web/.svelte-kit/
+apps/web/build/
+apps/web/playwright-report/
+apps/web/test-results/
+
+# Authored by hand, kept verbatim: docs are the architect's/designer's source of
+# truth and tokens.css is a byte-for-byte copy of docs/design/tokens.css.
+docs/
+CLAUDE.md
+apps/web/src/lib/styles/tokens.css

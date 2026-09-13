@@ -1,0 +1,9 @@
+packages
+dist
+node_modules
+coverage
+.eslintignore
+.gitignore
+.prettierignore
+CHANGELOG.md
+*.svg
