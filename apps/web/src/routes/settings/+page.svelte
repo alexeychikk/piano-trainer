@@ -5,19 +5,33 @@
    * owns it. Every control applies immediately — no Save button, no dialogs.
    */
   import { base } from '$app/paths';
+  import MetronomePanel from '$lib/components/audio/MetronomePanel.svelte';
   import PianoKeyboard from '$lib/components/piano/PianoKeyboard.svelte';
   import type { KeyHighlight } from '$lib/components/piano/highlights';
+  import { audio } from '$lib/audio/engine.svelte';
+  import { INSTRUMENTS } from '$lib/audio/instruments';
+  import { audioExplanation } from '$lib/audio/status';
   import { midiInput } from '$lib/midi/input.svelte';
   import { settings, type LabelMode } from '$lib/storage/settings.svelte';
-  import type { Midi } from '$lib/theory';
+  import { MIDDLE_C, type Midi } from '$lib/theory';
+
+  /** A short arpeggio, so "Test" says something about the instrument. */
+  const TEST_PHRASE: { midi: Midi; at: number }[] = [
+    { midi: MIDDLE_C, at: 0 },
+    { midi: MIDDLE_C + 4, at: 0.18 },
+    { midi: MIDDLE_C + 7, at: 0.36 },
+    { midi: MIDDLE_C + 11, at: 0.54 },
+  ];
+
+  const volumePercent = $derived(Math.round(settings.value.volume * 100));
+  const soundExplanation = $derived(audioExplanation({ status: audio.status }));
+
+  async function testSound() {
+    await audio.ensureStarted();
+    audio.playSequence(TEST_PHRASE, { velocity: 90 });
+  }
 
   const PENDING_SECTIONS = [
-    {
-      id: 'sound',
-      title: 'Sound',
-      note: 'Instrument, volume and the metronome tempo.',
-      slice: 3,
-    },
     {
       id: 'practice',
       title: 'Practice',
@@ -129,6 +143,64 @@
   </p>
 </section>
 
+<section id="sound">
+  <h2>Sound</h2>
+
+  <div class="row">
+    <label for="instrument">Instrument</label>
+    <select
+      id="instrument"
+      value={settings.value.instrument}
+      onchange={(event) => audio.setInstrument(event.currentTarget.value)}
+    >
+      {#each INSTRUMENTS as instrument (instrument.id)}
+        <option value={instrument.id}>{instrument.name}</option>
+      {/each}
+    </select>
+    <span class="state" class:connected={audio.status === 'ready'}>
+      <span aria-hidden="true">{audio.chip.glyph}</span>
+      {audio.chip.label}
+    </span>
+  </div>
+
+  {#if soundExplanation}
+    <p class="note">{soundExplanation}</p>
+  {/if}
+
+  <div class="row">
+    <label for="volume">Volume</label>
+    <input
+      id="volume"
+      type="range"
+      min="0"
+      max="100"
+      step="1"
+      value={volumePercent}
+      oninput={(event) =>
+        audio.setVolume(Number(event.currentTarget.value) / 100)}
+    />
+    <span class="state tabular">{volumePercent}%</span>
+    <button type="button" class="action inline" onclick={testSound}>
+      Test <span aria-hidden="true">♪</span>
+    </button>
+  </div>
+
+  <div class="row">
+    <label class="choice" for="sound-on">
+      <input
+        id="sound-on"
+        type="checkbox"
+        checked={settings.value.soundEnabled}
+        onchange={(event) => audio.setMuted(!event.currentTarget.checked)}
+      />
+      Sound on
+    </label>
+    <span class="slice">Press <kbd>M</kbd> anywhere to mute.</span>
+  </div>
+
+  <MetronomePanel />
+</section>
+
 {#each PENDING_SECTIONS as section (section.id)}
   <section id={section.id}>
     <h2>{section.title}</h2>
@@ -147,8 +219,32 @@
     max-width: 60ch;
   }
 
-  #midi {
+  #midi,
+  #sound {
     max-width: var(--content-max);
+  }
+
+  .tabular {
+    font-family: var(--font-mono);
+  }
+
+  .inline {
+    margin-top: 0;
+  }
+
+  input[type='range'] {
+    width: 16rem;
+    accent-color: var(--accent);
+  }
+
+  kbd {
+    padding: 0 var(--space-1);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg-2);
+    color: var(--text-2);
+    font-family: var(--font-mono);
+    font-size: var(--fs-micro);
   }
 
   .note {

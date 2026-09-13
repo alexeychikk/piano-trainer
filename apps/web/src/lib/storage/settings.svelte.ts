@@ -18,16 +18,50 @@ export interface AppSettings {
   midiDeviceKey: string | null;
   /** Note labels on the piano keyboard (UX spec §6.3). */
   noteLabels: LabelMode;
+  /**
+   * Soundfont instrument id (slice 3). A plain string on purpose: validating
+   * it against the curated list would make this base layer import
+   * `$lib/audio`, which the layering rule forbids — the engine falls back to
+   * its default when it does not know the id.
+   */
+  instrument: string;
+  /** Master volume, 0..1 (UX spec §6.3 shows the slider at 72%). */
+  volume: number;
+  /** Master mute. `false` keeps the app completely silent. */
+  soundEnabled: boolean;
+  /** Metronome tempo in BPM. */
+  tempoBpm: number;
+  /** Metronome beats per bar; beat 1 is the accented downbeat. */
+  beatsPerBar: number;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
   midiDeviceKey: null,
   noteLabels: 'c-only',
+  instrument: 'acoustic_grand_piano',
+  volume: 0.72,
+  soundEnabled: true,
+  tempoBpm: 90,
+  beatsPerBar: 4,
 };
 
 const STORAGE_KEY = 'piano-trainer:settings';
 
 const LABEL_MODES: readonly LabelMode[] = ['none', 'c-only', 'white', 'all'];
+
+/** Bounds mirrored by `$lib/audio` (`clampVolume`, `clampTempo`, …). */
+const VOLUME_RANGE: readonly [number, number] = [0, 1];
+const TEMPO_RANGE: readonly [number, number] = [40, 240];
+const BEATS_RANGE: readonly [number, number] = [1, 12];
+
+function boundedNumber(
+  value: unknown,
+  [min, max]: readonly [number, number],
+  fallback: number,
+): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return fallback;
+  return Math.min(max, Math.max(min, value));
+}
 
 /** Keep only keys we know, with the right shape — storage is user-editable. */
 export function parseSettings(raw: string | null): AppSettings {
@@ -45,7 +79,29 @@ export function parseSettings(raw: string | null): AppSettings {
   const noteLabels = LABEL_MODES.includes(record.noteLabels as LabelMode)
     ? (record.noteLabels as LabelMode)
     : DEFAULT_SETTINGS.noteLabels;
-  return { midiDeviceKey, noteLabels };
+  return {
+    midiDeviceKey,
+    noteLabels,
+    instrument:
+      typeof record.instrument === 'string'
+        ? record.instrument
+        : DEFAULT_SETTINGS.instrument,
+    volume: boundedNumber(record.volume, VOLUME_RANGE, DEFAULT_SETTINGS.volume),
+    soundEnabled:
+      typeof record.soundEnabled === 'boolean'
+        ? record.soundEnabled
+        : DEFAULT_SETTINGS.soundEnabled,
+    tempoBpm: boundedNumber(
+      record.tempoBpm,
+      TEMPO_RANGE,
+      DEFAULT_SETTINGS.tempoBpm,
+    ),
+    beatsPerBar: boundedNumber(
+      record.beatsPerBar,
+      BEATS_RANGE,
+      DEFAULT_SETTINGS.beatsPerBar,
+    ),
+  };
 }
 
 export class SettingsStore {

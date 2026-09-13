@@ -76,3 +76,14 @@ export function notesInRange(low: Midi, high: Midi): Midi[] {
 export function clampMidi(midi: Midi): Midi {
   return Math.min(MIDI_MAX, Math.max(MIDI_MIN, Math.round(midi)));
 }
+
+/** Concert pitch: A4 = 440 Hz, the reference the synth voices tune to. */
+export const A4_HZ = 440;
+
+/**
+ * Equal-tempered frequency of a MIDI note. Pure maths, so the fallback synth
+ * (and any future tuning work) shares one definition.
+ */
+export function midiToFrequency(midi: Midi): number {
+  return A4_HZ * 2 ** ((midi - 69) / 12);
+}

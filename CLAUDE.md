@@ -82,6 +82,34 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
   never `Math.random()`.
 - Audio is scheduled on `AudioContext.currentTime` through the shared lookahead scheduler, never with
   `setTimeout`. The `AudioContext` starts on a user gesture.
+- **Audio (slice 3)**: one engine — `$lib/audio/engine.svelte.ts`, singleton `audio` — owns the
+  `AudioContext`, the master gain, instrument loading and the instrument cache, and is the only thing
+  that makes a sound. It is created in `ensureStarted()` only, wired once in `+layout.svelte`
+  together with the first-`pointerdown`/`keydown` start, the `m` mute shortcut and the single
+  `midiInput.subscribe` that routes every note to the engine — **screens never play what the user
+  played**, they only read state. `noteOn` never awaits: while samples load (or after they fail) the
+  oscillator synth in `synth.ts` plays instead, so a dead CDN is a thinner sound and a banner
+  (`onFallback`), never silence or an error. `smplr` is imported lazily inside the engine and is the
+  only place soundfonts are touched. Everything timed goes through `PulseScheduler`
+  (`scheduler.ts`, 25 ms tick / 100 ms window); the metronome (`metronome.svelte.ts`, singleton
+  `metronome`) is module-level so the click survives navigation, and its visible beat follows in
+  `requestAnimationFrame` — the light may lag, the click may not. All audio wording lives in
+  `$lib/audio/status.ts`. `audio` and `midi` are sibling layers: neither imports the other (which is
+  why the played-back `DEFAULT_VELOCITY` is deliberately restated in `audio/gain.ts`).
+- **Sound settings** (`instrument`, `volume`, `soundEnabled`, `tempoBpm`, `beatsPerBar`) live in the
+  same `settings` store, but UI changes them through `audio.setVolume/setMuted/setInstrument` and
+  `metronome.setTempo/setBeatsPerBar` — never by patching `settings` directly, because the engine
+  owns the master gain and the running scheduler. Web Audio is never required in tests: use the fake
+  context in `$lib/audio/testing.ts` and mock `smplr`; the Playwright specs block the sample CDN so
+  e2e always exercises the synth fallback. The fake's params keep a timeline: `param.value` reports
+  the automation **at `currentTime`** only (as the real one does) and `param.valueAt(t)` reads a
+  scheduled point — assert with `valueAt` for anything scheduled ahead.
+- **Never anchor future automation on `AudioParam.value`.** The getter is the value *now*, so a
+  release computed at schedule time (a note with a `duration`) would ramp from whatever the node
+  happens to hold rather than from where the envelope will be. Compute it instead —
+  `envelopeGainAt()` in `audio/synth.ts` is the closed form of the synth envelope — and keep a
+  scheduled voice releasable early (`stopAll` mid-playback must cut it), re-anchoring on the earlier
+  of the two times.
 - Links and assets go through `base` from `$app/paths` (GitHub Pages serves under `/piano-trainer/`).
   Routes are prerendered (`+layout.ts`, `trailingSlash: 'always'`); a route whose params are only
   known at runtime opts out with `export const prerender = false` and is served by the SPA fallback

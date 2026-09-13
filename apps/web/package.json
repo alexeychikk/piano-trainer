@@ -29,6 +29,7 @@
     "vitest": "^3.2.7"
   },
   "dependencies": {
+    "smplr": "^1.0.0",
     "tonal": "^6.4.3"
   }
 }

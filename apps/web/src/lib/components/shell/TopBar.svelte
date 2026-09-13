@@ -4,6 +4,7 @@
   import { NAV_ITEMS, isActive } from './nav';
   import StatusChip from './StatusChip.svelte';
   import { midiInput } from '$lib/midi/input.svelte';
+  import { audio } from '$lib/audio/engine.svelte';
 </script>
 
 <header class="topbar">
@@ -34,12 +35,13 @@
       srLabel={midiInput.chip.srLabel}
       tone={midiInput.chip.tone}
     />
-    <!-- Static until slice 3 wires the audio engine in. -->
     <StatusChip
       href="/settings#sound"
-      glyph="🔇"
-      label="Sound off"
-      srLabel="Sound: not available yet"
+      glyph={audio.chip.glyph}
+      label={audio.chip.label}
+      srLabel={audio.chip.srLabel}
+      tone={audio.chip.tone}
+      pulse={audio.chip.pulse}
     />
   </div>
 </header>

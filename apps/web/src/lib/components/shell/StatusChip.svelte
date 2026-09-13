@@ -10,9 +10,18 @@
     /** Spelled-out accessible name, e.g. 'MIDI: no device found'. */
     srLabel: string;
     tone?: 'muted' | 'success' | 'warn' | 'danger';
+    /** UX spec §2.2: the "audio not started" chip pulses once per 4 s. */
+    pulse?: boolean;
   }
 
-  const { href, glyph, label, srLabel, tone = 'muted' }: Props = $props();
+  const {
+    href,
+    glyph,
+    label,
+    srLabel,
+    tone = 'muted',
+    pulse = false,
+  }: Props = $props();
 </script>
 
 <a
@@ -20,6 +29,7 @@
   class:success={tone === 'success'}
   class:warn={tone === 'warn'}
   class:danger={tone === 'danger'}
+  class:pulse
   href={`${base}${href}`}
   aria-label={srLabel}
 >
@@ -63,5 +73,33 @@
     max-width: 22ch;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  /*
+   * "Audio not started" pulses once per 4 s (UX spec §2.2) — a nudge, not an
+   * animation. The 4 s period and the 1.6 % lift are one-off values the spec
+   * fixes for this chip alone, so they stay literal here (CLAUDE.md).
+   */
+  .pulse {
+    animation: chip-pulse 4s var(--ease) infinite;
+  }
+
+  @keyframes chip-pulse {
+    0%,
+    88%,
+    100% {
+      transform: scale(1);
+      border-color: var(--border);
+    }
+    94% {
+      transform: scale(1.016);
+      border-color: currentcolor;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .pulse {
+      animation: none;
+    }
   }
 </style>
