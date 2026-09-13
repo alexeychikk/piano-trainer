@@ -1,0 +1,148 @@
+/**
+ * piano-trainer — design tokens (v1)
+ * Source of truth: docs/design/core-practice-ux.md §7.
+ * Copy this file to apps/web/src/lib/styles/tokens.css and import it once in
+ * the root layout. Components read tokens only — no raw hex outside this file.
+ */
+
+:root,
+[data-theme='dark'] {
+  /* ---- colour ---------------------------------------------------------- */
+  --bg-0: #0e1116; /* app background */
+  --bg-1: #151a21; /* surfaces, top bar, cards */
+  --bg-2: #1d242d; /* raised: buttons, banners, chips */
+  --border: #2a333f; /* hairlines, empty pips */
+
+  --text-1: #f2f5f8; /* 17.3:1 on --bg-0 */
+  --text-2: #a9b4c0; /*  8.98:1 */
+  --text-3: #7c8794; /*  5.18:1 */
+
+  --accent: #5b9dff; /*  6.94:1 — primary action, played keys, links */
+  --success: #3dd68c; /* 10.08:1 — correct */
+  --danger: #ff6b6b; /*  6.81:1 — wrong, destructive */
+  --warn: #ffc65c; /* 12.14:1 — due, attention, degraded */
+  --hint: #b48cff; /*  7.33:1 — target / ghost notes, reveals */
+
+  /* ink used on top of any filled state colour */
+  --on-accent: var(--bg-0);
+  --on-success: var(--bg-0);
+  --on-danger: var(--bg-0);
+  --on-warn: var(--bg-0);
+
+  --key-white: #edf1f5;
+  --key-black: #10151b;
+  --key-white-hover: #dce3ea;
+  --key-black-hover: #1a2028;
+  --key-ink: #10151b; /* 16.2:1 on --key-white */
+
+  --focus: #7cc4ff; /* 10.08:1 on --bg-0 */
+
+  /* ---- type ------------------------------------------------------------ */
+  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
+    Inter, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+
+  --fs-display: 4.5rem; /* 72px / 1.05 / 650 — chord symbols, focus mode  */
+  --fs-prompt: 3.5rem; /* 56px / 1.1  / 650 — runner prompt              */
+  --fs-feedback: 2rem; /* 32px / 1.2  / 650 — correct / wrong line       */
+  --fs-h1: 1.75rem; /* 28px / 1.2  / 650 */
+  --fs-h2: 1.25rem; /* 20px / 1.3  / 600 */
+  --fs-body-lg: 1.125rem; /* 18px / 1.45 / 400 */
+  --fs-body: 1rem; /* 16px / 1.5  / 400 */
+  --fs-small: 0.875rem; /* 14px / 1.45 / 400 */
+  --fs-micro: 0.75rem; /* 12px / 1.3  / 500 — floor, never smaller       */
+
+  --lh-tight: 1.1;
+  --lh-snug: 1.3;
+  --lh-base: 1.5;
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 650;
+
+  /* ---- space / radius -------------------------------------------------- */
+  --space-1: 0.25rem; /*  4px */
+  --space-2: 0.5rem; /*  8px */
+  --space-3: 0.75rem; /* 12px */
+  --space-4: 1rem; /* 16px */
+  --space-5: 1.5rem; /* 24px */
+  --space-6: 2rem; /* 32px */
+  --space-7: 3rem; /* 48px */
+  --space-8: 4rem; /* 64px */
+
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-pill: 999px;
+
+  --shadow-pop: 0 8px 24px rgb(0 0 0 / 0.45); /* help sheet only */
+  --shadow-key-down: inset 0 3px 6px rgb(0 0 0 / 0.35);
+
+  /* ---- layout ---------------------------------------------------------- */
+  --topbar-h: 56px;
+  --statusbar-h: 52px;
+  --shortcutbar-h: 40px;
+  --feedback-h: 88px; /* reserved, never collapses */
+  --content-max: 1440px;
+  --keyboard-max: 1760px;
+  --keyboard-max-h: 280px;
+  --hit-min: 44px; /* minimum interactive target      */
+  --hit-drill: 64px; /* minimum in-exercise control     */
+
+  /* ---- keyboard geometry (see §5.2) ------------------------------------ */
+  --key-white-w-min: 18px;
+  --key-white-w-max: 48px;
+  --key-white-ratio: 6.2; /* height = ratio * width, capped   */
+  --key-black-w-ratio: 0.6; /* of white width                   */
+  --key-black-h-ratio: 0.62; /* of white height                  */
+
+  /* ---- motion ---------------------------------------------------------- */
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+  --dur-slow: 320ms;
+  --ease: cubic-bezier(0.2, 0.8, 0.3, 1);
+
+  /* ---- exercise-loop timing (mirror of runner constants, §4.3) --------- */
+  --feedback-correct-ms: 650ms;
+  --feedback-streak-ms: 450ms;
+  --reveal-delay-ms: 250ms;
+}
+
+/* Light theme is a legibility fallback, not a v1 design target. */
+[data-theme='light'] {
+  --bg-0: #f7f9fb;
+  --bg-1: #ffffff;
+  --bg-2: #eef2f6;
+  --border: #d3dbe4;
+  --text-1: #10151b;
+  --text-2: #46525f;
+  --text-3: #63707d;
+  --accent: #1f5fd0;
+  --success: #10784a;
+  --danger: #c22b2b;
+  --warn: #8a5a00;
+  --hint: #6a3fc0;
+  --on-accent: #ffffff;
+  --on-success: #ffffff;
+  --on-danger: #ffffff;
+  --on-warn: #ffffff;
+  --key-ink: #10151b;
+  --focus: #1f5fd0;
+  --shadow-pop: 0 8px 24px rgb(16 21 27 / 0.18);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-fast: 1ms;
+    --dur-base: 1ms;
+    --dur-slow: 1ms;
+  }
+}
+
+/* Focus ring — one rule, used everywhere (§7.6). The inner 1px --bg-0 shadow
+   keeps the ring visible on white piano keys as well as on dark surfaces. */
+:where(a, button, [role='button'], input, select, textarea, [tabindex]):focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 1px var(--bg-0);
+}

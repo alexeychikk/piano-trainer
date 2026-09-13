@@ -1,3 +1,14 @@
-node_modules
-dist
-packages
+node_modules/
+.DS_Store
+
+# build output
+apps/web/.svelte-kit/
+apps/web/build/
+apps/web/test-results/
+apps/web/playwright-report/
+coverage/
+
+# env
+.env
+.env.*
+!.env.example

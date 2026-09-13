@@ -21,7 +21,10 @@ copy deck. It is authoritative for layout, states, copy and visuals; do not inve
 | `docs/decisions/` | ADRs. |
 | `docs/design/` | UX specs. |
 
-> Until slice 1 lands, the old app still sits at the repository root and `apps/web` does not exist yet.
+Slice 1 has landed: the workspace root holds `package.json` (all scripts), `pnpm-workspace.yaml`
+(`apps/*` only — the legacy app is not a workspace member), `eslint.config.js`, `.prettierrc`,
+`.nvmrc` (Node 22), commitlint + husky hooks, and the CI/Pages workflows (currently parked in
+`.github/workflows-pending/`, see that README).
 
 ## Stack (decided — do not re-litigate, amend the ADR instead)
 
@@ -40,9 +43,12 @@ pnpm preview
 pnpm lint         # eslint + prettier check
 pnpm format       # prettier --write
 pnpm check        # svelte-check / tsc
-pnpm test         # vitest run
-pnpm test:e2e     # playwright
+pnpm test         # vitest run (alias: pnpm test:unit)
+pnpm test:e2e     # playwright — needs `pnpm --filter web exec playwright install chromium` once
 ```
+
+Everything runs from the root and is filtered into `apps/web`; never run a package manager inside
+`legacy/`. CI runs exactly this list: `lint` → `check` → `test:unit` → `build` → `test:e2e`.
 
 ## Code conventions
 
@@ -60,6 +66,14 @@ pnpm test:e2e     # playwright
 - Audio is scheduled on `AudioContext.currentTime` through the shared lookahead scheduler, never with
   `setTimeout`. The `AudioContext` starts on a user gesture.
 - Links and assets go through `base` from `$app/paths` (GitHub Pages serves under `/piano-trainer/`).
+  Routes are prerendered (`+layout.ts`, `trailingSlash: 'always'`); a route whose params are only
+  known at runtime opts out with `export const prerender = false` and is served by the SPA fallback
+  — which on Pages is **`404.html`**, not the ADR's `200.html` (Pages serves `404.html` for unknown
+  paths).
+- App shell: `$lib/components/shell/` — `TopBar` (nav model and active-route rule in the pure
+  `nav.ts`), `StatusChip` (top-bar status, never colour alone), `BannerStack`
+  (`banners.svelte.ts`: non-blocking one-liners, max two, oldest wins) and `Placeholder` (skeleton
+  screens). New global messages go through `banners.show(...)`, never through a dialog.
 - **UI**: all colours, sizes, spacing and durations come from `$lib/styles/tokens.css` (copied from
   [`docs/design/tokens.css`](docs/design/tokens.css)) — **no raw hex or magic px outside that file**.
   Dark-first. Correct/wrong/target states always pair colour with a glyph (never colour alone), and
@@ -67,7 +81,11 @@ pnpm test:e2e     # playwright
 - Prettier: single quotes, width 80, trailing commas, LF, 2 spaces. Commits follow **Conventional
   Commits** (`feat:`, `fix:`, `docs:`, `chore:`) — enforced by commitlint.
 - Tests: pure logic (theory, grading, scheduler, MIDI parsing) always gets a Vitest test; glue and
-  markup usually do not. Playwright covers a thin smoke path per exercise.
+  markup usually do not. Playwright covers a thin smoke path per exercise. Unit tests sit next to
+  the module (`nav.ts` → `nav.test.ts`); e2e specs live in `apps/web/e2e/`.
+- `apps/web/src/lib/styles/tokens.css` is a byte-for-byte copy of `docs/design/tokens.css` — change
+  the spec first, then re-copy. Both files, and everything under `docs/`, are Prettier-ignored so
+  they do not drift.
 
 ## Working agreements
 
