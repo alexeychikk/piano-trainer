@@ -10,9 +10,12 @@ permissions:
   pages: write
   id-token: write
 
+# Queued runs are skipped, but an in-flight *production* deployment is allowed
+# to finish — cancelling one mid-flight can leave Pages on a half-published
+# state. Same setting as GitHub's own Pages starter workflow.
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -29,8 +32,15 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      # Turns Pages on (source: GitHub Actions) the first time this runs, so
-      # nobody has to click through repository settings.
+      # `enablement: true` only works when the token may CREATE the Pages site,
+      # which needs repo admin — GITHUB_TOKEN and GitHub App installation tokens
+      # do not have it. On this repo it failed with
+      #   Create Pages site failed. Error: Resource not accessible by integration
+      # so the Pages source must be set by hand, once, by a repo admin:
+      #   Settings -> Pages -> Build and deployment -> Source: GitHub Actions
+      # Still pending as of 2026-09-13 — until it is set this step fails here
+      # and nothing is published. It is kept `true` because it is a no-op once
+      # the site exists (and lets a fork with an admin token bootstrap itself).
       - uses: actions/configure-pages@v5
         with:
           enablement: true

@@ -5,6 +5,10 @@ on:
   push:
     branches: [master]
 
+# Nothing in this job needs a write token.
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
