@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  MIDDLE_C,
   clampMidi,
   isBlackKey,
+  midiToFrequency,
   midiToName,
   nameToMidi,
   notesInRange,
@@ -59,5 +61,20 @@ describe('ranges', () => {
     expect(clampMidi(-4)).toBe(0);
     expect(clampMidi(9000)).toBe(127);
     expect(clampMidi(60)).toBe(60);
+  });
+});
+
+describe('midiToFrequency', () => {
+  it('tunes A4 to 440 Hz', () => {
+    expect(midiToFrequency(69)).toBe(440);
+  });
+
+  it('doubles every octave', () => {
+    expect(midiToFrequency(81)).toBeCloseTo(880, 6);
+    expect(midiToFrequency(57)).toBeCloseTo(220, 6);
+  });
+
+  it('places middle C just above 261 Hz', () => {
+    expect(midiToFrequency(MIDDLE_C)).toBeCloseTo(261.6255653, 6);
   });
 });

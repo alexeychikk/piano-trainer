@@ -1,9 +1,12 @@
 <script lang="ts">
   /**
-   * Free play (UX spec §2, route `/play`): the keyboard, what you are holding
-   * and the chord it spells. Silent by design — the audio engine arrives in
-   * slice 3 — so this screen answers one question: does my hardware work?
+   * Free play (UX spec §2, route `/play`): the keyboard, what you are holding,
+   * the chord it spells — and, since slice 3, the sound. Notes are not played
+   * from here: the root layout routes every `midiInput` event to the engine,
+   * so this screen stays a view of the same state whatever the source was.
    */
+  import MetronomePanel from '$lib/components/audio/MetronomePanel.svelte';
+  import SoundStrip from '$lib/components/audio/SoundStrip.svelte';
   import NoMidiStrip from '$lib/components/midi/NoMidiStrip.svelte';
   import PianoKeyboard from '$lib/components/piano/PianoKeyboard.svelte';
   import type { KeyHighlight } from '$lib/components/piano/highlights';
@@ -66,11 +69,11 @@
 
 <h1>Free play</h1>
 <p class="lede">
-  Play anything — your notes light up here. No sound yet; the audio engine
-  arrives with the next slice.
+  Play anything — your notes sound and light up here. Press <kbd>M</kbd> to mute.
 </p>
 
 <NoMidiStrip />
+<SoundStrip />
 
 <!-- Visual only: see `ANNOUNCE_SETTLE_MS` for what is announced instead. -->
 <section class="readout">
@@ -121,6 +124,8 @@
   Computer keys <kbd>{COMPUTER_KEY_HINT}</kbd> play from {octaveLabel} upwards;
   <kbd>Z</kbd> / <kbd>X</kbd> shift the octave.
 </p>
+
+<MetronomePanel />
 
 <style>
   .lede {
