@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  DEFAULT_VELOCITY,
   DEFAULT_VOLUME,
   MAX_VELOCITY,
   clampVelocity,
@@ -52,5 +53,14 @@ describe('velocityGain', () => {
     expect(clampVelocity(0)).toBe(1);
     expect(clampVelocity(999)).toBe(MAX_VELOCITY);
     expect(velocityGain(999)).toBe(1);
+  });
+
+  it('falls back to the default velocity for junk, never to the loudest', () => {
+    expect(clampVelocity(Number.NaN)).toBe(DEFAULT_VELOCITY);
+    expect(clampVelocity(undefined as unknown as number)).toBe(
+      DEFAULT_VELOCITY,
+    );
+    expect(clampVelocity(Number.POSITIVE_INFINITY)).toBe(DEFAULT_VELOCITY);
+    expect(velocityGain(Number.NaN)).toBeLessThan(1);
   });
 });

@@ -26,7 +26,9 @@ export function clampVolume(volume: number): number {
 }
 
 export function clampVelocity(velocity: number): number {
-  if (!Number.isFinite(velocity)) return MAX_VELOCITY;
+  // Junk in (a malformed MIDI message, `NaN`, `undefined`) must not come out as
+  // the loudest note the synth can make — fall back to the app's own velocity.
+  if (!Number.isFinite(velocity)) return DEFAULT_VELOCITY;
   return Math.min(MAX_VELOCITY, Math.max(MIN_VELOCITY, Math.round(velocity)));
 }
 

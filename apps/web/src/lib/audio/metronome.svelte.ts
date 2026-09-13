@@ -73,6 +73,9 @@ export class Metronome {
   /** Start the click. Starts audio too — call it from a user gesture. */
   async start(): Promise<void> {
     if (this.running) return;
+    // `ensureStarted()` only settles once the soundfont load has, but the
+    // layout's first-gesture handler has normally created the context already,
+    // so this returns at once — the click itself needs no samples.
     await this.#engine.ensureStarted();
     if (!this.#engine.started) return;
     this.#scheduler.interval = secondsPerBeat(this.bpm);
@@ -115,6 +118,18 @@ export class Metronome {
   #onPulse(pulse: Pulse): void {
     this.#engine.click(pulse.time, pulse.accent);
     this.#pending.push(pulse);
+    // The rAF loop is the normal drain, but it does not run without frames
+    // (SSR, tests) or in a backgrounded tab — draining here as well keeps the
+    // queue to the scheduler's lookahead instead of one entry per beat forever.
+    this.#drain();
+  }
+
+  /** Advance the indicator to the last click the audio clock has reached. */
+  #drain(): void {
+    const now = this.#engine.now();
+    while (this.#pending.length > 0 && this.#pending[0].time <= now) {
+      this.beat = this.#pending.shift()!.beatInBar;
+    }
   }
 
   /** Move the indicator when the audio clock reaches each scheduled click. */
@@ -124,21 +139,20 @@ export class Metronome {
     const step = () => {
       this.#frame = null;
       if (!this.running) return;
-      const now = this.#engine.now();
-      while (this.#pending.length > 0 && this.#pending[0].time <= now) {
-        this.beat = this.#pending.shift()!.beatInBar;
-      }
+      this.#drain();
       this.#frame = frames.requestAnimationFrame(step);
     };
     this.#frame = frames.requestAnimationFrame(step);
   }
 
+  /** Clicks scheduled but not yet shown — bounded by the lookahead (tests). */
+  get pendingBeats(): number {
+    return this.#pending.length;
+  }
+
   /** Advance the visible beat without waiting for a frame (tests). */
   syncIndicator(): void {
-    const now = this.#engine.now();
-    while (this.#pending.length > 0 && this.#pending[0].time <= now) {
-      this.beat = this.#pending.shift()!.beatInBar;
-    }
+    this.#drain();
   }
 }
 

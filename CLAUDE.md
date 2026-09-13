@@ -101,7 +101,15 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
   `metronome.setTempo/setBeatsPerBar` — never by patching `settings` directly, because the engine
   owns the master gain and the running scheduler. Web Audio is never required in tests: use the fake
   context in `$lib/audio/testing.ts` and mock `smplr`; the Playwright specs block the sample CDN so
-  e2e always exercises the synth fallback.
+  e2e always exercises the synth fallback. The fake's params keep a timeline: `param.value` reports
+  the automation **at `currentTime`** only (as the real one does) and `param.valueAt(t)` reads a
+  scheduled point — assert with `valueAt` for anything scheduled ahead.
+- **Never anchor future automation on `AudioParam.value`.** The getter is the value *now*, so a
+  release computed at schedule time (a note with a `duration`) would ramp from whatever the node
+  happens to hold rather than from where the envelope will be. Compute it instead —
+  `envelopeGainAt()` in `audio/synth.ts` is the closed form of the synth envelope — and keep a
+  scheduled voice releasable early (`stopAll` mid-playback must cut it), re-anchoring on the earlier
+  of the two times.
 - Links and assets go through `base` from `$app/paths` (GitHub Pages serves under `/piano-trainer/`).
   Routes are prerendered (`+layout.ts`, `trailingSlash: 'always'`); a route whose params are only
   known at runtime opts out with `export const prerender = false` and is served by the SPA fallback

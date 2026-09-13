@@ -7,46 +7,84 @@
  * tests only.
  */
 
-interface FakeParam {
+/** One point on a param's automation timeline. */
+export interface ParamEvent {
+  kind: 'set' | 'linear' | 'exponential' | 'target';
+  time: number;
   value: number;
-  setValueAtTime(value: number, time: number): FakeParam;
-  linearRampToValueAtTime(value: number, time: number): FakeParam;
-  exponentialRampToValueAtTime(value: number, time: number): FakeParam;
-  setTargetAtTime(value: number, time: number, constant: number): FakeParam;
-  cancelScheduledValues(time: number): FakeParam;
 }
 
-function createParam(initial = 1): FakeParam {
-  const param: FakeParam = {
-    value: initial,
-    setValueAtTime(value) {
-      param.value = value;
-      return param;
-    },
-    linearRampToValueAtTime(value) {
-      param.value = value;
-      return param;
-    },
-    exponentialRampToValueAtTime(value) {
-      param.value = value;
-      return param;
-    },
-    setTargetAtTime(value) {
-      param.value = value;
-      return param;
-    },
-    cancelScheduledValues() {
-      return param;
-    },
-  };
-  return param;
+/**
+ * A param with a *timeline*, not a single eager number. `value` reports what a
+ * real `AudioParam` would: the automation at or before `currentTime` only —
+ * scheduling something for the future must not change what the getter returns.
+ * (The eager version of this double hid a real bug: a release anchored on
+ * `gain.value` read at schedule time looked correct in tests.)
+ */
+export class FakeParam {
+  readonly events: ParamEvent[] = [];
+
+  constructor(
+    private readonly initial: number,
+    private readonly now: () => number,
+  ) {}
+
+  /** The value the automation has reached at `time` (step-wise, no ramps). */
+  valueAt(time: number): number {
+    let current = this.initial;
+    let at = -Infinity;
+    for (const event of this.events) {
+      if (event.time <= time && event.time >= at) {
+        current = event.value;
+        at = event.time;
+      }
+    }
+    return current;
+  }
+
+  get value(): number {
+    return this.valueAt(this.now());
+  }
+
+  set value(value: number) {
+    this.events.push({ kind: 'set', time: this.now(), value });
+  }
+
+  setValueAtTime(value: number, time: number): this {
+    this.events.push({ kind: 'set', time, value });
+    return this;
+  }
+
+  linearRampToValueAtTime(value: number, time: number): this {
+    this.events.push({ kind: 'linear', time, value });
+    return this;
+  }
+
+  exponentialRampToValueAtTime(value: number, time: number): this {
+    this.events.push({ kind: 'exponential', time, value });
+    return this;
+  }
+
+  setTargetAtTime(value: number, time: number): this {
+    this.events.push({ kind: 'target', time, value });
+    return this;
+  }
+
+  cancelScheduledValues(time: number): this {
+    for (let i = this.events.length - 1; i >= 0; i -= 1) {
+      if (this.events[i].time >= time) this.events.splice(i, 1);
+    }
+    return this;
+  }
 }
 
 export interface FakeOscillator {
   type: string;
   frequency: FakeParam;
   startedAt: number | null;
+  /** The last `stop()` time — a re-anchored release calls `stop()` again. */
   stoppedAt: number | null;
+  stopCalls: number[];
   connect(): void;
   start(time?: number): void;
   stop(time?: number): void;
@@ -70,7 +108,7 @@ export class FakeAudioContext {
 
   createGain(): FakeGain {
     const gain: FakeGain = {
-      gain: createParam(1),
+      gain: new FakeParam(1, () => this.currentTime),
       connect: () => {},
       disconnect: () => {},
     };
@@ -81,15 +119,17 @@ export class FakeAudioContext {
   createOscillator(): FakeOscillator {
     const osc: FakeOscillator = {
       type: 'sine',
-      frequency: createParam(440),
+      frequency: new FakeParam(440, () => this.currentTime),
       startedAt: null,
       stoppedAt: null,
+      stopCalls: [],
       connect: () => {},
       start: (time = this.currentTime) => {
         osc.startedAt = time;
       },
       stop: (time = this.currentTime) => {
         osc.stoppedAt = time;
+        osc.stopCalls.push(time);
       },
     };
     this.oscillators.push(osc);

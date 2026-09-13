@@ -170,7 +170,11 @@ describe('the soundfont fallback', () => {
     engine.click(3, false);
     const [accent, beat] = context().oscillators;
     expect(accent.startedAt).toBe(2.5);
-    expect(accent.frequency.value).toBeGreaterThan(beat.frequency.value);
+    // Read the automation at the scheduled time: `value` is what the param is
+    // at `currentTime`, and both clicks are still in the future.
+    expect(accent.frequency.valueAt(2.5)).toBeGreaterThan(
+      beat.frequency.valueAt(3),
+    );
   });
 });
 

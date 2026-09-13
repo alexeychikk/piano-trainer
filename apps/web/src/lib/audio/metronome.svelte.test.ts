@@ -124,6 +124,17 @@ describe('Metronome', () => {
     expect(h.metronome.beat).toBe(1);
   });
 
+  it('never accumulates pending beats, even with no animation frames', async () => {
+    const h = harness();
+    h.metronome.setTempo(240);
+    await h.metronome.start();
+
+    h.run(60); // a minute of clicks with the rAF drain unavailable
+    expect(h.engine.clicks.length).toBeGreaterThan(200);
+    // Bounded by the scheduler's lookahead, not one entry per beat.
+    expect(h.metronome.pendingBeats).toBeLessThanOrEqual(2);
+  });
+
   it('stops cleanly and resets the indicator', async () => {
     const h = harness();
     await h.metronome.start();
