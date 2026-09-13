@@ -9,19 +9,21 @@
   } as const;
 </script>
 
-{#if banners.items.length > 0}
-  <div class="stack" role="status" aria-live="polite">
-    {#each banners.items as banner (banner.id)}
-      <div class="banner {banner.tone}">
-        <span class="glyph" aria-hidden="true">{GLYPHS[banner.tone]}</span>
-        <span class="message">{banner.message}</span>
-        <button type="button" onclick={() => banners.dismiss(banner.id)}>
-          Dismiss
-        </button>
-      </div>
-    {/each}
-  </div>
-{/if}
+<!--
+  The live region is mounted up front and stays mounted: a region that appears
+  together with its first message is not announced by screen readers.
+-->
+<div class="stack" role="status" aria-live="polite">
+  {#each banners.items as banner (banner.id)}
+    <div class="banner {banner.tone}">
+      <span class="glyph" aria-hidden="true">{GLYPHS[banner.tone]}</span>
+      <span class="message">{banner.message}</span>
+      <button type="button" onclick={() => banners.dismiss(banner.id)}>
+        Dismiss
+      </button>
+    </div>
+  {/each}
+</div>
 
 <style>
   .stack {
