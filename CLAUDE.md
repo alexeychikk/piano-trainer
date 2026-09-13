@@ -56,8 +56,10 @@ Everything runs from the root and is filtered into `apps/web`; never run a packa
   a class instance exported from a `*.svelte.ts` module (e.g. `$lib/midi/input.svelte.ts`); do **not**
   use `svelte/store` writables.
 - **Layering** — `theory` imports nothing local (pure TS, no DOM, no randomness beyond an injected
-  RNG); `audio`/`midi` may import `theory`; `exercises` may import `theory`/`audio`/`midi`;
-  `components` may import all of them; **non-UI modules never import Svelte components**.
+  RNG); `storage` is a base layer too; `audio`/`midi` may import `theory` and `storage`; `exercises`
+  may import `theory`/`audio`/`midi`; `components` may import all of them; **non-UI modules never
+  import Svelte components**. Both halves are enforced in `eslint.config.js`; a `*.svelte.ts` runes
+  module is *not* a component (the guard only rejects PascalCase `.svelte` imports).
 - **Pitches are MIDI integers** (`Midi`, C4 = 60) at runtime; note names are display-only, enharmonics
   compare equal. Never grade on strings.
 - Exercises are drop-in: a folder under `$lib/exercises/<id>/` implementing `ExerciseDefinition` plus
@@ -70,6 +72,22 @@ Everything runs from the root and is filtered into `apps/web`; never run a packa
   known at runtime opts out with `export const prerender = false` and is served by the SPA fallback
   — which on Pages is **`404.html`**, not the ADR's `200.html` (Pages serves `404.html` for unknown
   paths).
+- **Note input (slice 2)**: every source — MIDI port, on-screen keyboard, computer keys — emits the
+  same `NoteEvent` into the single `midiInput` store (`$lib/midi/input.svelte.ts`). Screens read
+  `midiInput.held` / `.chip` / `.explanation` and call `midiInput.noteOn/noteOff(midi, source)`;
+  nothing downstream may ask where a note came from. Web MIDI access is requested from a user
+  gesture (`connect()`), or silently on load only when the permission is already granted
+  (`autoConnect()`, wired once in `+layout.svelte` together with `computerKeyboard.attach(window)`).
+  Devices are remembered as `${manufacturer}:${name}`, never by port id. All MIDI wording lives in
+  `$lib/midi/status.ts` — add copy there, not in a component.
+- **Settings** are `localStorage` via the `settings` store (`$lib/storage/settings.svelte.ts`) and
+  are read only in `hydrate()`, called from the root layout after mount — module init must not touch
+  storage or prerendered HTML and the first client render disagree.
+- `PianoKeyboard` (`$lib/components/piano/`) is the one keyboard, for input *and* exercise display:
+  props `range/layout/highlights/labels/labelStyle/interactive/maxHeightPx`, `onNoteOn/onNoteOff`
+  callbacks out. Parents pass a `Map<Midi, KeyHighlight>` (`played` included) — the component holds
+  no exercise state and plays no audio. Its pixel maths lives in `geometry.ts`, whose constants
+  mirror the keyboard tokens because layout maths cannot read CSS variables.
 - App shell: `$lib/components/shell/` — `TopBar` (nav model and active-route rule in the pure
   `nav.ts`), `StatusChip` (top-bar status, never colour alone), `BannerStack`
   (`banners.svelte.ts`: non-blocking one-liners, max two, oldest wins) and `Placeholder` (skeleton
@@ -81,7 +99,9 @@ Everything runs from the root and is filtered into `apps/web`; never run a packa
 - Prettier: single quotes, width 80, trailing commas, LF, 2 spaces. Commits follow **Conventional
   Commits** (`feat:`, `fix:`, `docs:`, `chore:`) — enforced by commitlint.
 - Tests: pure logic (theory, grading, scheduler, MIDI parsing) always gets a Vitest test; glue and
-  markup usually do not. Playwright covers a thin smoke path per exercise. Unit tests sit next to
+  markup usually do not — components may be mounted with `@testing-library/svelte` when the markup
+  carries a rule (a11y, highlight states), which is why `vite.config.ts` resolves the `browser`
+  condition under Vitest and `vitest-setup.ts` stubs `ResizeObserver`. Playwright covers a thin smoke path per exercise. Unit tests sit next to
   the module (`nav.ts` → `nav.test.ts`); e2e specs live in `apps/web/e2e/`.
 - `apps/web/src/lib/styles/tokens.css` is a byte-for-byte copy of `docs/design/tokens.css` — change
   the spec first, then re-copy. Both files, and everything under `docs/`, are Prettier-ignored so
