@@ -8,7 +8,16 @@
   import { audio } from '$lib/audio/engine.svelte';
   import { audioExplanation } from '$lib/audio/status';
 
-  const explanation = $derived(audioExplanation({ status: audio.status }));
+  /**
+   * The soundfont fallback is announced by a banner (UX spec §2.3 lists it as
+   * a banner case), so the strip stays quiet about it — the same sentence in
+   * two places at once reads like two problems.
+   */
+  const explanation = $derived(
+    audio.status === 'fallback'
+      ? null
+      : audioExplanation({ status: audio.status }),
+  );
 </script>
 
 {#if explanation}

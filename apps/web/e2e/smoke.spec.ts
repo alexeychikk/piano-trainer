@@ -108,11 +108,15 @@ test('sound waits for a gesture, then degrades to the synth (ADR §2)', async ({
 
   await page.getByTestId('enable-sound').click();
 
-  // The blocked CDN takes the fallback path — a banner, never a dialog.
+  // The blocked CDN takes the fallback path — a banner, never a dialog, and
+  // the strip does not repeat it.
   await expect(page.getByLabel(/^Sound: soundfont unavailable/)).toBeVisible();
   await expect(
-    page.getByText('Soundfont unavailable — using the built-in synth.'),
+    page
+      .getByRole('status')
+      .getByText('Soundfont unavailable — using the built-in synth.'),
   ).toBeVisible();
+  await expect(page.getByTestId('sound-strip')).toHaveCount(0);
   // …and Free Play keeps working.
   await page.keyboard.down('a');
   await expect(page.getByTestId('held-notes')).toContainText('C4');
