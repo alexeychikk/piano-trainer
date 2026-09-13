@@ -6,8 +6,8 @@ A local-first web app: no accounts, no backend, no installs. Practice data stays
 is exportable. Desktop browser first — Web MIDI needs Chrome, Edge or Opera; everything is also
 playable with the on-screen keyboard.
 
-Will be live at <https://alexeychikk.github.io/piano-trainer/> once the Pages deploy workflow is
-activated (see `.github/workflows-pending/README.md`).
+Live at <https://alexeychikk.github.io/piano-trainer/>, published from `master` by the Pages deploy
+workflow.
 
 ## Run it locally
 
@@ -47,11 +47,9 @@ It is removed once the web app reaches parity.
 
 ## CI and deployment
 
-The workflows are written and reviewed but sit in
-[`.github/workflows-pending/`](.github/workflows-pending/README.md) until someone with the
-`workflows` permission moves them into `.github/workflows/` (two `git mv`s — see that README).
-Once active: pull requests run lint, typecheck, unit tests, build and the Playwright smoke suite,
-and every push to `master` publishes the static build to GitHub Pages with
+Pull requests and pushes to `master` run [`ci.yml`](.github/workflows/ci.yml): lint, typecheck,
+unit tests, build and the Playwright smoke suite. Every push to `master` also runs
+[`deploy.yml`](.github/workflows/deploy.yml), which publishes the static build to GitHub Pages with
 `BASE_PATH=/piano-trainer`.
 
 Conventions for contributors (and agents) are in [`CLAUDE.md`](CLAUDE.md).

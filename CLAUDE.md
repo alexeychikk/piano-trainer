@@ -23,8 +23,8 @@ copy deck. It is authoritative for layout, states, copy and visuals; do not inve
 
 Slice 1 has landed: the workspace root holds `package.json` (all scripts), `pnpm-workspace.yaml`
 (`apps/*` only — the legacy app is not a workspace member), `eslint.config.js`, `.prettierrc`,
-`.nvmrc` (Node 22), commitlint + husky hooks, and the CI/Pages workflows (currently parked in
-`.github/workflows-pending/`, see that README).
+`.nvmrc` (Node 22), commitlint + husky hooks, and the CI/Pages workflows, now active in
+`.github/workflows/` (`ci.yml` on every pull request, `deploy.yml` publishing `master` to Pages).
 
 ## Stack (decided — do not re-litigate, amend the ADR instead)
 
@@ -48,7 +48,9 @@ pnpm test:e2e     # playwright — needs `pnpm --filter web exec playwright inst
 ```
 
 Everything runs from the root and is filtered into `apps/web`; never run a package manager inside
-`legacy/`. CI runs exactly this list: `lint` → `check` → `test:unit` → `build` → `test:e2e`.
+`legacy/`. CI runs exactly this list: `lint` → `check` → `test:unit` → `build` → `test:e2e`, in one
+job named `lint · check · test · build · e2e`. Under `CI=true` Playwright reuses that `build` (it
+only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still builds first.
 
 ## Code conventions
 
