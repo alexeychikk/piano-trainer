@@ -66,6 +66,28 @@ describe('PracticeStore', () => {
     expect(second.masteryFor(['find-the-note:pc:0'])).toBeCloseTo(0.21);
   });
 
+  it('the schedule survives a reload, twice over (ADR 0002 §3)', async () => {
+    // The trap slice 9a had to avoid: `deriveSkills` rebuilds a skill from the
+    // log, so if it rebuilt through `initialSkill` the SR fields would reset on
+    // every load. Hydrating twice must give the same `dueAt` both times.
+    const first = new PracticeStore();
+    first.record(attempt({ ts: 1_700_000_000_000 }));
+    first.record(attempt({ questionId: 'q2', ts: 1_700_000_060_000 }));
+    await settle();
+    const written = first.byId.get('find-the-note:pc:0');
+    expect(written?.dueAt).toBe(1_700_000_060_000 + 24 * 60 * 60 * 1000);
+    expect(written?.intervalDays).toBe(1);
+
+    const second = new PracticeStore();
+    await second.hydrate();
+    expect(second.byId.get('find-the-note:pc:0')).toEqual(written);
+
+    const third = new PracticeStore();
+    await third.hydrate();
+    await third.hydrate();
+    expect(third.byId.get('find-the-note:pc:0')).toEqual(written);
+  });
+
   it('keeps both attempts when the same question comes round twice', async () => {
     // The log is append-only: a repeated question id (a seed collision, or a
     // slice-5b import from a second device) must not overwrite a row.

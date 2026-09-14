@@ -9,6 +9,7 @@ import {
   MASTERY_ALPHA,
   WEAK_MIN_ATTEMPTS,
 } from './mastery';
+import { FIRST_INTERVAL_DAYS } from './scheduler';
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -61,11 +62,42 @@ describe('applyAttempt', () => {
     expect(state.mastery).toBeCloseTo(0.15);
   });
 
-  it('leaves the spaced-repetition fields for slice 9', () => {
+  it('schedules the skill as it folds the attempt in (slice 9a)', () => {
     const state = applyAttempt(null, attempt());
-    expect(state.easiness).toBe(2.5);
+    expect(state.easiness).toBeCloseTo(2.6, 10);
+    expect(state.intervalDays).toBe(FIRST_INTERVAL_DAYS);
+    // Scheduled from the attempt's own timestamp, so a replay of the log
+    // reproduces it (ADR 0002 §3's trap).
+    expect(state.dueAt).toBe(state.lastSeenAt + 10 * 60_000);
+  });
+
+  it('a miss makes the skill due immediately and costs easiness', () => {
+    const solid = {
+      ...initialSkill('s', 'e'),
+      reps: 4,
+      easiness: 2.6,
+      intervalDays: 12,
+      dueAt: 1,
+    };
+    const state = applyAttempt(
+      solid,
+      attempt({ correct: false, score: 0, ts: 5_000 }),
+    );
     expect(state.intervalDays).toBe(0);
-    expect(state.dueAt).toBe(0);
+    expect(state.dueAt).toBe(5_000);
+    expect(state.easiness).toBeCloseTo(2.4, 10);
+  });
+
+  it('replaying the log twice gives the same schedule', () => {
+    const log = [
+      attempt({ questionId: 'a', ts: 1_000 }),
+      attempt({ questionId: 'b', ts: 2_000, correct: false, score: 0 }),
+      attempt({ questionId: 'c', ts: 3_000 }),
+    ];
+    const once = deriveSkills(log).get('find-the-note:pc:0');
+    const twice = deriveSkills([...log].reverse()).get('find-the-note:pc:0');
+    expect(twice).toEqual(once);
+    expect(once?.dueAt).toBe(3_000 + 10 * 60_000);
   });
 });
 

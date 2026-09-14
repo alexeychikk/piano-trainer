@@ -297,9 +297,8 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
     log, so a lost or half-written skill record heals on the next load.
   - **Mastery is an EWMA, α = 0.3, over the grade's `score`** (`$lib/practice/mastery.ts`); weak =
     `mastery < 0.3` **and** ≥ 3 attempts (`!`, in `--warn`). Unseen is `null` (`new`), never 0.
-  - **Nothing schedules anything before slice 9**: `easiness`/`intervalDays`/`dueAt` are written at
-    their defaults and read by nobody, so `/progress` ships without `DUE NOW`, the `DUE n` badge and
-    `Drill these` rather than faking a due date. Everything else on the screen is real data.
+  - **Scheduling is slice 9a's** — see the `Spaced repetition` section below; slice 5a's "written at
+    their defaults and read by nobody" no longer holds.
   - Layering: `practice` may import `storage` and `exercises` types and **nothing imports it back**
     — the runner takes an `onAttempt` callback (`ExerciseRunner.svelte` passes `practice.record`) and
     stays testable without a database. **All practice wording is in `$lib/practice/copy.ts`** —
@@ -316,6 +315,39 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
   - Tests: `idb` needs the whole IDB global family, so a spec that touches storage imports
     `fake-indexeddb/auto` and installs a fresh `IDBFactory` per test; nothing else in the suite has
     IndexedDB, which is exactly how a degraded browser behaves.
+- **Spaced repetition (slice 9a)** — see [`docs/decisions/0003-spaced-repetition-scheduling.md`](docs/decisions/0003-spaced-repetition-scheduling.md),
+  which supersedes ADR 0002 §3:
+  - **`$lib/practice/scheduler.ts` is SM-2-lite and takes its clock as an argument.**
+    `review(state, { correct, at })` → `{ easiness, intervalDays, dueAt }`. Pass: easiness `+0.1`
+    (cap `2.8`), interval `0 → 10 min → 1 day → × easiness` (cap `180 d`). Miss: easiness `−0.2`
+    (floor `1.3`), interval `0`, **`dueAt = at`** (due now, so a fumble comes back in the same
+    session). **`score` never enters the schedule** — it drives mastery; for recall a half-right
+    answer is a miss. The ten-minute first rung is deliberate (one right answer is not learning).
+  - **The schedule is replayed from the log, never trusted from the record**: `applyAttempt` folds
+    `review()` in at `attempt.ts`, so `deriveSkills()` reproduces it and a reload cannot wipe it
+    (ADR 0002 §3's trap). Consequently **no `PRACTICE_SCHEMA_VERSION` bump** — the three fields were
+    already in the record and the export payload, and only their meaning narrowed.
+  - **`new` is not `due`**: `isDue` needs `reps > 0`, so an unpractised skill is `new` (UX §6.2) and
+    `N due` counts **overdue + weak** only. A card, a panel band and the `DUE NOW` counter all read
+    the same number from the planner — never their own count.
+  - **`$lib/practice/planner.ts` is the pure selector**: `buildPlan(exercises, skills, now)` → the
+    ordered items, `dueCount`, `byExercise` and the first `pick`. Order: **overdue** (longest wait)
+    → **weak** (weakest) → **new** (the exercise's own order), ties on `skillId`. A skill that is
+    practised, not weak and not yet due is **absent** — padding the plan would make `N due`
+    meaningless. Home's `Practice now` opens `plan.pick`'s exercise; `/progress`'s `Drill these`
+    opens its own.
+  - **A targeted run is a bias, not a restriction** (`?due=1`): the runner draws up to
+    `TARGET_SAMPLE_TRIES` (16) seeds and keeps the first question whose `skillId` the planner asked
+    for, passing `targetSkillId` into `generate()` for the day an exercise honours it. No draw
+    lands ⇒ an ordinary question, never a hang. The runner still compares ids and nothing else, so
+    it learns nothing about any exercise.
+  - The schedule's wording is in `copy.ts` like everything else: `dueNow` (`12 due`), `dueBadge`
+    (`Due 4`), `skillsDueToday`, `timeUntil` (`in 3 h` / `now`), and `skillDetail` now carries
+    UX §6.2's `due …` clause. The word `due` is always in the text — `--warn` only carries it.
+  - **An abandoned reveal now pauses** (fixed here, broken since slice 4): `#finish()` re-arms the
+    idle timer, and `resume()` returns to the *reveal* (replaying the answer) instead of re-asking a
+    question that is already graded and logged.
+
 - **Export / import (slice 5b)** — the payload is
   `{ schemaVersion, exportedAt, settings, skills, attempts }`, epoch ms throughout, file
   `piano-trainer-YYYY-MM-DD.json`. Split in two, the same way the runner splits state from audio:

@@ -98,7 +98,10 @@ const sequenceStub: ExerciseDefinition<{ semitones: number }> = {
   },
 };
 
-function harness(definition: AnyExercise = stub) {
+function harness(
+  definition: AnyExercise = stub,
+  options: { targetSkills?: () => readonly string[] } = {},
+) {
   const plays: { notes: number[][]; at: number }[] = [];
   const attempts: AttemptResult[] = [];
   let clock = 0;
@@ -118,6 +121,7 @@ function harness(definition: AnyExercise = stub) {
     now: () => clock,
     seed: () => seed,
     range: () => ({ low: 21, high: 108 }),
+    targetSkills: options.targetSkills,
     onAttempt: (attempt) => attempts.push(attempt),
   });
 
@@ -324,6 +328,31 @@ describe('ExerciseRunner · pausing', () => {
     expect(h.runner.phase).toBe('awaiting');
   });
 
+  it('pauses on an abandoned reveal, and comes back to it', async () => {
+    // The reveal waits for the user, so it is where a drill gets abandoned —
+    // and until slice 9a nothing re-armed the idle timer there.
+    const h = await started(harness());
+    h.setNextAnswer(61);
+    h.runner.noteOn(62, 'midi');
+    expect(h.runner.phase).toBe('feedback');
+    h.tick(REVEAL_DELAY_MS);
+    const playsBefore = h.plays.length;
+
+    h.tick(IDLE_PAUSE_MS);
+    expect(h.runner.phase).toBe('paused');
+
+    // Resuming a reveal replays the answer instead of asking the question
+    // again: it is graded and logged already.
+    h.runner.space();
+    expect(h.runner.phase).toBe('feedback');
+    expect(h.plays.length).toBe(playsBefore + 1);
+    expect(h.attempts).toHaveLength(1);
+
+    // And it can be abandoned twice.
+    h.tick(IDLE_PAUSE_MS);
+    expect(h.runner.phase).toBe('paused');
+  });
+
   it('a note starts the drill from idle', async () => {
     const h = harness();
     h.runner.noteOn(60, 'midi');
@@ -496,5 +525,59 @@ describe('ExerciseRunner · a question that is read, not heard', () => {
     // And again on demand, while the feedback is up.
     h.runner.replay();
     expect(h.plays[2].notes).toEqual([[expected, expected + 4, expected + 10]]);
+  });
+});
+
+describe('ExerciseRunner · a targeted run (slice 9a)', () => {
+  /** A runner whose seeds climb, so `stub:pc:<seed % 12>` varies per question. */
+  function targeted(targets: readonly string[]) {
+    let seed = 60;
+    const seen: (string | undefined)[] = [];
+    // A spy on the stub, typed as the stub is, so `generate` keeps its own
+    // settings type and the registry's erasure happens in one place.
+    const spy: ExerciseDefinition<{ midi: number }> = {
+      ...stub,
+      generate: (ctx) => {
+        seen.push(ctx.targetSkillId);
+        return stub.generate(ctx);
+      },
+    };
+    const runner = new ExerciseRunner(spy as AnyExercise, {
+      playback: {
+        play: () => 0,
+        stop: () => {},
+        ensureStarted: () => Promise.resolve(),
+      },
+      now: () => 0,
+      seed: () => (seed += 1),
+      range: () => ({ low: 21, high: 108 }),
+      targetSkills: () => targets,
+    });
+    return { runner, seen };
+  }
+
+  it('keeps asking until the question is one of the planner’s skills', async () => {
+    const { runner, seen } = targeted(['stub:pc:5']);
+    await runner.start();
+    expect(runner.question?.skillId).toBe('stub:pc:5');
+    // The target is handed to `generate()` as well, for an exercise that
+    // learns to honour it — the runner still only compares skill ids.
+    expect(seen.every((target) => target === 'stub:pc:5')).toBe(true);
+  });
+
+  it('accepts whatever it gets when the target never comes up', async () => {
+    const { runner, seen } = targeted(['stub:pc:nothing']);
+    await runner.start();
+    // A target the exercise cannot generate degrades to a normal question
+    // rather than hanging the drill — bounded by TARGET_SAMPLE_TRIES.
+    expect(runner.question).not.toBeNull();
+    expect(seen.length).toBe(16);
+  });
+
+  it('is an ordinary drill with no targets', async () => {
+    const h = harness();
+    await h.runner.start();
+    expect(h.runner.question?.skillId).toBe('stub:pc:0');
+    expect(h.plays).toHaveLength(1);
   });
 });
