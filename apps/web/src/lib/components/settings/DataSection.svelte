@@ -294,7 +294,7 @@
        stays disabled until it matches, and a ghost `Cancel` closes it. -->
   <hr class="rule" />
 
-  <p class="note small">{PRACTICE_COPY.resetNudge}</p>
+  <p class="note small nudge">{PRACTICE_COPY.resetNudge}</p>
 
   {#if confirm.phase === 'idle'}
     <div class="actions">
@@ -466,5 +466,13 @@
   .small {
     font-size: var(--fs-small);
     color: var(--text-3);
+  }
+
+  /* §8.5 wants the reset nudge at 14 px --text-2, and `.note`/`.small` have
+     equal specificity — whichever comes last wins, so the one line that asks
+     for the brighter ink says so after them. The import line above keeps
+     --text-3 (pre-existing, and not this ticket's). */
+  .nudge {
+    color: var(--text-2);
   }
 </style>

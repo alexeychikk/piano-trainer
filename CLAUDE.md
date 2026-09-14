@@ -238,6 +238,17 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
     answer given while the read was in flight survives; `reload()` **replaces**, which is what
     slice 5b's import needs after it swaps the log out. A failed write sets `degraded` and reports
     the copy deck's line once through `onError` → a banner.
+  - **The queue is drained on the leave paths, and only there**: `practice.flush()` waits for the
+    queued writes (looping until the queue's tail stops moving, so a write queued *while* it waited
+    is not left behind), and `$lib/practice/leave.ts` attaches it to `visibilitychange` → `hidden`
+    and `pagehide` while the root layout's `onNavigate` **awaits** it — SvelteKit holds the
+    navigation until the hook resolves, and that is the one moment waiting for a write is correct
+    (no question is on screen). Nothing is ever awaited during a drill. `flush()` is a synchronous
+    no-op on an empty queue (so a leave path may fire it every time), never throws and reports
+    nothing of its own — a failed write already said its sentence once, through `onError`. It gives
+    up after `FLUSH_DEADLINE_MS` (2 s), because `openPracticeStorage()` may legitimately wait
+    forever (another tab holding an older database version open) and a navigation may not: a missed
+    write is a failure we already survive, a hung app is not. `sync()` is `flush(0)` + `reload()`.
   - **The store memoises the *promise* of `openPracticeStorage()`, never a "have I opened yet" flag**
     — every caller awaits the same open. A flag hands the second caller a still-`null` storage, which
     the write path cannot tell from *no* storage: it would degrade the session and drop the attempt,
