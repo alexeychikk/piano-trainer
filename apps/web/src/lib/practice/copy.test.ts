@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { skillDetail, timeAgo } from './copy';
+import {
+  dataStats,
+  exportDone,
+  importDone,
+  importWrongVersion,
+  skillDetail,
+  timeAgo,
+} from './copy';
 
 /** Midday, so a ±hours case never crosses a local midnight by accident. */
 const NOW = new Date('2026-09-14T12:00:00').getTime();
@@ -39,5 +46,41 @@ describe('skillDetail', () => {
         now: NOW,
       }),
     ).toBe('1 attempt · 100% · last seen just now');
+  });
+});
+
+describe('export/import wording (slice 5b)', () => {
+  it('reports an export the way the copy deck writes it', () => {
+    expect(exportDone(412, 37)).toBe('Exported 412 attempts and 37 skills.');
+    expect(exportDone(1, 1)).toBe('Exported 1 attempt and 1 skill.');
+  });
+
+  it('reports an import the way UX §6.3 writes it', () => {
+    expect(importDone(402, 37)).toBe('Imported 402 attempts, 37 skills.');
+  });
+
+  it('names both schema versions when a file is too new', () => {
+    expect(importWrongVersion(2, 1)).toBe(
+      'This file is from schema v2; this app reads v1.',
+    );
+  });
+});
+
+describe('dataStats', () => {
+  it('is the §8.5 line, with the export clause when there was one', () => {
+    expect(
+      dataStats({
+        attempts: 412,
+        skills: 37,
+        lastExportAt: NOW - 3 * 24 * HOUR,
+        now: NOW,
+      }),
+    ).toBe('412 attempts · 37 skills · last export 3 d ago');
+  });
+
+  it('drops the clause entirely before the first export', () => {
+    expect(
+      dataStats({ attempts: 0, skills: 0, lastExportAt: null, now: NOW }),
+    ).toBe('0 attempts · 0 skills');
   });
 });

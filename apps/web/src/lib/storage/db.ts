@@ -90,6 +90,9 @@ export interface PracticeSnapshot {
   skills: SkillState[];
 }
 
+/** The data half of a snapshot — what slice 5b's import replaces. */
+export type PracticeData = Pick<PracticeSnapshot, 'attempts' | 'skills'>;
+
 export const EMPTY_SNAPSHOT: PracticeSnapshot = {
   schemaVersion: PRACTICE_SCHEMA_VERSION,
   attempts: [],
@@ -120,6 +123,12 @@ export interface PracticeStorage {
   read(): Promise<PracticeSnapshot>;
   /** One transaction: the attempt and the skill it updated move together. */
   write(attempt: StoredAttempt, skill: SkillState): Promise<void>;
+  /**
+   * Swap the whole log out for an imported one (slice 5b). Also one
+   * transaction: a rejected or interrupted import leaves the old data exactly
+   * as it was, never half of each.
+   */
+  replace(data: PracticeData): Promise<void>;
   close(): void;
 }
 
@@ -184,6 +193,17 @@ export function parseSkill(raw: unknown): SkillState | null {
 
 /** SM-2's starting easiness factor (ADR §6); slice 9 is what changes it. */
 export const DEFAULT_EASINESS = 2.5;
+
+/**
+ * Abort a transaction and wait for it to finish aborting. `tx.done` rejects
+ * with an `AbortError`, and leaving that rejection unhandled is console noise
+ * the e2e suite (which asserts an empty console) would see — the caller throws
+ * its own error instead.
+ */
+async function abort(tx: { abort(): void; done: Promise<unknown> }) {
+  tx.abort();
+  await tx.done.catch(() => {});
+}
 
 /**
  * Open the practice database. Returns `null` — never throws — when there is no
@@ -257,12 +277,41 @@ export async function openPracticeStorage(): Promise<PracticeStorage | null> {
         (meta?.schemaVersion ?? PRACTICE_SCHEMA_VERSION) >
         PRACTICE_SCHEMA_VERSION
       ) {
-        tx.abort();
+        await abort(tx);
         throw new Error('practice database is newer than this build');
       }
       await tx.objectStore('attempts').put(attempt);
       await tx.objectStore('skills').put(skill);
       await tx.objectStore('meta').put({
+        key: META_KEY,
+        schemaVersion: PRACTICE_SCHEMA_VERSION,
+        createdAt: meta?.createdAt ?? now,
+        updatedAt: now,
+      });
+      await tx.done;
+    },
+
+    async replace(data: PracticeData): Promise<void> {
+      const tx = db.transaction(['attempts', 'skills', 'meta'], 'readwrite');
+      const now = Date.now();
+      const metaStore = tx.objectStore('meta');
+      const meta = await metaStore.get(META_KEY);
+      if (
+        (meta?.schemaVersion ?? PRACTICE_SCHEMA_VERSION) >
+        PRACTICE_SCHEMA_VERSION
+      ) {
+        await abort(tx);
+        throw new Error('practice database is newer than this build');
+      }
+      const attempts = tx.objectStore('attempts');
+      const skills = tx.objectStore('skills');
+      // Clear then put, inside the one transaction: the old log is only gone
+      // once the new one is durable, so a failure mid-import is a no-op.
+      await attempts.clear();
+      await skills.clear();
+      for (const attempt of data.attempts) await attempts.put(attempt);
+      for (const skill of data.skills) await skills.put(skill);
+      await metaStore.put({
         key: META_KEY,
         schemaVersion: PRACTICE_SCHEMA_VERSION,
         createdAt: meta?.createdAt ?? now,

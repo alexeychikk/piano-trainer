@@ -213,4 +213,24 @@ describe('settings', () => {
     await engine.ensureStarted();
     expect(engine.loadedInstrument).toBe('acoustic_grand_piano');
   });
+
+  it('persists the validated id, so the select can never render blank', async () => {
+    const engine = new AudioEngine();
+    await engine.ensureStarted();
+
+    // An id from outside the app — a hand-edited `localStorage`, an imported
+    // file. `/settings` renders its options from `INSTRUMENTS`, so storing the
+    // raw value would select no option and leave the control empty while the
+    // default plays.
+    engine.setInstrument('moon-harp');
+    expect(settings.value.instrument).toBe('acoustic_grand_piano');
+    expect(engine.loadedInstrument).toBe('acoustic_grand_piano');
+  });
+
+  it('validates the id before a context exists, too', () => {
+    const engine = new AudioEngine();
+    engine.setInstrument('moon-harp');
+    expect(settings.value.instrument).toBe('acoustic_grand_piano');
+    expect(fake.contexts).toHaveLength(0);
+  });
 });

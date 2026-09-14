@@ -47,6 +47,14 @@ export interface AppSettings {
   countIn: CountIn;
   /** Runner focus mode — chrome hidden (UX spec §4.7 persists it). */
   focusMode: boolean;
+  /**
+   * Epoch ms of the last practice-data export, or `null` — the `last export
+   * 3 days ago` clause of the `#data` stats line (sci-fi-screens.md §8.5). It
+   * is a setting rather than practice data on purpose: it describes *this*
+   * browser, so an imported file must not overwrite it (the import applies
+   * every other field).
+   */
+  lastExportAt: number | null;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -63,6 +71,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   keyboardHigh: 96,
   countIn: 'off',
   focusMode: false,
+  lastExportAt: null,
 };
 
 const STORAGE_KEY = 'piano-trainer:settings';
@@ -90,12 +99,18 @@ function boundedNumber(
 /** Keep only keys we know, with the right shape — storage is user-editable. */
 export function parseSettings(raw: string | null): AppSettings {
   if (!raw) return { ...DEFAULT_SETTINGS };
-  let parsed: unknown;
   try {
-    parsed = JSON.parse(raw);
+    return parseSettingsValue(JSON.parse(raw));
   } catch {
     return { ...DEFAULT_SETTINGS };
   }
+}
+
+/**
+ * The same validation over an already-parsed value — what slice 5b's import
+ * hands in, since a settings object inside a JSON file was never a string.
+ */
+export function parseSettingsValue(parsed: unknown): AppSettings {
   if (!parsed || typeof parsed !== 'object') return { ...DEFAULT_SETTINGS };
   const record = parsed as Record<string, unknown>;
   const midiDeviceKey =
@@ -133,6 +148,11 @@ export function parseSettings(raw: string | null): AppSettings {
       typeof record.focusMode === 'boolean'
         ? record.focusMode
         : DEFAULT_SETTINGS.focusMode,
+    lastExportAt:
+      typeof record.lastExportAt === 'number' &&
+      Number.isFinite(record.lastExportAt)
+        ? record.lastExportAt
+        : null,
   };
 }
 
@@ -166,10 +186,20 @@ function parseRange(record: Record<string, unknown>): {
 /** A usable instrument spans at least an octave (the wizard enforces it too). */
 export const MIN_RANGE_SEMITONES = 12;
 
+/**
+ * Trailing debounce for a continuous control (the volume slider, slice 5b): a
+ * drag fires `input` every few ms and each one serialised the whole settings
+ * object into `localStorage` — a synchronous write on the drag's frame budget.
+ * Short enough that letting go and closing the tab still saves.
+ */
+export const WRITE_DEBOUNCE_MS = 250;
+
 export class SettingsStore {
   value = $state<AppSettings>({ ...DEFAULT_SETTINGS });
   /** True once the stored values have been read (client only). */
   hydrated = $state(false);
+
+  #pending: ReturnType<typeof setTimeout> | null = null;
 
   /** Read persisted settings. Safe to call more than once. */
   hydrate(): void {
@@ -186,6 +216,63 @@ export class SettingsStore {
   /** Apply a change immediately and persist it (UX spec §6.3: no Save). */
   patch(change: Partial<AppSettings>): void {
     this.value = { ...this.value, ...change };
+    this.#write();
+  }
+
+  /**
+   * Apply a change immediately and persist it on a trailing debounce — for a
+   * control that fires continuously. The in-memory value is always current;
+   * only the write waits, so anything that *reads storage* (export) flushes
+   * first.
+   */
+  patchSoon(change: Partial<AppSettings>): void {
+    this.value = { ...this.value, ...change };
+    if (this.#pending !== null) clearTimeout(this.#pending);
+    this.#pending = setTimeout(() => {
+      this.#pending = null;
+      this.#write();
+    }, WRITE_DEBOUNCE_MS);
+  }
+
+  /**
+   * Apply a change onto what is **stored**, not onto this tab's snapshot.
+   *
+   * `patch()` writes the whole in-memory object back, so a tab that has been
+   * open across another tab's edits would undo them to record one field. For a
+   * field a *reader* stamps (`lastExportAt`, written right after `read()`),
+   * re-reading first keeps last-write-wins to the field that actually changed.
+   */
+  patchStored(change: Partial<AppSettings>): void {
+    this.value = { ...this.read(), ...change };
+    this.#write();
+  }
+
+  /** Persist a debounced change now. */
+  flush(): void {
+    if (this.#pending === null) return;
+    clearTimeout(this.#pending);
+    this.#pending = null;
+    this.#write();
+  }
+
+  /**
+   * What is actually **stored**, parsed fresh — `hydrate()` is one-shot, so the
+   * in-memory snapshot can be older than storage (a second tab) and is what an
+   * export must not trust. Pending debounced writes are flushed first, so this
+   * never reports a value the user has already changed. Falls back to the live
+   * value when there is no `localStorage` to read.
+   */
+  read(): AppSettings {
+    this.flush();
+    if (typeof localStorage === 'undefined') return { ...this.value };
+    try {
+      return parseSettings(localStorage.getItem(STORAGE_KEY));
+    } catch {
+      return { ...this.value };
+    }
+  }
+
+  #write(): void {
     if (typeof localStorage === 'undefined') return;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(this.value));

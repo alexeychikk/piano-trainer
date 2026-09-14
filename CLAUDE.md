@@ -214,6 +214,57 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
   - Tests: `idb` needs the whole IDB global family, so a spec that touches storage imports
     `fake-indexeddb/auto` and installs a fresh `IDBFactory` per test; nothing else in the suite has
     IndexedDB, which is exactly how a degraded browser behaves.
+- **Export / import (slice 5b)** — the payload is
+  `{ schemaVersion, exportedAt, settings, skills, attempts }`, epoch ms throughout, file
+  `piano-trainer-YYYY-MM-DD.json`. Split in two, the same way the runner splits state from audio:
+  - `$lib/practice/transfer.ts` is **pure** — build, serialise, `parsePracticeFile()` — and
+    `$lib/practice/download.ts` is the browser half (`Blob` + anchor click; nothing leaves the
+    machine, there is no endpoint) plus the one shared `exportPracticeData()` that `/settings` →
+    Data and `/progress`'s `Export JSON` both run. UI is `$lib/components/settings/DataSection.svelte`.
+  - **Import replaces, in one transaction**: `practice.replaceAll()` → `PracticeStorage.replace()`
+    clears and rewrites `attempts`/`skills`/`meta` inside a single `tx`, so a refused or interrupted
+    import changes nothing at all. It runs **on the write queue**, so an attempt recorded a moment
+    earlier cannot land on top of the imported log, and it ends in `reload()` (replace), never
+    `hydrate()` (merge). Without storage the import applies in memory and sets `degraded` **without**
+    `onError` — the storage banner's sentence is about a lost attempt; the import has its own line.
+  - A stranger's file gets the storage layer's own rule: every record through
+    `parseAttempt`/`parseSkill`, unknown records dropped, an unkeyed attempt keyed on read — but a
+    file that *offers* records of which **none** parse is refused, because importing it as nothing
+    would quietly empty a real log. A higher `schemaVersion` is refused with the copy deck's line; a
+    lower one is still read.
+  - **"The file carries no settings" is its own case**, not the defaults: `PracticeFile.settings` is
+    `AppSettings | null` and the import skips `applySettings` for `null`. `parseSettingsValue()` is
+    lenient on purpose (a half-written `localStorage` must still boot, so every missing field comes
+    back as its default), so collapsing a missing/corrupt/empty block into it would let an
+    attempts-only file from another device silently reset the taught keyboard range, the remembered
+    piano, the instrument and the tempo — while the banner only mentions attempts and skills. A block
+    with at least one key is ours (our export always writes them all) and still fills its gaps from
+    the defaults.
+  - **Anything that reads storage re-reads it**: `settings.hydrate()` is one-shot, so export uses
+    `settings.read()` (parses `localStorage` fresh) and `practice.sync()` (drains the write queue,
+    then re-reads). Never export the hydrated snapshot. A field that a *reader* stamps afterwards is
+    written with `settings.patchStored()` (re-read, then merge), not `patch()`, which would write
+    this tab's whole stale snapshot back over another tab's edits to record one field —
+    `lastExportAt` is the only such field today.
+  - **The volume slider is the one continuously-changing control**: `audio.setVolume` moves the gain
+    now and persists through `settings.patchSoon()` (250 ms trailing debounce); `settings.flush()`
+    commits it early (the slider's `change`) and `read()` flushes first. Everything else still uses
+    `patch()`.
+  - `lastExportAt` is a **setting**, not practice data — it describes this browser, so an import
+    applies every other field and leaves it alone. Import restores settings through their owners
+    (`audio.setVolume/setMuted/setInstrument`, `metronome.setTempo/setBeatsPerBar`,
+    `midiInput.select`), never by patching `settings` behind the engine's back.
+  - Export/import wording lives in `$lib/practice/copy.ts` (`exportDone`, `importDone`,
+    `importWrongVersion`, `dataStats`), with the results shown **both** as a banner (the spec's
+    channel) and as an inline `✓`/`✗` line in the section (the banner stack is capped at two).
+  - A remembered MIDI device that is switched off has no `<option>`, and a `<select>` whose value
+    matches none renders **blank** instead of its placeholder: what it displays comes from the pure
+    `deviceValue(key, devices)` in `$lib/midi/status.ts`. The key itself stays remembered.
+  - **The same blank-`<select>` rule binds the instrument**, which has no placeholder to fall back
+    to: `audio.setInstrument()` validates the id **before it persists it** (`isInstrumentId` →
+    `DEFAULT_INSTRUMENT`), not only before it loads it, so a junk id from a hand-edited
+    `localStorage` or an imported file can never leave `/settings` showing nothing while the default
+    plays. The guard lives in the engine because `storage` may not import `$lib/audio/instruments`.
 - **The `AudioContext` starts on a capture-phase listener** in `+layout.svelte`. A piano key's own
   `pointerdown` runs at the target first, so a bubble-phase start was always one press too late and
   the first click was silent.

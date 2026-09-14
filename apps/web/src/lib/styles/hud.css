@@ -118,8 +118,9 @@
 }
 
 /* Out of range (sci-fi-screens.md §8.4): `--warn`, never `--danger` — danger
-   means *wrong* in the answer path. Paired with the `30–300 bpm` hint, so the
-   state is never colour alone. */
+   means *wrong* in the answer path. Paired with the `40–240 bpm` hint — the
+   scheduler's own `MIN_BPM`–`MAX_BPM`, not the spec's illustrative numbers —
+   so the state is never colour alone. */
 .hud-field[aria-invalid='true'] {
   border-color: var(--warn);
 }

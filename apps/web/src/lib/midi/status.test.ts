@@ -4,6 +4,7 @@ import {
   deviceAction,
   deviceLostMessage,
   deviceSelect,
+  deviceValue,
   midiChip,
   midiExplanation,
 } from './status';
@@ -167,5 +168,25 @@ describe('deviceAction', () => {
   it('offers no button when asking again would change nothing', () => {
     expect(deviceAction({ status: 'denied' })).toBeNull();
     expect(deviceAction({ status: 'unsupported' })).toBeNull();
+  });
+});
+
+describe('deviceValue (slice 5b fix)', () => {
+  const devices = [{ key: 'Roland:FP-30' }, { key: 'Nektar:Impact LX' }];
+
+  it('shows the remembered device when it is plugged in', () => {
+    expect(deviceValue('Roland:FP-30', devices)).toBe('Roland:FP-30');
+  });
+
+  it('falls back to the placeholder when the piano is switched off', () => {
+    // The key stays remembered — only the <select>'s displayed value falls
+    // back, because a value matching no option renders blank.
+    expect(deviceValue('Roland:FP-30', [])).toBe('');
+    expect(deviceValue('Yamaha:P-125', devices)).toBe('');
+  });
+
+  it('shows the placeholder when nothing was ever chosen', () => {
+    expect(deviceValue(null, devices)).toBe('');
+    expect(deviceValue('', devices)).toBe('');
   });
 });
