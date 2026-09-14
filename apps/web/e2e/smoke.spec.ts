@@ -82,7 +82,10 @@ test('the shell renders and the nav reaches every v1 screen', async ({
     page.getByRole('heading', { name: 'Ready to practise' }),
   ).toBeVisible();
 
-  await page.getByRole('link', { name: 'Progress' }).click();
+  // `exact`, because home's drill cards are links too and an accessible name
+  // match is a *substring* one by default: `ii-V-I progressions …` contains
+  // `Progress`. The nav item is the link whose whole name is the word.
+  await page.getByRole('link', { name: 'Progress', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Progress' })).toBeVisible();
 
   await page.getByRole('link', { name: 'Free play' }).click();
@@ -476,9 +479,9 @@ test('the progression drill takes a twelve-note cadence from the computer keys',
   await expect(prompt).toHaveText('Ready?');
 
   await page.keyboard.press('Space');
-  await expect(prompt).toHaveText('Which progression did you hear?');
+  await expect(prompt).toHaveText('Which cadence did you hear?');
   await expect(page.getByTestId('prompt-sub')).toHaveText(
-    'Play the three chords back in order, in root position',
+    'Play the chords back in order, in root position',
   );
   // Three chords a beat and a bit apart, so `presenting` lasts a few seconds:
   // wait for the drill to be listening — the replay control says when.

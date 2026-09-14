@@ -297,8 +297,17 @@ function generate(
     skillId: skillIdFor(type, tonicPc),
     payload,
     prompt: {
-      title: 'Which progression did you hear?',
-      subtitle: 'Play the three chords back in order, in root position',
+      // `cadence`, not `progression`: the prompt is `--fs-prompt` (56 px,
+      // uppercase, tracked), and `WHICH PROGRESSION DID YOU HEAR?` (31
+      // characters) wraps onto a second line at 1280 px — which costs the
+      // answer area a line and pushes the runner into a scroll, which §4.1
+      // forbids (CI caught it). The longest title that is known to fit is the
+      // interval drill's 28 characters; this one is 27. The word
+      // `progression` is the rail's job anyway — it says `ii-V-I
+      // progressions` — so nothing is lost. Never lengthen either line
+      // without re-running the no-scroll guard.
+      title: 'Which cadence did you hear?',
+      subtitle: 'Play the chords back in order, in root position',
       showKeyboard: true,
     },
     playback: {
