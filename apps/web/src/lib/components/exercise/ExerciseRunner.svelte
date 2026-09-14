@@ -436,7 +436,7 @@
         <!-- The whole mapping, `Z` / `X` included (§4.6): with the root at the
              bottom of a voicing, most answers need the shift between notes. -->
         · piano keys <Chip variant="key">{COMPUTER_KEY_HINT}</Chip>
-        · <Chip variant="key">{OCTAVE_DOWN_HINT}</Chip>
+        · <Chip variant="key">{OCTAVE_DOWN_HINT}</Chip> /
         <Chip variant="key">{OCTAVE_UP_HINT}</Chip>
         {OCTAVE_SHIFT_HINT_LABEL}
       {/if}

@@ -322,15 +322,15 @@ export function missDetail(
   // The mirror mistake: kept the 7th, dropped the 3rd (root–5th–7th). It is
   // the note that makes the chord major or minor, so it is the one a shell can
   // least afford to lose — and it had no named line before.
-  const third = shellIntervals(quality)?.[1];
-  const thirdPc = third === undefined ? null : (rootPc + third) % 12;
-  if (
-    bassPc === rootPc &&
-    thirdPc !== null &&
-    !pcs.has(thirdPc) &&
-    seventhPc !== null &&
-    pcs.has(seventhPc)
-  )
+  //
+  // The precondition is **no 3rd at all**, minor or major, not "not the asked
+  // quality's 3rd": an answer that carries the *other* 3rd (asked `Cm7`,
+  // played `C-E-Bb`) is another quality's shell, which the naming branch below
+  // explains properly — and that is the commonest mistake in this drill, so
+  // telling the user the 3rd is missing would be plainly false.
+  const seventhKept = seventhPc !== null && pcs.has(seventhPc);
+  const noThird = !pcs.has((rootPc + 3) % 12) && !pcs.has((rootPc + 4) % 12);
+  if (bassPc === rootPc && noThird && seventhKept)
     return 'The 3rd is the colour — a shell keeps the 3rd and the 7th';
 
   // The right shape in the wrong key, or another quality's shell: name what it

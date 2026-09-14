@@ -283,8 +283,8 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
     navigation until the hook resolves, and that is the one moment waiting for a write is correct
     (no question is on screen). Nothing is ever awaited during a drill. `flush()` is a no-op on an
     empty queue — one microtask, no waiting (it is `async`, so never literally *synchronous*), so a
-    leave path may fire it every time — never throws and reports
-    nothing of its own — a failed write already said its sentence once, through `onError`. It gives
+    leave path may fire it every time — never throws and reports nothing of its own — a failed write
+    already said its sentence once, through `onError`. It gives
     up after `FLUSH_DEADLINE_MS` (2 s), because `openPracticeStorage()` may legitimately wait
     forever (another tab holding an older database version open) and a navigation may not: a missed
     write is a failure we already survive, a hung app is not. `sync()` is `flush(0)` + `reload()`.
