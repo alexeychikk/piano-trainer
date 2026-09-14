@@ -9,7 +9,7 @@
  * without a browser (ADR §5).
  */
 
-import { midiToName, pcOf, type Midi } from '$lib/theory';
+import { MIDDLE_C, midiToName, pcOf, type Midi } from '$lib/theory';
 import { randomInt } from '../rng';
 import type {
   Answer,
@@ -47,6 +47,21 @@ export function skillIdFor(midi: Midi): string {
  */
 export function spell(midi: Midi): string {
   return midiToName(midi, 'flat');
+}
+
+/**
+ * The name of the pitch class behind a skill id (`find-the-note:pc:3` → `Eb`),
+ * for the progress grid — octave-less, because the skill is the pitch class in
+ * any octave. An id this exercise does not recognise comes back unchanged.
+ */
+export function pitchClassName(skillId: string): string {
+  const pc = Number(skillId.slice(`${FIND_THE_NOTE_ID}:pc:`.length));
+  if (!skillId.startsWith(`${FIND_THE_NOTE_ID}:pc:`) || !Number.isInteger(pc)) {
+    return skillId;
+  }
+  // Spelled from C4 and stripped of the octave: one spelling per pitch, the
+  // same flats the prompt and the keyboard labels use.
+  return spell(MIDDLE_C + (((pc % 12) + 12) % 12)).replace(/-?\d+$/, '');
 }
 
 function generate(
@@ -142,6 +157,7 @@ export const findTheNote: ExerciseDefinition<
   requiresMidi: false,
   skillsCovered: () =>
     Array.from({ length: 12 }, (_, pc) => `${FIND_THE_NOTE_ID}:pc:${pc}`),
+  skillLabel: (skillId) => pitchClassName(skillId),
   generate,
   grade,
 };

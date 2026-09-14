@@ -7,6 +7,7 @@
   import { banners } from '$lib/components/shell/banners.svelte';
   import { computerKeyboard } from '$lib/midi/computer-keys.svelte';
   import { midiInput } from '$lib/midi/input.svelte';
+  import { practice } from '$lib/practice/store.svelte';
   import { deviceLostMessage } from '$lib/midi/status';
   import { isTypingTarget } from '$lib/midi/keymap';
   import { audio } from '$lib/audio/engine.svelte';
@@ -30,6 +31,10 @@
    */
   onMount(() => {
     settings.hydrate();
+    // Practice data is read after mount for the same reason settings are: the
+    // app is prerendered, so module init must not touch storage.
+    practice.onError = (message) => banners.show(message, 'warn');
+    void practice.hydrate();
     midiInput.onDeviceLost = (name) =>
       banners.show(deviceLostMessage(name), 'warn');
     void midiInput.autoConnect();
@@ -69,6 +74,7 @@
       window.removeEventListener('keydown', onKeyDown, { capture: true });
       midiInput.onDeviceLost = null;
       audio.onFallback = null;
+      practice.onError = null;
     };
   });
 </script>

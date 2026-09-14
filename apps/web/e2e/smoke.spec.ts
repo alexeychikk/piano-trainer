@@ -319,3 +319,41 @@ test('the range wizard learns the keyboard from two presses', async ({
 
   expect(consoleErrors).toEqual([]);
 });
+
+test('an answered question survives a reload and shows on /progress', async ({
+  page,
+}) => {
+  const consoleErrors = watchConsole(page);
+
+  await page.goto('/progress/');
+  // Nothing practised yet: the copy deck's empty state, never an empty chart.
+  await expect(page.getByText('No attempts yet.')).toBeVisible();
+
+  await page.goto('/practice/find-the-note/');
+  const prompt = page.getByTestId('prompt');
+  await expect(prompt).toHaveText('Ready?');
+  await page.keyboard.press('Space');
+  await expect(prompt).toHaveText('Which note?');
+  await expect(page.getByTestId('replay')).toBeEnabled();
+  // `A` is C4 — right or wrong, it is a graded attempt and gets logged.
+  await page.keyboard.press('a');
+  await expect(page.getByTestId('answered')).toContainText('/1');
+
+  await page.goto('/progress/');
+  await expect(page.getByRole('heading', { name: /^today$/i })).toBeVisible();
+
+  // The point of the slice: a full reload, and it is still there — which only
+  // IndexedDB can do, the in-memory store having gone with the page.
+  await page.reload();
+  await expect(page.getByRole('heading', { name: /^today$/i })).toBeVisible();
+  await expect(page.getByText('No attempts yet.')).toHaveCount(0);
+  await expect(
+    page.getByRole('heading', { name: /^find the note$/i }),
+  ).toBeVisible();
+  // Mastery is never a bare number: seven pips and the percentage (§6.2).
+  await expect(
+    page.getByRole('img', { name: /mastery \d+ percent/i }).first(),
+  ).toBeVisible();
+
+  expect(consoleErrors).toEqual([]);
+});

@@ -19,6 +19,9 @@
  *   itself, so `generate()` stays pure.
  * - `ExpectedAnswer` carries a `label`: the reveal names the answer in text as
  *   well as on the keyboard (UX spec §8.6).
+ * - `ExerciseDefinition.skillLabel` — how an exercise names one of its own
+ *   skill ids, so `/progress` can label a cell without decoding the id (slice
+ *   5a).
  */
 
 import type { Midi, NoteName } from '$lib/theory';
@@ -129,6 +132,14 @@ export interface ExerciseDefinition<P = unknown, S = Record<string, never>> {
   description: string;
   /** Enumerable, for the progress screen (slice 5). */
   skillsCovered(settings: S): SkillId[];
+  /**
+   * How this exercise names one of its skills — a fifth display extension to
+   * ADR §5, as generic as the other four. `/progress` shows a cell per skill
+   * and a raw id (`find-the-note:pc:3`) is not a name, but only the exercise
+   * knows what `pc:3` means. Optional: without it the screen falls back to the
+   * id's last segment, and still learns nothing about the exercise.
+   */
+  skillLabel?(skillId: SkillId, settings: S): string;
   defaultSettings: S;
   /** Declarative; the runner renders the settings UI (slice 5+). */
   settingsFields?: SettingsField[];
