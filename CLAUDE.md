@@ -7,9 +7,17 @@ backend, static hosting. Desktop browser first.
 — it fixes the stack, the internal music vocabulary, the exercise contract and the slice order.
 Anything below is the short version; the ADR wins on detail.
 
-**Before building any UI**: [`docs/design/core-practice-ux.md`](docs/design/core-practice-ux.md) —
-routes, app shell, exercise-runner states and timing, piano-keyboard spec, tokens, a11y rules and the
-copy deck. It is authoritative for layout, states, copy and visuals; do not invent UX.
+**Before building any UI**, read both, in this order:
+
+1. [`docs/design/core-practice-ux.md`](docs/design/core-practice-ux.md) — routes, app shell,
+   exercise-runner states and timing, piano-keyboard spec, a11y rules and the copy deck. Authoritative
+   for **behaviour, layout, states and copy**; do not invent UX. Its §7 (visual values) is superseded.
+2. [`docs/design/sci-fi-visual-language.md`](docs/design/sci-fi-visual-language.md) — the sci-fi/HUD
+   re-skin (owner request, 2026-09-14). Authoritative for **visuals**: palette, the chamfer/glow panel
+   anatomy, background texture, typography and tracking, iconography, component skins, the motion
+   budget, and the shell + home treatment. It is a re-skin, not a re-plan: it moves no region, adds no
+   screen and changes no word of copy. Part 2 (runner, `PianoKeyboard`, Free Play, Progress, Settings,
+   `/session`) is a separate design ticket.
 
 ## Repository layout
 
@@ -174,6 +182,10 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
   fixes literally (the piano key's 3 px black-key radius, 2 px press offset, 4 px edge bar, …) stay
   literal in the component that draws them — tokenising a single-use 2 px only hides where it came
   from. Cite the spec section in a comment; everything reusable still becomes a token.
+  Shared HUD primitives from the sci-fi language (`HudPanel`, `MicroLabel`, `Chip`/`Badge`/
+  `GlyphBadge`, `Button`, `ProgressBar`, `MasteryPips`, `Meter`, `ListRow`) live in
+  `$lib/components/hud/` and may import nothing but tokens and icons; icons are inline SVG Svelte
+  components in `$lib/components/icons/` — **no icon font, no icon package**.
 - Prettier: single quotes, width 80, trailing commas, LF, 2 spaces. Commits follow **Conventional
   Commits** (`feat:`, `fix:`, `docs:`, `chore:`) — enforced by commitlint.
 - Tests: pure logic (theory, grading, scheduler, MIDI parsing) always gets a Vitest test; glue and

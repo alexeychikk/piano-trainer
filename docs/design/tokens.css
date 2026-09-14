@@ -1,56 +1,120 @@
 /**
- * piano-trainer — design tokens (v1)
- * Source of truth: docs/design/core-practice-ux.md §7.
- * Copy this file to apps/web/src/lib/styles/tokens.css and import it once in
- * the root layout. Components read tokens only — no raw hex outside this file.
+ * piano-trainer — design tokens (v2, "HUD" sci-fi language)
+ *
+ * Source of truth: docs/design/sci-fi-visual-language.md.
+ * Behaviour, layout, states and copy still come from docs/design/core-practice-ux.md;
+ * this file supersedes only its §7 (palette / type / elevation / motion values).
+ *
+ * Copy this file byte-for-byte to apps/web/src/lib/styles/tokens.css and import it
+ * once in the root layout. Components read tokens only — no raw hex outside this file.
+ *
+ * Colours were sampled from docs/design/reference/sci-fi-reference.png and then
+ * adjusted for contrast; every ratio quoted below is against --bg-0 unless stated.
  */
 
 :root,
 [data-theme='dark'] {
-  /* ---- colour ---------------------------------------------------------- */
-  --bg-0: #0e1116; /* app background */
-  --bg-1: #151a21; /* surfaces, top bar, cards */
-  --bg-2: #1d242d; /* raised: buttons, banners, chips */
-  --border: #2a333f; /* hairlines, empty pips */
+  /* ---- colour · surfaces ------------------------------------------------ */
+  --bg-0: #01060f; /* app background — near-black navy               */
+  --bg-1: #041020; /* panel surface (top bar, cards, panels)         */
+  --bg-2: #0a1b30; /* raised: chips, secondary buttons, inputs       */
+  --bg-well: #020a16; /* sunken: HUD readouts, bar/ring tracks, beds    */
+  --bg-scrim: rgb(1 6 15 / 0.72); /* behind the ? help sheet only   */
 
-  --text-1: #f2f5f8; /* 17.3:1 on --bg-0 */
-  --text-2: #a9b4c0; /*  8.98:1 */
-  --text-3: #7c8794; /*  5.18:1 */
+  --border: #123253; /*  1.55 — plain hairline, empty pips, dividers */
+  --panel-border: #0c3f70; /*  1.83 — resting luminous panel edge         */
+  --panel-border-hot: #1c74b8; /*  3.11 — meaningful edge: active / hovered / focused panel,
+                                   status-pill outline, key outlines (AA non-text) */
 
-  --accent: #5b9dff; /*  6.94:1 — primary action, played keys, links */
-  --success: #3dd68c; /* 10.08:1 — correct */
-  --danger: #ff6b6b; /*  6.81:1 — wrong, destructive */
-  --warn: #ffc65c; /* 12.14:1 — due, attention, degraded */
-  --hint: #b48cff; /*  7.33:1 — target / ghost notes, reveals */
+  /* ---- colour · text ---------------------------------------------------- */
+  --text-1: #e8f6ff; /* 18.43 — primary text                        */
+  --text-2: #a5c6de; /* 11.34 — secondary text, micro-labels        */
+  --text-3: #7793ae; /*  6.35 — muted, shortcut bar, key labels     */
+
+  /* ---- colour · state --------------------------------------------------- */
+  --accent: #4d9dff; /*  7.33 — primary action, played keys, links  */
+  --accent-deep: #1030d8; /*  gradient end / pressed CTA (never text)    */
+  --cyan: #35d6f5; /* 11.69 — HUD rules, live values, data-viz    */
+  --success: #19e8b6; /* 12.82 — correct, "go", MIDI connected       */
+  --danger: #ff6b8a; /*  7.47 — wrong, destructive                  */
+  --warn: #ffc24d; /* 12.64 — due, attention, degraded            */
+  --hint: #b48cff; /*  7.87 — target & ghost notes, reveals       */
+  --magenta: #e06aff; /*  7.42 — data-viz gradient end only          */
 
   /* ink used on top of any filled state colour */
-  --on-accent: var(--bg-0);
+  --on-accent: #ffffff; /* 4.65 on the lightest --grad-primary stop  */
   --on-success: var(--bg-0);
   --on-danger: var(--bg-0);
   --on-warn: var(--bg-0);
+  --on-hint: var(--bg-0);
+  --on-cyan: var(--bg-0);
 
-  --key-white: #edf1f5;
-  --key-black: #10151b;
-  --key-white-hover: #dce3ea;
-  --key-black-hover: #1a2028;
-  --key-ink: #10151b; /* 16.2:1 on --key-white */
+  /* ---- colour · piano keys ---------------------------------------------- */
+  --key-white: #dceaf5; /* ink on it: 15.57                          */
+  --key-white-hover: #c7dcec;
+  --key-black: #050d1a;
+  --key-black-hover: #0c1a2b;
+  --key-ink: #041020;
+  --key-bed: #020a16; /* the trough the keys sit in                */
 
-  --focus: #7cc4ff; /* 10.08:1 on --bg-0 */
+  --focus: #7ce4ff; /* 13.92                                     */
 
-  /* ---- type ------------------------------------------------------------ */
+  /* ---- gradients -------------------------------------------------------- */
+  --grad-primary: linear-gradient(180deg, #2a6bf5 0%, #1030d8 100%);
+  --grad-primary-hover: linear-gradient(180deg, #3c82ff 0%, #1a40ec 100%);
+  --grad-go: linear-gradient(180deg, #19e8b6 0%, #06b48c 100%);
+  --grad-panel: linear-gradient(180deg, #06152a 0%, #030d1b 100%);
+  --grad-header: linear-gradient(90deg, #0a2542 0%, rgb(10 37 66 / 0) 72%);
+  /* one ramp for every quantitative visual: bars, rings, meters, equalizers */
+  --grad-data: linear-gradient(90deg, #35d6f5 0%, #4d9dff 46%, #b48cff 100%);
+  --grad-data-hot: linear-gradient(90deg, #b48cff 0%, #e06aff 100%);
+  --grad-rule: linear-gradient(
+    90deg,
+    rgb(53 214 245 / 0.55) 0%,
+    rgb(53 214 245 / 0) 100%
+  );
+
+  /* ---- glow & elevation -------------------------------------------------- */
+  --glow-panel: 0 0 22px -8px rgb(28 116 184 / 0.55);
+  --glow-panel-hot: 0 0 26px -6px rgb(53 214 245 / 0.42);
+  --glow-accent: 0 0 18px -4px rgb(77 157 255 / 0.6);
+  --glow-success: 0 0 18px -4px rgb(25 232 182 / 0.55);
+  --glow-danger: 0 0 18px -4px rgb(255 107 138 / 0.55);
+  --glow-hint: 0 0 18px -4px rgb(180 140 255 / 0.55);
+  --glow-text: 0 0 12px rgb(53 214 245 / 0.35); /* text-shadow, HUD only  */
+  --shadow-pop: 0 12px 32px rgb(0 0 0 / 0.6); /* ? help sheet only      */
+  --shadow-key-down: inset 0 3px 6px rgb(0 0 0 / 0.45);
+  --inset-top: inset 0 1px 0 rgb(53 214 245 / 0.14); /* panel top highlight */
+
+  /* ---- background texture (see spec §3.2) ------------------------------- */
+  --texture-grid-size: 48px;
+  --texture-grid-line: rgb(28 116 184 / 0.055);
+  --texture-scanline-size: 3px;
+  --texture-scanline: rgb(53 214 245 / 0.022);
+  --texture-vignette: radial-gradient(
+    120% 80% at 50% 0%,
+    rgb(16 48 216 / 0.1) 0%,
+    rgb(1 6 15 / 0) 60%
+  );
+
+  /* ---- type ------------------------------------------------------------- */
+  /* Display face is self-hosted, Latin-subset woff2 (see spec §4.1). The
+     fallbacks are deliberately condensed so the layout survives without it. */
+  --font-display: 'Chakra Petch', 'Saira Condensed', 'Roboto Condensed',
+    'Arial Narrow', ui-sans-serif, system-ui, sans-serif;
   --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
     Inter, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
 
-  --fs-display: 4.5rem; /* 72px / 1.05 / 650 — chord symbols, focus mode  */
-  --fs-prompt: 3.5rem; /* 56px / 1.1  / 650 — runner prompt              */
-  --fs-feedback: 2rem; /* 32px / 1.2  / 650 — correct / wrong line       */
-  --fs-h1: 1.75rem; /* 28px / 1.2  / 650 */
-  --fs-h2: 1.25rem; /* 20px / 1.3  / 600 */
+  --fs-display: 4.5rem; /* 72px / 1.05 / 700 — chord symbols, HUD readouts */
+  --fs-prompt: 3.5rem; /* 56px / 1.1  / 700 — runner prompt (floor)       */
+  --fs-feedback: 2rem; /* 32px / 1.2  / 700 — correct / wrong line        */
+  --fs-h1: 1.75rem; /* 28px / 1.2  / 700 — screen titles, hero label   */
+  --fs-h2: 1.25rem; /* 20px / 1.3  / 600 — card titles                 */
   --fs-body-lg: 1.125rem; /* 18px / 1.45 / 400 */
   --fs-body: 1rem; /* 16px / 1.5  / 400 */
   --fs-small: 0.875rem; /* 14px / 1.45 / 400 */
-  --fs-micro: 0.75rem; /* 12px / 1.3  / 500 — floor, never smaller       */
+  --fs-micro: 0.75rem; /* 12px / 1.3  / 600 — label floor, never smaller */
 
   --lh-tight: 1.1;
   --lh-snug: 1.3;
@@ -58,9 +122,15 @@
   --fw-regular: 400;
   --fw-medium: 500;
   --fw-semibold: 600;
-  --fw-bold: 650;
+  --fw-bold: 700;
 
-  /* ---- space / radius -------------------------------------------------- */
+  /* letter-spacing — the sci-fi look is mostly tracking, not a new face */
+  --track-label: 0.18em; /* uppercase micro-labels, panel headers     */
+  --track-hud: 0.1em; /* uppercase buttons, status pills, badges   */
+  --track-heading: 0.03em; /* uppercase h1/h2/prompt                    */
+  --track-none: 0;
+
+  /* ---- space / radius / chamfer ----------------------------------------- */
   --space-1: 0.25rem; /*  4px */
   --space-2: 0.5rem; /*  8px */
   --space-3: 0.75rem; /* 12px */
@@ -73,12 +143,15 @@
   --radius-sm: 4px;
   --radius-md: 8px;
   --radius-lg: 12px;
+  --radius-xl: 16px;
   --radius-pill: 999px;
 
-  --shadow-pop: 0 8px 24px rgb(0 0 0 / 0.45); /* help sheet only */
-  --shadow-key-down: inset 0 3px 6px rgb(0 0 0 / 0.35);
+  /* 45° corner cuts — the panel/button silhouette (spec §3.1) */
+  --chamfer-sm: 6px; /* chips, badges, small buttons  */
+  --chamfer-md: 10px; /* cards, buttons, status pills  */
+  --chamfer-lg: 14px; /* panels, hero, keyboard panel  */
 
-  /* ---- layout ---------------------------------------------------------- */
+  /* ---- layout ----------------------------------------------------------- */
   --topbar-h: 56px;
   --statusbar-h: 52px;
   --shortcutbar-h: 40px;
@@ -86,63 +159,116 @@
   --content-max: 1440px;
   --keyboard-max: 1760px;
   --keyboard-max-h: 280px;
-  --hit-min: 44px; /* minimum interactive target      */
-  --hit-drill: 64px; /* minimum in-exercise control     */
+  --hit-min: 44px;
+  --hit-drill: 64px;
 
-  /* ---- keyboard geometry (see §5.2) ------------------------------------ */
+  /* ---- keyboard geometry (core-practice-ux.md §5.2) --------------------- */
   --key-white-w-min: 18px;
   --key-white-w-max: 48px;
-  --key-white-ratio: 6.2; /* height = ratio * width, capped   */
-  --key-black-w-ratio: 0.6; /* of white width                   */
-  --key-black-h-ratio: 0.62; /* of white height                  */
+  --key-white-ratio: 6.2;
+  --key-black-w-ratio: 0.6;
+  --key-black-h-ratio: 0.62;
 
-  /* ---- motion ---------------------------------------------------------- */
+  /* ---- data-viz --------------------------------------------------------- */
+  --pip-size: 10px; /* mastery pips (7 of them)      */
+  --pip-gap: 4px;
+  --bar-h: 8px; /* progress bar track height     */
+  --ring-stroke: 10px; /* circular percentage ring      */
+  --meter-bar-w: 6px; /* equalizer / level meter bar   */
+  --meter-bar-gap: 3px;
+
+  /* ---- motion ----------------------------------------------------------- */
   --dur-fast: 120ms;
   --dur-base: 200ms;
   --dur-slow: 320ms;
+  --dur-glow: 2400ms; /* decorative only — droppable   */
   --ease: cubic-bezier(0.2, 0.8, 0.3, 1);
 
-  /* ---- exercise-loop timing (mirror of runner constants, §4.3) --------- */
+  /* ---- exercise-loop timing (mirror of runner constants, UX spec §4.3) -- */
   --feedback-correct-ms: 650ms;
   --feedback-streak-ms: 450ms;
   --reveal-delay-ms: 250ms;
 }
 
-/* Light theme is a legibility fallback, not a v1 design target. */
+/* Light theme is a legibility fallback, not a v1 design target (UX spec §11).
+   It keeps the token contract but drops glow, texture and gradients to flat
+   values — the HUD language is dark-only by design. */
 [data-theme='light'] {
-  --bg-0: #f7f9fb;
+  --bg-0: #f4f8fc;
   --bg-1: #ffffff;
-  --bg-2: #eef2f6;
-  --border: #d3dbe4;
-  --text-1: #10151b;
-  --text-2: #46525f;
-  --text-3: #63707d;
+  --bg-2: #e8eff7;
+  --bg-well: #dde7f1;
+  --bg-scrim: rgb(16 21 27 / 0.4);
+  --border: #c9d7e4;
+  --panel-border: #b3c7da;
+  --panel-border-hot: #4a7fa8;
+  --text-1: #041020;
+  --text-2: #3f5a72;
+  --text-3: #5c7085;
   --accent: #1f5fd0;
-  --success: #10784a;
-  --danger: #c22b2b;
-  --warn: #8a5a00;
+  --accent-deep: #123a94;
+  --cyan: #0f6f8c;
+  --success: #0a6e56;
+  --danger: #b52545;
+  --warn: #7a5200;
   --hint: #6a3fc0;
+  --magenta: #8d2fa8;
   --on-accent: #ffffff;
   --on-success: #ffffff;
   --on-danger: #ffffff;
   --on-warn: #ffffff;
-  --key-ink: #10151b;
+  --on-hint: #ffffff;
+  --on-cyan: #ffffff;
+  --key-white: #ffffff;
+  --key-white-hover: #edf3f9;
+  --key-black: #16202c;
+  --key-black-hover: #24313f;
+  --key-ink: #041020;
+  --key-bed: #d2dde8;
   --focus: #1f5fd0;
+  --grad-primary: linear-gradient(180deg, #2f6fdd 0%, #1f4fb8 100%);
+  --grad-primary-hover: linear-gradient(180deg, #3a7cec 0%, #2a5cc8 100%);
+  --grad-go: linear-gradient(180deg, #0f8468 0%, #0a6e56 100%);
+  --grad-panel: none;
+  --grad-header: none;
+  --grad-data: linear-gradient(90deg, #0f6f8c 0%, #1f5fd0 46%, #6a3fc0 100%);
+  --grad-data-hot: linear-gradient(90deg, #6a3fc0 0%, #8d2fa8 100%);
+  --grad-rule: linear-gradient(
+    90deg,
+    rgb(74 127 168 / 0.5) 0%,
+    rgb(74 127 168 / 0) 100%
+  );
+  --glow-panel: none;
+  --glow-panel-hot: none;
+  --glow-accent: none;
+  --glow-success: none;
+  --glow-danger: none;
+  --glow-hint: none;
+  --glow-text: none;
+  --inset-top: none;
   --shadow-pop: 0 8px 24px rgb(16 21 27 / 0.18);
+  --texture-grid-line: rgb(74 127 168 / 0.06);
+  --texture-scanline: transparent;
+  --texture-vignette: none;
 }
 
+/* Reduced motion kills every duration and every decorative loop (spec §7). */
 @media (prefers-reduced-motion: reduce) {
   :root {
     --dur-fast: 1ms;
     --dur-base: 1ms;
     --dur-slow: 1ms;
+    --dur-glow: 1ms;
   }
 }
 
-/* Focus ring — one rule, used everywhere (§7.6). The inner 1px --bg-0 shadow
-   keeps the ring visible on white piano keys as well as on dark surfaces. */
+/* Focus ring — one rule, used everywhere (spec §3.4). The inner 1px --bg-0
+   shadow keeps the ring visible on white piano keys as well as on dark panels;
+   the outer glow makes it read at a metre. */
 :where(a, button, [role='button'], input, select, textarea, [tabindex]):focus-visible {
   outline: 3px solid var(--focus);
   outline-offset: 2px;
-  box-shadow: 0 0 0 1px var(--bg-0);
+  box-shadow:
+    0 0 0 1px var(--bg-0),
+    0 0 14px -2px rgb(124 228 255 / 0.7);
 }
