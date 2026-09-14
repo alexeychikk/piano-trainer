@@ -344,10 +344,14 @@ test('the chord drill takes a four-note answer from the computer keys', async ({
 
   await page.goto('/practice/chord-quality/');
   const prompt = page.getByTestId('prompt');
+  const replay = page.getByTestId('replay');
   await expect(prompt).toHaveText('Ready?');
 
   await page.keyboard.press('Space');
   await expect(prompt).toHaveText('Which chord did you hear?');
+  // The chord is 1600 ms long and `presenting` is not an answering phase, so
+  // wait for the drill to be listening — the replay control says when.
+  await expect(replay).toBeEnabled();
 
   // A chord answer is a `note-sequence` of four notes (slice 7), so there are
   // four slots — the count comes from the question, not from the runner.
