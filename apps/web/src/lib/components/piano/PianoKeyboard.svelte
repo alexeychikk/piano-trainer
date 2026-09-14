@@ -400,7 +400,11 @@
     padding-bottom: var(--space-2);
     border: 1px solid var(--bg-0);
     background: var(--key-white);
-    color: var(--text-3);
+    /* Key faces are not panels: `--text-3` is a panel-text colour and measures
+       2.61 on `--key-white` (2.26 on hover). The sci-fi spec §9 pairs the key
+       label with `--key-ink` — 15.57 dark / 19.09 light. `.black` overrides it
+       below, because `--key-ink` on `--key-black` is 1.02. */
+    color: var(--key-ink);
     cursor: pointer;
     transition:
       background-color var(--dur-fast) var(--ease),

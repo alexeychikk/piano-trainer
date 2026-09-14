@@ -206,6 +206,11 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
     while flat `--accent` stays a border, glyph, link and text colour. The other `--on-*` roles all
     resolve to `--bg-0` and are unaffected; this one role sign-changed in the re-skin, so a
     pre-re-skin `background: var(--accent); color: var(--on-accent)` pair is always a contrast bug.
+  - **A key face is not a panel.** Piano-key labels (and the `◇` ghost glyph) take **`--key-ink` on
+    white keys** and **`--text-2` on black keys** — the two ink roles the spec's §9 pairs with the
+    key tokens (15.57 / 10.87). `--text-3` is panel text: on `--key-white` it measures 2.61 (2.26 on
+    hover), and `--key-ink` on `--key-black` is 1.02, so neither role survives being used on the
+    other face.
   - **Focus on a chamfered element** drops `outline` (it follows the unclipped rectangle) and turns
     the edge layer into the ring: edge → `--focus`, face margin → 3 px.
   - Headings, buttons, labels, numerals use `--font-display`; **body copy stays `--font-sans` and
