@@ -319,6 +319,20 @@ export function missDetail(
   )
     return 'A shell leaves the 5th out — keep the 3rd and the 7th';
 
+  // The mirror mistake: kept the 7th, dropped the 3rd (root–5th–7th). It is
+  // the note that makes the chord major or minor, so it is the one a shell can
+  // least afford to lose — and it had no named line before.
+  const third = shellIntervals(quality)?.[1];
+  const thirdPc = third === undefined ? null : (rootPc + third) % 12;
+  if (
+    bassPc === rootPc &&
+    thirdPc !== null &&
+    !pcs.has(thirdPc) &&
+    seventhPc !== null &&
+    pcs.has(seventhPc)
+  )
+    return 'The 3rd is the colour — a shell keeps the 3rd and the 7th';
+
   // The right shape in the wrong key, or another quality's shell: name what it
   // was, so the mistake is visible as a transposition and not as noise.
   const shell = qualityOfShellIntervals(intervalsAboveBass(played));

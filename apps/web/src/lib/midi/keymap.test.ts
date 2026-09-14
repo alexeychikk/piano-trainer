@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  COMPUTER_KEY_HINT,
+  COMPUTER_KEY_SEMITONES,
   DEFAULT_BASE_OCTAVE,
+  OCTAVE_DOWN_HINT,
+  OCTAVE_DOWN_KEY,
+  OCTAVE_UP_HINT,
+  OCTAVE_UP_KEY,
   isNoteKeyPress,
   isTypingTarget,
   midiForComputerKey,
@@ -71,6 +77,23 @@ describe('isNoteKeyPress', () => {
 
   it('ignores auto-repeat, so a held key is one note', () => {
     expect(isNoteKeyPress({ code: 'KeyA', repeat: true })).toBe(false);
+  });
+});
+
+describe('the advertised mapping', () => {
+  it('names every mapped note key, in row order', () => {
+    expect(COMPUTER_KEY_HINT.split(' ')).toEqual(
+      Object.keys(COMPUTER_KEY_SEMITONES).map((code) =>
+        code.replace('Key', ''),
+      ),
+    );
+  });
+
+  it('names the keycaps the octave shift actually listens to (§4.6)', () => {
+    expect(OCTAVE_DOWN_KEY).toBe(`Key${OCTAVE_DOWN_HINT}`);
+    expect(OCTAVE_UP_KEY).toBe(`Key${OCTAVE_UP_HINT}`);
+    expect(isNoteKeyPress({ code: `Key${OCTAVE_DOWN_HINT}` })).toBe(true);
+    expect(isNoteKeyPress({ code: `Key${OCTAVE_UP_HINT}` })).toBe(true);
   });
 });
 

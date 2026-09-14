@@ -320,6 +320,17 @@ describe('missDetail', () => {
     );
   });
 
+  it('calls out the 3rd, the note a shell cannot lose', () => {
+    // C7 played C-G-Bb: the 7th is there, the colour is not.
+    expect(missDetail(0, 'dom7', [48, 55, 58])).toBe(
+      'The 3rd is the colour — a shell keeps the 3rd and the 7th',
+    );
+    // Dm7 played D-A-C, same shape a tone up.
+    expect(missDetail(2, 'min7', [50, 57, 60])).toBe(
+      'The 3rd is the colour — a shell keeps the 3rd and the 7th',
+    );
+  });
+
   it('names the shell that was played instead', () => {
     // Asked Cmaj7, played the C7 shell.
     expect(missDetail(0, 'maj7', shellNotes(48, 'dom7') ?? [])).toBe(

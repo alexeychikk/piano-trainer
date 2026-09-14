@@ -34,6 +34,19 @@ describe('ExerciseRunner frame', () => {
     expect(rail?.textContent).not.toMatch(/\p{Extended_Pictographic}/u);
   });
 
+  it('advertises the whole computer mapping, octave shift included (§4.6)', () => {
+    // There is no MIDI device in a test environment, so the bar carries the
+    // mapping — and the mapping is `A W S E D F T G Y H U J K` *plus* `Z`/`X`.
+    const bar = mount().querySelector('.shortcuts');
+    const caps = [...(bar?.querySelectorAll('kbd') ?? [])].map(
+      (kbd) => kbd.textContent,
+    );
+    expect(caps).toContain('A W S E D F T G Y H U J K');
+    expect(caps).toContain('Z');
+    expect(caps).toContain('X');
+    expect(bar?.textContent).toContain('octave');
+  });
+
   it('shows the question count on the ProgressBar, not in a second place', () => {
     const bar = mount().querySelector('[data-testid="answered"]');
     expect(bar?.querySelector('[role="progressbar"]')).not.toBeNull();

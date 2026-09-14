@@ -104,9 +104,10 @@ export class PracticeStore {
   }
 
   /**
-   * Wait for the queued writes to land — the leave paths (`$lib/practice/
-   * leave.ts`: client-side navigation, `visibilitychange` → `hidden`,
-   * `pagehide`). `record()` returns before its transaction commits, so a user
+   * Wait for the queued writes to land — the leave paths: the root layout's
+   * `onNavigate` (client-side navigation) awaits this directly, and
+   * `$lib/practice/leave.ts` attaches it to `visibilitychange` → `hidden` and
+   * `pagehide`. `record()` returns before its transaction commits, so a user
    * who answers and leaves in the same breath could otherwise outrun it and
    * lose the attempt.
    *
@@ -114,8 +115,9 @@ export class PracticeStore {
    * once) and never reports anything of its own: a flush is not an event the
    * user did, so it has no sentence. With nothing queued — including every
    * call after storage turned out to be unavailable, when the queue empties
-   * immediately — it is a synchronous no-op, so a leave path may call it on
-   * every navigation.
+   * immediately — it costs one microtask and no waiting (it is `async`, so it
+   * is never literally synchronous), so a leave path may call it on every
+   * navigation.
    *
    * Resolves `true` when the queue is empty, `false` when the deadline ran out
    * first. The deadline exists because `openPracticeStorage()` may legitimately
