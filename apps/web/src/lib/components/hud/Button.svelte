@@ -27,6 +27,12 @@
      * that *the button* is enabled, which a wrapper `<div>` can never carry.
      */
     testId?: string;
+    /**
+     * A toggle button's pressed state (the metronome's Start/Stop). The skin
+     * already changes — `go` when stopped, `secondary` when running, with its
+     * own glyph and label — this carries the same state to assistive tech.
+     */
+    ariaPressed?: boolean;
     onclick?: (event: MouseEvent) => void;
     children: Snippet;
   }
@@ -42,6 +48,7 @@
     sub,
     ariaLabel,
     testId,
+    ariaPressed,
     onclick,
     children,
   }: Props = $props();
@@ -100,6 +107,7 @@
     {type}
     {disabled}
     aria-label={ariaLabel}
+    aria-pressed={ariaPressed}
     data-testid={testId}
     {onclick}
     class="btn {variant} {size} {glow}"

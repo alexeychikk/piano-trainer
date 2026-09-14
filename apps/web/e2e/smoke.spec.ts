@@ -65,6 +65,17 @@ test('the shell renders and the nav reaches every v1 screen', async ({
   await page.getByRole('link', { name: SETTINGS_LINK }).click();
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
 
+  // Each section panel's header band is that section's `<h2>` — the four
+  // anchors the rail and the top-bar chips deep-link to keep their names.
+  for (const section of ['MIDI', 'Sound', 'Practice', 'Data']) {
+    await expect(
+      page.getByRole('heading', {
+        level: 2,
+        name: new RegExp(`^${section}$`, 'i'),
+      }),
+    ).toBeVisible();
+  }
+
   // The runner route is client-rendered through the SPA fallback (`404.html`,
   // which is what the static server the suite runs against really returns).
   await page.goto('/practice/find-the-note/');
@@ -178,6 +189,20 @@ test('the metronome toggles from the keyboard and keeps running across routes', 
   const consoleErrors = watchConsole(page);
 
   await page.goto('/play/');
+  // The panel's header band *is* the region's heading: the re-skin restyles
+  // the outline, it does not delete it. Uppercasing is `text-transform`, which
+  // Chromium folds into the accessible name, hence the case-insensitive match.
+  await expect(
+    page.getByRole('heading', { level: 2, name: /^metronome$/i }),
+  ).toBeVisible();
+
+  // §6's −/+ nudges are the `Button` primitive, so they are real, reachable
+  // controls that can carry the chamfered focus ring.
+  const slower = page.getByRole('button', { name: 'Slower' });
+  await slower.focus();
+  await expect(slower).toBeFocused();
+  await expect(page.getByRole('button', { name: 'Faster' })).toBeVisible();
+
   const toggle = page.getByTestId('metronome-toggle');
   await expect(toggle).toHaveAttribute('aria-pressed', 'false');
 
@@ -188,6 +213,26 @@ test('the metronome toggles from the keyboard and keeps running across routes', 
 
   await page.getByTestId('metronome-tempo').fill('120');
   await expect(page.getByTestId('metronome-tempo')).toHaveValue('120');
+
+  // The field is a display of the *committed* tempo (sci-fi-screens.md §8.4):
+  // an out-of-range value is flagged while it is typed, and once committed the
+  // field can never keep showing a tempo the metronome does not have.
+  // Typed, not `fill`ed: `fill` also commits, and the flag is what happens
+  // *while* the value is out of range.
+  const tempo = page.getByTestId('metronome-tempo');
+  await tempo.click();
+  await tempo.press('ControlOrMeta+a');
+  await tempo.pressSequentially('400');
+  await expect(tempo).toHaveAttribute('aria-invalid', 'true');
+  await expect(page.getByTestId('tempo-hint')).toBeVisible();
+
+  await tempo.blur();
+  await expect(tempo).not.toHaveValue('400');
+  await expect(tempo).not.toHaveAttribute('aria-invalid', 'true');
+  await expect(page.getByTestId('tempo-hint')).toHaveCount(0);
+
+  await tempo.fill('120');
+  await tempo.blur();
 
   // The click survives navigation — Settings shows the same running state.
   await page.getByRole('link', { name: SETTINGS_LINK }).click();

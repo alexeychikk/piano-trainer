@@ -80,6 +80,68 @@ export function midiChip({
   };
 }
 
+export interface DeviceSelect {
+  /**
+   * The placeholder option's text. Never blank: a disabled `<select>` still
+   * shows its current option, so the state is always readable.
+   */
+  placeholder: string;
+  /** A select with nothing to choose is disabled. */
+  disabled: boolean;
+}
+
+/**
+ * What the Settings device `<select>` says (sci-fi-screens.md §8.2). Before
+ * `requestMIDIAccess` has ever run we have not looked, so "No device found"
+ * was a lie — the placeholder is a function of the status instead.
+ *
+ * These six option strings are new *labels*, not copy-deck sentences: the four
+ * sentences in `MIDI_COPY` are unchanged and still carry the explanation.
+ */
+export function deviceSelect({
+  status,
+  inputCount,
+}: Pick<MidiChipInput, 'status' | 'inputCount'>): DeviceSelect {
+  if (status === 'unsupported') {
+    return { placeholder: 'MIDI unavailable', disabled: true };
+  }
+  if (status === 'denied') {
+    return { placeholder: 'MIDI blocked', disabled: true };
+  }
+  if (status === 'idle') {
+    return { placeholder: 'Connect MIDI to list devices', disabled: true };
+  }
+  if (status === 'requesting') {
+    return { placeholder: 'Looking for devices…', disabled: true };
+  }
+  // Granted: we have looked, so now "none found" is the truth.
+  if (inputCount === 0) {
+    return { placeholder: 'No device found', disabled: true };
+  }
+  return { placeholder: 'None', disabled: false };
+}
+
+export interface DeviceAction {
+  label: string;
+  disabled: boolean;
+}
+
+/**
+ * The request button beside the select (§8.2's "Row action"), or `null` when
+ * asking again would change nothing — `denied` is rejected instantly by the
+ * browser and `unsupported` has nothing to request, so both are left to the
+ * explanation and the `#midi` link.
+ */
+export function deviceAction({
+  status,
+}: Pick<MidiChipInput, 'status'>): DeviceAction | null {
+  if (status === 'unsupported' || status === 'denied') return null;
+  if (status === 'granted') {
+    return { label: 'Rescan devices', disabled: false };
+  }
+  return { label: 'Connect MIDI', disabled: status === 'requesting' };
+}
+
 /** Copy deck §9, verbatim. */
 export const MIDI_COPY = {
   none: `No MIDI keyboard — answer with the on-screen keys or A W S E D F T G Y H U J K`,
