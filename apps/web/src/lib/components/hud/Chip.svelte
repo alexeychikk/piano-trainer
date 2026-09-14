@@ -15,7 +15,9 @@
 </script>
 
 {#if variant === 'key'}
-  <span class="keycap">{@render children()}</span>
+  <!-- A keycap is a shortcut hint, so it is a `<kbd>`: the skin changed in the
+       re-skin, the semantics did not. -->
+  <kbd class="keycap">{@render children()}</kbd>
 {:else}
   <span class="chip hud-cut hud-cut-sm">
     <span class="face hud-cut hud-cut-sm">{@render children()}</span>

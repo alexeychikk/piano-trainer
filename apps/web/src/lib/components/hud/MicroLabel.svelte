@@ -15,13 +15,15 @@
     hot?: boolean;
     /** Renders a `<span>` by default; `as` allows h2/h3/legend/div. */
     as?: 'span' | 'div' | 'h2' | 'h3';
+    /** So a heading rendered here can name its region (`aria-labelledby`). */
+    id?: string;
     children: Snippet;
   }
 
-  const { hot = false, as = 'span', children }: Props = $props();
+  const { hot = false, as = 'span', id, children }: Props = $props();
 </script>
 
-<svelte:element this={as} class="micro" class:hot>
+<svelte:element this={as} {id} class="micro" class:hot>
   {@render children()}
 </svelte:element>
 

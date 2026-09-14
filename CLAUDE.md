@@ -284,13 +284,31 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
   - The Settings **preview keyboard is 72 px** (§8.3 amends UX §6.3's 48: at 49 keys that left ~7 px
     of key face), and the **sticky section rail** (`$lib/components/settings/SectionRail.svelte`) is
     rendered only at ≥ 1100 px. Its links are plain anchors so deep links and the keyboard work with
-    the `IntersectionObserver` switched off — the observer only *decorates* the active item.
+    the `IntersectionObserver` switched off — the observer only *decorates* the active item. The rail
+    is a panel (glow → edge → face) and the active item's `--glow-accent` belongs to its 2 px
+    `--accent` bar, drawn as a `::before`, not to the whole link rectangle.
+  - Settings' inline state beside each select is the top-bar pill's smaller sibling, so it wears the
+    pill's label treatment — **not** `MicroLabel`: `midiChip().label` *is* the device name once
+    connected, and a proper noun is not shouted (the same deviation `StatusChip` already ships).
   - Free Play's readout is **the same sunken well as the runner's prompt**, so the two screens feel
     like one instrument: hot micro-label (`CURRENT NOTE` at 0–1 notes, `CURRENT CHORD` at 2+), the
     value in `--font-display` with `--glow-text`, held notes in `--cyan`. **No input/level meter** —
     we have pitches, not a level (deviation 18).
   - `Button` gained `ariaPressed` (the metronome's Start/Stop) rather than being forked, the same
     move pass 2a made with `testId`.
+  - **A re-skin restyles the document outline, it never deletes it.** Where a `HudPanel`'s header
+    band replaces what was a heading, it *is* the heading: `HudPanel` takes `headerAs="h2"` +
+    `headerId` (forwarded to `MicroLabel`'s `as`/`id`), and the `<section>` around it is
+    `aria-labelledby` that id. Settings' four sections and the metronome panel are built that way,
+    so `/settings` and `/play` keep their `<h2>`s and their named regions. Uppercasing is still
+    `text-transform`, so the accessible name keeps its casing — a Playwright `getByRole('heading')`
+    on one needs a case-insensitive regex.
+  - **Anything focusable is either the `Button` primitive or clips its inner `edge`/`face` spans,
+    never itself.** The global ring paints outside the border box, so `clip-path` on a focusable
+    element erases it — that is why the metronome's `−`/`+` nudges are `Button`s with `ariaLabel`
+    (§6 asks for secondary buttons anyway) and not native buttons wearing `hud-cut`.
+  - `Chip variant="key"` renders a **`<kbd>`**: it is the shortcut hint the copy deck spells out, and
+    the re-skin changed its skin, not its semantics.
   - **The sound chip's `🔇`/`🔈`/`🔊` stay.** §2.7 retires emoji from the HUD but exempts these:
     they are *copy* (`SoundChip.glyph` in `$lib/audio/status.ts`), so they are out of the re-skin's
     reach and recorded as a known inconsistency — do not "fix" them without a copy change.

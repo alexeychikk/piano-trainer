@@ -14,6 +14,15 @@
   interface Props {
     /** Micro-label header band. Omit for a card with its own title. */
     header?: string;
+    /**
+     * The band *is* the section heading on a panel that replaces one (Settings'
+     * four sections, the metronome): a re-skin may restyle a heading, it may
+     * not delete the document outline. Uppercasing stays `text-transform`, so
+     * the accessible name keeps its real casing.
+     */
+    headerAs?: 'span' | 'h2' | 'h3';
+    /** Id on the header, so a region can be `aria-labelledby` it. */
+    headerId?: string;
     /** At most one trailing control on the band (§5.8). */
     headerTrailing?: Snippet;
     /** `lg` for panels, `md` for cards and small panels. */
@@ -29,6 +38,8 @@
 
   const {
     header,
+    headerAs = 'span',
+    headerId,
     headerTrailing,
     chamfer = 'lg',
     hot = false,
@@ -54,7 +65,7 @@
     <span class="face {cut}">
       {#if header}
         <span class="band">
-          <MicroLabel>{header}</MicroLabel>
+          <MicroLabel as={headerAs} id={headerId}>{header}</MicroLabel>
           {@render headerTrailing?.()}
         </span>
       {/if}

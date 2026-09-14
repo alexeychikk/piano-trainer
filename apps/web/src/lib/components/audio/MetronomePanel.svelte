@@ -2,7 +2,8 @@
   /**
    * Metronome controls (slice 3), in the part-2 language (sci-fi-screens.md
    * §6): a `HudPanel` with the `METRONOME` header band, `Button` for start and
-   * stop, §5.11 fields for tempo and beats-per-bar, and numbered diamond pips.
+   * stop *and* for the −/+ nudges, §5.11 fields for tempo and beats-per-bar,
+   * and numbered diamond pips. The band is the region's `<h2>`.
    *
    * The beat indicator never rests on colour alone (UX spec §8): the running
    * beat is filled *and* larger *and* numbered, and the downbeat is outlined.
@@ -66,91 +67,100 @@
   }
 </script>
 
-<HudPanel header="Metronome" chamfer="md" padding="md">
-  <div class="controls">
-    <Button
-      variant={metronome.running ? 'secondary' : 'go'}
-      ariaPressed={metronome.running}
-      testId="metronome-toggle"
-      onclick={() => void metronome.toggle()}
-    >
-      {#snippet glyph()}
-        <span aria-hidden="true">{metronome.running ? '■' : '▶'}</span>
-      {/snippet}
-      {metronome.running ? 'Stop' : 'Start'}
-    </Button>
+<!-- The panel band is this region's heading, so `/play` keeps its `<h2>` and
+     the region keeps an accessible name (the skin changed, the outline did
+     not). -->
+<section aria-labelledby="metronome-heading">
+  <HudPanel
+    header="Metronome"
+    headerAs="h2"
+    headerId="metronome-heading"
+    chamfer="md"
+    padding="md"
+  >
+    <div class="controls">
+      <Button
+        variant={metronome.running ? 'secondary' : 'go'}
+        ariaPressed={metronome.running}
+        testId="metronome-toggle"
+        onclick={() => void metronome.toggle()}
+      >
+        {#snippet glyph()}
+          <span aria-hidden="true">{metronome.running ? '■' : '▶'}</span>
+        {/snippet}
+        {metronome.running ? 'Stop' : 'Start'}
+      </Button>
 
-    <div class="tempo">
-      <button
-        type="button"
-        class="nudge hud-cut hud-cut-sm"
-        aria-label="Slower"
-        onclick={() => metronome.setTempo(metronome.bpm - NUDGE_BPM)}
-      >
-        −
-      </button>
+      <div class="tempo">
+        <Button
+          variant="secondary"
+          ariaLabel="Slower"
+          onclick={() => metronome.setTempo(metronome.bpm - NUDGE_BPM)}
+        >
+          −
+        </Button>
+        <label class="field">
+          <span class="visually-hidden">Tempo in beats per minute</span>
+          <input
+            class="hud-field hud-cut hud-cut-sm tempo-input"
+            type="number"
+            min={MIN_BPM}
+            max={MAX_BPM}
+            step="1"
+            value={metronome.bpm}
+            aria-invalid={tempoOutOfRange ? 'true' : undefined}
+            aria-describedby={tempoOutOfRange ? 'tempo-range' : undefined}
+            oninput={onTempoInput}
+            onchange={commitTempo}
+            onblur={commitTempo}
+            onkeydown={onTempoKeydown}
+            data-testid="metronome-tempo"
+          />
+        </label>
+        <span class="unit">bpm</span>
+        <Button
+          variant="secondary"
+          ariaLabel="Faster"
+          onclick={() => metronome.setTempo(metronome.bpm + NUDGE_BPM)}
+        >
+          +
+        </Button>
+      </div>
+
       <label class="field">
-        <span class="visually-hidden">Tempo in beats per minute</span>
-        <input
-          class="hud-field hud-cut hud-cut-sm tempo-input"
-          type="number"
-          min={MIN_BPM}
-          max={MAX_BPM}
-          step="1"
-          value={metronome.bpm}
-          aria-invalid={tempoOutOfRange ? 'true' : undefined}
-          aria-describedby={tempoOutOfRange ? 'tempo-range' : undefined}
-          oninput={onTempoInput}
-          onchange={commitTempo}
-          onblur={commitTempo}
-          onkeydown={onTempoKeydown}
-          data-testid="metronome-tempo"
-        />
+        <MicroLabel>Beats per bar</MicroLabel>
+        <select
+          class="hud-field hud-cut hud-cut-sm"
+          value={metronome.beatsPerBar}
+          onchange={(event) =>
+            metronome.setBeatsPerBar(Number(event.currentTarget.value))}
+        >
+          {#each barOptions as option (option)}
+            <option value={option}>{option}</option>
+          {/each}
+        </select>
       </label>
-      <span class="unit">bpm</span>
-      <button
-        type="button"
-        class="nudge hud-cut hud-cut-sm"
-        aria-label="Faster"
-        onclick={() => metronome.setTempo(metronome.bpm + NUDGE_BPM)}
-      >
-        +
-      </button>
+
+      <p class="pips" aria-hidden="true" data-testid="metronome-beats">
+        {#each beats as beat (beat)}
+          <span
+            class="pip"
+            class:downbeat={beat === 0}
+            class:active={metronome.running && metronome.beat === beat}
+          >
+            <span class="pip-number">{beat + 1}</span>
+          </span>
+        {/each}
+      </p>
     </div>
 
-    <label class="field">
-      <MicroLabel>Beats per bar</MicroLabel>
-      <select
-        class="hud-field hud-cut hud-cut-sm"
-        value={metronome.beatsPerBar}
-        onchange={(event) =>
-          metronome.setBeatsPerBar(Number(event.currentTarget.value))}
-      >
-        {#each barOptions as option (option)}
-          <option value={option}>{option}</option>
-        {/each}
-      </select>
-    </label>
-
-    <p class="pips" aria-hidden="true" data-testid="metronome-beats">
-      {#each beats as beat (beat)}
-        <span
-          class="pip"
-          class:downbeat={beat === 0}
-          class:active={metronome.running && metronome.beat === beat}
-        >
-          <span class="pip-number">{beat + 1}</span>
-        </span>
-      {/each}
-    </p>
-  </div>
-
-  {#if tempoOutOfRange}
-    <p class="hint" id="tempo-range" data-testid="tempo-hint">
-      {TEMPO_RANGE_HINT}
-    </p>
-  {/if}
-</HudPanel>
+    {#if tempoOutOfRange}
+      <p class="hint" id="tempo-range" data-testid="tempo-hint">
+        {TEMPO_RANGE_HINT}
+      </p>
+    {/if}
+  </HudPanel>
+</section>
 
 <style>
   .controls {
@@ -160,27 +170,14 @@
     gap: var(--space-4);
   }
 
+  /* §6's −/+ nudges are `Button` (`secondary`, `ariaLabel`), not native
+     buttons with a chamfer: a clipped *focusable* element cannot wear the
+     global ring, and the primitive already solves that by clipping its inner
+     edge/face and turning the edge into the ring. */
   .tempo {
     display: inline-flex;
     align-items: center;
     gap: var(--space-2);
-  }
-
-  /* §6: the −/+ nudges are 44 px secondary buttons. They carry no label of
-     their own, so they stay native buttons with the field's skin. */
-  .nudge {
-    width: var(--hit-min);
-    height: var(--hit-min);
-    background: var(--bg-2);
-    border: 1px solid var(--border);
-    color: var(--text-1);
-    font: inherit;
-    cursor: pointer;
-  }
-
-  .nudge:hover {
-    border-color: var(--panel-border-hot);
-    color: var(--accent);
   }
 
   .tempo-input {

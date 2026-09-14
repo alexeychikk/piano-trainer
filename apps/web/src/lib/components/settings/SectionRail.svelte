@@ -50,21 +50,27 @@
   });
 </script>
 
-<nav class="rail hud-cut" aria-label="Settings sections">
-  <ul>
-    {#each sections as section (section.id)}
-      <li>
-        <a
-          href="#{section.id}"
-          class:active={active === section.id}
-          aria-current={active === section.id ? 'true' : undefined}
-          onclick={() => (active = section.id)}
-        >
-          <MicroLabel>{section.label}</MicroLabel>
-        </a>
-      </li>
-    {/each}
-  </ul>
+<nav class="rail" aria-label="Settings sections">
+  <!-- A panel, so glow → edge → face as everywhere else (§8.1). The face is
+       padded, so a link's focus ring never reaches the chamfered corner. -->
+  <span class="edge hud-cut">
+    <span class="face hud-cut">
+      <ul>
+        {#each sections as section (section.id)}
+          <li>
+            <a
+              href="#{section.id}"
+              class:active={active === section.id}
+              aria-current={active === section.id ? 'true' : undefined}
+              onclick={() => (active = section.id)}
+            >
+              <MicroLabel>{section.label}</MicroLabel>
+            </a>
+          </li>
+        {/each}
+      </ul>
+    </span>
+  </span>
 </nav>
 
 <style>
@@ -72,8 +78,20 @@
     position: sticky;
     /* §8.1: clear of the sticky top bar, by one step of the scale. */
     top: calc(var(--topbar-h) + var(--space-5));
+  }
+
+  .edge {
+    display: flex;
+    background: var(--panel-border);
+  }
+
+  .face {
+    flex: 1;
+    /* The 1 px inset *is* the edge: clip-path would eat a real border. */
+    margin: 1px;
     padding: var(--space-2);
-    background: var(--bg-1);
+    background: var(--grad-panel);
+    background-color: var(--bg-1);
   }
 
   ul {
@@ -83,13 +101,13 @@
   }
 
   a {
+    position: relative;
     display: flex;
     align-items: center;
-    /* A 2 px bar that only appears when active would shift the label, so the
-       resting state reserves it as transparent. */
     min-height: var(--hit-min);
-    padding: 0 var(--space-3);
-    border-left: 2px solid transparent;
+    /* §8.1's 2 px active bar is reserved in the padding, so marking an item
+       never shifts its label (the literal 2 px is the spec's own). */
+    padding: 0 var(--space-3) 0 calc(var(--space-3) + 2px);
     color: var(--text-2);
   }
 
@@ -98,9 +116,17 @@
   }
 
   .active {
-    border-left-color: var(--accent);
-    box-shadow: var(--glow-accent);
     color: var(--text-1);
+  }
+
+  /* The glow belongs to the bar, not to the link's rectangle. */
+  .active::before {
+    content: '';
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 2px;
+    background: var(--accent);
+    box-shadow: var(--glow-accent);
   }
 
   /* The label inherits the link's colour rather than the micro-label default,

@@ -104,8 +104,14 @@
   </div>
 
   <div class="panels">
-    <section id="midi">
-      <HudPanel header="MIDI" chamfer="lg" padding="lg">
+    <section id="midi" aria-labelledby="midi-heading">
+      <HudPanel
+        header="MIDI"
+        headerAs="h2"
+        headerId="midi-heading"
+        chamfer="lg"
+        padding="lg"
+      >
         <div class="row">
           <label class="field" for="midi-device">
             <MicroLabel>Input device</MicroLabel>
@@ -125,10 +131,13 @@
           </label>
 
           <!-- The top-bar pill's smaller sibling (§8.1): glyph + state word in
-               the state colour, never colour alone. -->
+               the state colour, never colour alone. It wears the pill's label
+               treatment rather than the micro-label's uppercase, because this
+               label *is* the device name once connected and a proper noun is
+               not shouted — the same deviation `StatusChip` already ships. -->
           <span class="state {midiInput.chip.tone}">
             <span aria-hidden="true">{midiInput.chip.glyph}</span>
-            <MicroLabel>{midiInput.chip.label}</MicroLabel>
+            <span class="state-label">{midiInput.chip.label}</span>
           </span>
         </div>
 
@@ -185,8 +194,14 @@
       </HudPanel>
     </section>
 
-    <section id="sound">
-      <HudPanel header="Sound" chamfer="lg" padding="lg">
+    <section id="sound" aria-labelledby="sound-heading">
+      <HudPanel
+        header="Sound"
+        headerAs="h2"
+        headerId="sound-heading"
+        chamfer="lg"
+        padding="lg"
+      >
         <div class="row">
           <label class="field" for="instrument">
             <MicroLabel>Instrument</MicroLabel>
@@ -204,7 +219,7 @@
           </label>
           <span class="state {audio.chip.tone}">
             <span aria-hidden="true">{audio.chip.glyph}</span>
-            <MicroLabel>{audio.chip.label}</MicroLabel>
+            <span class="state-label">{audio.chip.label}</span>
           </span>
         </div>
 
@@ -255,8 +270,14 @@
       </HudPanel>
     </section>
 
-    <section id="practice">
-      <HudPanel header="Practice" chamfer="lg" padding="lg">
+    <section id="practice" aria-labelledby="practice-heading">
+      <HudPanel
+        header="Practice"
+        headerAs="h2"
+        headerId="practice-heading"
+        chamfer="lg"
+        padding="lg"
+      >
         <div class="measure">
           <fieldset class="row">
             <legend><MicroLabel>Count-in</MicroLabel></legend>
@@ -286,8 +307,14 @@
       </HudPanel>
     </section>
 
-    <section id="data">
-      <HudPanel header="Data" chamfer="lg" padding="lg">
+    <section id="data" aria-labelledby="data-heading">
+      <HudPanel
+        header="Data"
+        headerAs="h2"
+        headerId="data-heading"
+        chamfer="lg"
+        padding="lg"
+      >
         <div class="measure">
           <p class="note">
             Export and import your practice data as a JSON file.
@@ -400,7 +427,11 @@
     color: var(--danger);
   }
 
-  .state :global(.micro) {
+  /* The pill's label face (part 1 §5.2), minus the uppercase. */
+  .state-label {
+    font-family: var(--font-display);
+    font-size: var(--fs-small);
+    letter-spacing: var(--track-hud);
     color: inherit;
   }
 
