@@ -131,14 +131,45 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
   (`autoConnect()`, wired once in `+layout.svelte` together with `computerKeyboard.attach(window)`).
   Devices are remembered as `${manufacturer}:${name}`, never by port id. All MIDI wording lives in
   `$lib/midi/status.ts` — add copy there, not in a component.
+- **Exercises (slice 4)**: the ADR §5 contract lives in `$lib/exercises/types.ts`; an exercise is a
+  folder `$lib/exercises/<id>/` exporting an `ExerciseDefinition` plus one line in `registry.ts`, and
+  **nothing else in the app may learn its name** — the runner renders `Question.prompt`,
+  `Question.playback`, `Question.expected` and the `Grade` it gets back, and that is all it knows.
+  `generate()`/`grade()` are pure, take the seeded `rng` (`rng.ts`, `mulberry32`) and derive
+  `Question.id` from the seed, so a question is reproducible and both are tested without a browser.
+  Four documented extensions to the ADR's types (all display concerns, all generic): `Question.range`
+  (keys the question is answered on — everything else dims), `Question.spellings` (feeds the
+  keyboard's `labelStyle: 'context'`), `GenerateContext.range` (the user's instrument range, so
+  `generate()` never reads storage) and a `label` on `ExpectedAnswer` (the reveal is named in text as
+  well as shown, a11y §8.6).
+- **The runner** is `$lib/exercises/runner.svelte.ts` (state machine, score, streak) plus
+  `$lib/components/exercise/ExerciseRunner.svelte` (the §4 frame). **Every drill-rhythm constant
+  lives in the runner module** — `FEEDBACK_CORRECT_MS`, `FEEDBACK_STREAK_MS`, `REVEAL_DELAY_MS`,
+  `IDLE_PAUSE_MS`, `ADVANCE_LOCKOUT_MS` — never in a component. Audio reaches it through the
+  injectable `PlaybackApi` (`playback.ts`, `createAudioPlayback()`), which is also how the state
+  machine is tested with fake timers and no Web Audio. Answers arrive as `midiInput` events, so the
+  runner cannot tell a MIDI piano from the computer keys. Copy is in `feedback.ts`; keyboard
+  highlights are mapped by the pure `components/exercise/highlights.ts`. `f` (focus mode) is
+  deliberately **not** a shortcut: `F` is a note key and §4.6 keeps that mapping live — the `⤢`
+  button is the keyboard path. The runner sizes itself to the space the shell leaves (`.app` is a
+  full-height flex column in `+layout.svelte`) and clips: it must never scroll.
 - **Settings** are `localStorage` via the `settings` store (`$lib/storage/settings.svelte.ts`) and
   are read only in `hydrate()`, called from the root layout after mount — module init must not touch
-  storage or prerendered HTML and the first client render disagree.
+  storage or prerendered HTML and the first client render disagree. Slice 4 added `keyboardLow`/
+  `keyboardHigh` (one instrument range, taught by the range wizard in `$lib/midi/range.ts` — a pure
+  reducer — and used by every note exercise), `countIn` and `focusMode`. A stored range that is
+  inverted or under an octave is not a piano: it falls back to the default.
+- **The `AudioContext` starts on a capture-phase listener** in `+layout.svelte`. A piano key's own
+  `pointerdown` runs at the target first, so a bubble-phase start was always one press too late and
+  the first click was silent.
 - `PianoKeyboard` (`$lib/components/piano/`) is the one keyboard, for input *and* exercise display:
-  props `range/layout/highlights/labels/labelStyle/interactive/maxHeightPx`, `onNoteOn/onNoteOff`
+  props `range/layout/highlights/labels/labelStyle/spellings/interactive/maxHeightPx`,
+  `onNoteOn/onNoteOff`
   callbacks out. Parents pass a `Map<Midi, KeyHighlight>` (`played` included) — the component holds
   no exercise state and plays no audio. Its pixel maths lives in `geometry.ts`, whose constants
-  mirror the keyboard tokens because layout maths cannot read CSS variables.
+  mirror the keyboard tokens because layout maths cannot read CSS variables. It keeps roving focus
+  alive when a key it owns goes `dim` (a disabled element drops focus to `<body>`), and marks itself
+  `data-piano-keyboard` so a screen can tell a key press apart from a shell shortcut.
 - App shell: `$lib/components/shell/` — `TopBar` (nav model and active-route rule in the pure
   `nav.ts`), `StatusChip` (top-bar status, never colour alone), `BannerStack`
   (`banners.svelte.ts`: non-blocking one-liners, max two, oldest wins) and `Placeholder` (skeleton

@@ -10,6 +10,9 @@
 
 export type LabelMode = 'none' | 'c-only' | 'white' | 'all';
 
+/** Count-in before a question plays (slice 4; UX spec §4.3 timing table). */
+export type CountIn = 'off' | '1-bar';
+
 export interface AppSettings {
   /**
    * `${manufacturer}:${name}` of the chosen MIDI input — port ids are not
@@ -33,6 +36,17 @@ export interface AppSettings {
   tempoBpm: number;
   /** Metronome beats per bar; beat 1 is the accented downbeat. */
   beatsPerBar: number;
+  /**
+   * The playable range of the user's instrument, taught by the range wizard
+   * (UX spec §6.3). Exercises generate inside it; the runner renders it.
+   * One range, not one per device (see the note on `midiDeviceKey`).
+   */
+  keyboardLow: number;
+  keyboardHigh: number;
+  /** Count in one bar of clicks before each question, or not at all. */
+  countIn: CountIn;
+  /** Runner focus mode — chrome hidden (UX spec §4.7 persists it). */
+  focusMode: boolean;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -43,6 +57,12 @@ export const DEFAULT_SETTINGS: AppSettings = {
   soundEnabled: true,
   tempoBpm: 90,
   beatsPerBar: 4,
+  // C2–C7: the 61-key piano the keyboard component defaults to, until the
+  // wizard hears what the user actually owns.
+  keyboardLow: 36,
+  keyboardHigh: 96,
+  countIn: 'off',
+  focusMode: false,
 };
 
 const STORAGE_KEY = 'piano-trainer:settings';
@@ -53,6 +73,10 @@ const LABEL_MODES: readonly LabelMode[] = ['none', 'c-only', 'white', 'all'];
 const VOLUME_RANGE: readonly [number, number] = [0, 1];
 const TEMPO_RANGE: readonly [number, number] = [40, 240];
 const BEATS_RANGE: readonly [number, number] = [1, 12];
+/** MIDI note numbers; kept literal so this base layer imports nothing. */
+const MIDI_RANGE: readonly [number, number] = [0, 127];
+
+const COUNT_INS: readonly CountIn[] = ['off', '1-bar'];
 
 function boundedNumber(
   value: unknown,
@@ -101,8 +125,46 @@ export function parseSettings(raw: string | null): AppSettings {
       BEATS_RANGE,
       DEFAULT_SETTINGS.beatsPerBar,
     ),
+    ...parseRange(record),
+    countIn: COUNT_INS.includes(record.countIn as CountIn)
+      ? (record.countIn as CountIn)
+      : DEFAULT_SETTINGS.countIn,
+    focusMode:
+      typeof record.focusMode === 'boolean'
+        ? record.focusMode
+        : DEFAULT_SETTINGS.focusMode,
   };
 }
+
+/**
+ * A stored range that is inverted or too small is not a range a piano has —
+ * fall back to the default rather than generating questions inside it.
+ */
+function parseRange(record: Record<string, unknown>): {
+  keyboardLow: number;
+  keyboardHigh: number;
+} {
+  const low = Math.round(
+    boundedNumber(record.keyboardLow, MIDI_RANGE, DEFAULT_SETTINGS.keyboardLow),
+  );
+  const high = Math.round(
+    boundedNumber(
+      record.keyboardHigh,
+      MIDI_RANGE,
+      DEFAULT_SETTINGS.keyboardHigh,
+    ),
+  );
+  if (high - low < MIN_RANGE_SEMITONES) {
+    return {
+      keyboardLow: DEFAULT_SETTINGS.keyboardLow,
+      keyboardHigh: DEFAULT_SETTINGS.keyboardHigh,
+    };
+  }
+  return { keyboardLow: low, keyboardHigh: high };
+}
+
+/** A usable instrument spans at least an octave (the wizard enforces it too). */
+export const MIN_RANGE_SEMITONES = 12;
 
 export class SettingsStore {
   value = $state<AppSettings>({ ...DEFAULT_SETTINGS });

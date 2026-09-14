@@ -1,50 +1,58 @@
 <script lang="ts">
   import { base } from '$app/paths';
   import { page } from '$app/state';
-  import { NAV_ITEMS, isActive } from './nav';
+  import { NAV_ITEMS, isActive, isRunnerRoute } from './nav';
   import StatusChip from './StatusChip.svelte';
   import { midiInput } from '$lib/midi/input.svelte';
   import { audio } from '$lib/audio/engine.svelte';
+  import { settings } from '$lib/storage/settings.svelte';
+
+  /** Focus mode hides the shell — inside the runner only (UX §4.7). */
+  const hidden = $derived(
+    settings.value.focusMode && isRunnerRoute(page.url.pathname, base),
+  );
 </script>
 
-<header class="topbar">
-  <a class="wordmark" href={`${base}/`}>
-    <span aria-hidden="true">♪</span> piano-trainer
-  </a>
+{#if !hidden}
+  <header class="topbar">
+    <a class="wordmark" href={`${base}/`}>
+      <span aria-hidden="true">♪</span> piano-trainer
+    </a>
 
-  <nav aria-label="Main">
-    <ul>
-      {#each NAV_ITEMS as item (item.href)}
-        {@const current = isActive(page.url.pathname, item.href, base)}
-        <li>
-          <a
-            href={`${base}${item.href}`}
-            class:current
-            aria-current={current ? 'page' : undefined}>{item.label}</a
-          >
-        </li>
-      {/each}
-    </ul>
-  </nav>
+    <nav aria-label="Main">
+      <ul>
+        {#each NAV_ITEMS as item (item.href)}
+          {@const current = isActive(page.url.pathname, item.href, base)}
+          <li>
+            <a
+              href={`${base}${item.href}`}
+              class:current
+              aria-current={current ? 'page' : undefined}>{item.label}</a
+            >
+          </li>
+        {/each}
+      </ul>
+    </nav>
 
-  <div class="status">
-    <StatusChip
-      href="/settings#midi"
-      glyph={midiInput.chip.glyph}
-      label={midiInput.chip.label}
-      srLabel={midiInput.chip.srLabel}
-      tone={midiInput.chip.tone}
-    />
-    <StatusChip
-      href="/settings#sound"
-      glyph={audio.chip.glyph}
-      label={audio.chip.label}
-      srLabel={audio.chip.srLabel}
-      tone={audio.chip.tone}
-      pulse={audio.chip.pulse}
-    />
-  </div>
-</header>
+    <div class="status">
+      <StatusChip
+        href="/settings#midi"
+        glyph={midiInput.chip.glyph}
+        label={midiInput.chip.label}
+        srLabel={midiInput.chip.srLabel}
+        tone={midiInput.chip.tone}
+      />
+      <StatusChip
+        href="/settings#sound"
+        glyph={audio.chip.glyph}
+        label={audio.chip.label}
+        srLabel={audio.chip.srLabel}
+        tone={audio.chip.tone}
+        pulse={audio.chip.pulse}
+      />
+    </div>
+  </header>
+{/if}
 
 <style>
   .topbar {

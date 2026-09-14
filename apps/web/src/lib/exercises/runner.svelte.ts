@@ -1,0 +1,432 @@
+/**
+ * The exercise runner (ADR §5, UX spec §4): the state machine
+ * `idle → presenting → awaiting → grading → feedback → next`, plus the score
+ * and streak the status strip shows.
+ *
+ * It knows the `ExerciseDefinition` contract and nothing about any particular
+ * exercise: the question text, the sound, the expected answer and the grading
+ * all come from the definition, so a second exercise is a new folder and a
+ * registry entry, never a change here.
+ *
+ * Grading is synchronous and the audio is scheduled on the audio clock, so the
+ * only timers are the drill's own delays — the constants below, which UX spec
+ * §4.3 asks to keep in exactly one place.
+ */
+
+import { metronome } from '$lib/audio/metronome.svelte';
+import type { NoteSource } from '$lib/midi/events';
+import { settings } from '$lib/storage/settings.svelte';
+import type { Midi } from '$lib/theory';
+import {
+  feedbackAnnouncement,
+  feedbackLines,
+  STREAK_CALLOUT,
+  type FeedbackLines,
+  type Outcome,
+} from './feedback';
+import { createAudioPlayback, type PlaybackApi } from './playback';
+import { mulberry32, randomSeed } from './rng';
+import type {
+  AnyExercise,
+  AttemptResult,
+  ExpectedAnswer,
+  KeyRange,
+  Question,
+  SkillId,
+} from './types';
+
+// ---- drill rhythm (UX spec §4.3) ----------------------------------------
+
+/** Correct → next question. */
+export const FEEDBACK_CORRECT_MS = 650;
+/** Correct at a streak of `STREAK_CALLOUT` or more — the drill speeds up. */
+export const FEEDBACK_STREAK_MS = 450;
+/** Wrong → auto-replay the answer, while the wrong one is still in memory. */
+export const REVEAL_DELAY_MS = 250;
+/** No input for this long → `paused`, audio stopped. */
+export const IDLE_PAUSE_MS = 90_000;
+/**
+ * How long feedback ignores note-ons before one may advance the drill. Not in
+ * the spec: without it the key that was just graded — or the second note of a
+ * fumbled answer — would skip past the reveal before it has been heard.
+ */
+export const ADVANCE_LOCKOUT_MS = 500;
+
+/** How many recent skills an exercise may see, to avoid immediate repeats. */
+const HISTORY_LENGTH = 8;
+
+export type RunnerPhase =
+  'idle' | 'presenting' | 'awaiting' | 'feedback' | 'paused';
+
+export interface RunnerOptions {
+  playback?: PlaybackApi;
+  /** Milliseconds, for response times. */
+  now?: () => number;
+  /** Seed source for the next question. */
+  seed?: () => number;
+  /** The instrument range; defaults to the user's configured keyboard. */
+  range?: () => KeyRange;
+  onAttempt?: (attempt: AttemptResult) => void;
+}
+
+function defaultNow(): number {
+  return typeof performance !== 'undefined' ? performance.now() : Date.now();
+}
+
+export class ExerciseRunner {
+  phase = $state<RunnerPhase>('idle');
+  question = $state<Question | null>(null);
+  /** What the user played for the current question. */
+  answerNotes = $state<Midi[]>([]);
+  /** The expected notes, once revealed. */
+  revealNotes = $state<Midi[]>([]);
+  outcome = $state<Outcome | null>(null);
+  feedback = $state<FeedbackLines | null>(null);
+  /** Polite live-region text; one announcement per question and per answer. */
+  announcement = $state('');
+  /** True while the question's playback is still sounding. */
+  playing = $state(false);
+
+  answered = $state(0);
+  correctCount = $state(0);
+  streak = $state(0);
+  bestStreak = $state(0);
+  replays = $state(0);
+
+  accuracy: number | null = $derived(
+    this.answered === 0
+      ? null
+      : Math.round((this.correctCount / this.answered) * 100),
+  );
+
+  readonly definition: AnyExercise;
+
+  #playback: PlaybackApi;
+  #now: () => number;
+  #seed: () => number;
+  #range: () => KeyRange;
+  #onAttempt: ((attempt: AttemptResult) => void) | null;
+
+  #timer: ReturnType<typeof setTimeout> | null = null;
+  #idleTimer: ReturnType<typeof setTimeout> | null = null;
+  #recent: SkillId[] = [];
+  #askedAt = 0;
+  #feedbackAt = 0;
+
+  constructor(definition: AnyExercise, options: RunnerOptions = {}) {
+    this.definition = definition;
+    this.#playback = options.playback ?? createAudioPlayback();
+    this.#now = options.now ?? defaultNow;
+    this.#seed = options.seed ?? randomSeed;
+    this.#range =
+      options.range ??
+      (() => ({
+        low: settings.value.keyboardLow,
+        high: settings.value.keyboardHigh,
+      }));
+    this.#onAttempt = options.onAttempt ?? null;
+  }
+
+  // ---- input -------------------------------------------------------------
+
+  /**
+   * `Space` (UX spec §4.5): start, replay, continue or resume, depending on
+   * where the drill is. One entry point, so the shortcut cannot drift from the
+   * button next to it.
+   */
+  space(): void {
+    switch (this.phase) {
+      case 'idle':
+        void this.start();
+        return;
+      case 'paused':
+        this.resume();
+        return;
+      case 'awaiting':
+        this.replay();
+        return;
+      case 'feedback':
+        this.advance();
+        return;
+      default:
+        // `presenting`: the question is still playing; let it finish.
+        return;
+    }
+  }
+
+  /** Start the drill (from a user gesture: it makes a sound). */
+  async start(): Promise<void> {
+    if (this.phase !== 'idle') return;
+    await this.#playback.ensureStarted();
+    this.#next();
+  }
+
+  /** Replay the question. Counts towards `AttemptResult.replays`. */
+  replay(): void {
+    if (!this.question) return;
+    if (this.phase === 'awaiting') {
+      this.replays += 1;
+      this.#present();
+      return;
+    }
+    if (this.phase === 'feedback') {
+      // The reveal, on demand — the state machine stays where it is.
+      this.#replayReveal();
+    }
+  }
+
+  /** `Enter` — skip and reveal (UX spec §4.3). */
+  skip(): void {
+    if (this.phase !== 'awaiting' || !this.question) return;
+    this.#finish('skipped', { correct: false, score: 0 }, [], 'onscreen');
+  }
+
+  /** A note from any source (UX spec §4.4 `single-note`: first note commits). */
+  noteOn(midi: Midi, source: NoteSource): void {
+    switch (this.phase) {
+      case 'idle':
+        void this.start();
+        return;
+      case 'paused':
+        this.resume();
+        return;
+      case 'feedback':
+        // Any note-on continues, once the reveal has had time to be heard.
+        if (this.#now() - this.#feedbackAt >= ADVANCE_LOCKOUT_MS)
+          this.advance();
+        return;
+      case 'awaiting':
+        break;
+      default:
+        return;
+    }
+
+    const question = this.question;
+    if (!question) return;
+    this.#armIdleTimer();
+    // Slice 4 ships `single-note`; the other modes arrive with the exercises
+    // that need them (UX spec §4.4), and until then a note is not an answer.
+    if (question.answerMode !== 'single-note') return;
+
+    const grade = this.definition.grade(question, {
+      kind: 'notes',
+      notes: [midi],
+      order: [midi],
+      source,
+    });
+    this.#finish(
+      grade.correct ? 'correct' : 'wrong',
+      grade,
+      [midi],
+      source,
+      grade.feedback,
+      grade.revealed?.notes,
+    );
+  }
+
+  /** Continue after feedback. */
+  advance(): void {
+    if (this.phase !== 'feedback') return;
+    this.#next();
+  }
+
+  pause(): void {
+    if (this.phase === 'idle' || this.phase === 'paused') return;
+    this.#clearTimer();
+    this.#clearIdleTimer();
+    this.#playback.stop();
+    this.playing = false;
+    this.phase = 'paused';
+    this.announcement = 'Paused';
+  }
+
+  resume(): void {
+    if (this.phase !== 'paused' || !this.question) return;
+    this.#present();
+  }
+
+  /** Leave the drill: stop the sound and drop every timer. */
+  destroy(): void {
+    this.#clearTimer();
+    this.#clearIdleTimer();
+    this.#playback.stop();
+    this.playing = false;
+  }
+
+  // ---- machine -----------------------------------------------------------
+
+  #next(): void {
+    const seed = this.#seed();
+    const question = this.definition.generate({
+      settings: this.definition.defaultSettings,
+      rng: mulberry32(seed),
+      seed,
+      range: this.#range(),
+      history: { recentSkillIds: [...this.#recent] },
+    });
+    this.#recent = [question.skillId, ...this.#recent].slice(0, HISTORY_LENGTH);
+    this.question = question;
+    this.outcome = null;
+    this.feedback = null;
+    this.answerNotes = [];
+    this.revealNotes = [];
+    this.replays = 0;
+    this.announcement = [question.prompt.title, question.prompt.subtitle]
+      .filter(Boolean)
+      .join('. ');
+    this.#present();
+  }
+
+  /** Play the question and hold the answer back until it has finished. */
+  #present(): void {
+    const question = this.question;
+    if (!question) return;
+    this.#clearIdleTimer();
+    this.phase = 'presenting';
+    const durationMs = this.#play();
+    this.#setTimer(() => {
+      this.playing = false;
+      this.phase = 'awaiting';
+      this.#askedAt = this.#now();
+      this.#armIdleTimer();
+    }, durationMs);
+  }
+
+  /** Schedule the question's audio. Returns how long it lasts, in ms. */
+  #play(): number {
+    const question = this.question;
+    if (!question) return 0;
+    this.playing = true;
+    this.#playback.stop();
+    return this.#playback.play(question.playback, {
+      countIn: settings.value.countIn,
+      bpm: metronome.bpm,
+      beatsPerBar: metronome.beatsPerBar,
+    });
+  }
+
+  /**
+   * Play the answer during feedback. Nothing advances the machine here, so
+   * this is also what clears `playing` again — otherwise the replay control
+   * would stay disabled for the rest of the question.
+   */
+  #replayReveal(): void {
+    const durationMs = this.#play();
+    this.#setTimer(() => {
+      this.playing = false;
+    }, durationMs);
+  }
+
+  #finish(
+    outcome: Outcome,
+    grade: { correct: boolean; score: number },
+    notes: Midi[],
+    source: NoteSource,
+    detail?: string,
+    revealed?: Midi[],
+  ): void {
+    const question = this.question;
+    if (!question) return;
+    this.#clearTimer();
+    this.#clearIdleTimer();
+
+    this.answerNotes = notes;
+    this.outcome = outcome;
+    this.answered += 1;
+    if (grade.correct) {
+      this.correctCount += 1;
+      this.streak += 1;
+      this.bestStreak = Math.max(this.bestStreak, this.streak);
+    } else {
+      this.streak = 0;
+      this.revealNotes = revealed ?? expectedNotes(question.expected);
+    }
+
+    const expectedLabel = question.expected.label;
+    this.feedback = feedbackLines({
+      outcome,
+      expectedLabel,
+      detail,
+      streak: this.streak,
+    });
+    this.announcement = feedbackAnnouncement({
+      outcome,
+      expectedLabel,
+      detail,
+    });
+
+    this.#emit(question, grade, source);
+
+    this.phase = 'feedback';
+    this.#feedbackAt = this.#now();
+
+    if (outcome === 'correct') {
+      // The drill speeds up as you get sharper (§4.3).
+      const delay =
+        this.streak >= STREAK_CALLOUT
+          ? FEEDBACK_STREAK_MS
+          : FEEDBACK_CORRECT_MS;
+      this.#setTimer(() => this.advance(), delay);
+      return;
+    }
+    // A miss waits for the user — but hears the right answer first.
+    this.#setTimer(() => this.#replayReveal(), REVEAL_DELAY_MS);
+  }
+
+  #emit(
+    question: Question,
+    grade: { correct: boolean; score: number },
+    source: NoteSource,
+  ): void {
+    this.#onAttempt?.({
+      id: question.id,
+      ts: Date.now(),
+      exerciseId: this.definition.id,
+      skillId: question.skillId,
+      seed: question.seed,
+      correct: grade.correct,
+      score: grade.score,
+      responseMs: Math.max(0, Math.round(this.#now() - this.#askedAt)),
+      replays: this.replays,
+      answerSource: source,
+    });
+  }
+
+  // ---- timers ------------------------------------------------------------
+
+  #setTimer(run: () => void, ms: number): void {
+    this.#clearTimer();
+    this.#timer = setTimeout(
+      () => {
+        this.#timer = null;
+        run();
+      },
+      Math.max(0, ms),
+    );
+  }
+
+  #clearTimer(): void {
+    if (this.#timer === null) return;
+    clearTimeout(this.#timer);
+    this.#timer = null;
+  }
+
+  /** Session auto-pause after 90 s with no input (§4.3). */
+  #armIdleTimer(): void {
+    this.#clearIdleTimer();
+    this.#idleTimer = setTimeout(() => {
+      this.#idleTimer = null;
+      this.pause();
+    }, IDLE_PAUSE_MS);
+  }
+
+  #clearIdleTimer(): void {
+    if (this.#idleTimer === null) return;
+    clearTimeout(this.#idleTimer);
+    this.#idleTimer = null;
+  }
+}
+
+function expectedNotes(expected: ExpectedAnswer): Midi[] {
+  return expected.kind === 'notes' ? [...expected.notes] : [];
+}

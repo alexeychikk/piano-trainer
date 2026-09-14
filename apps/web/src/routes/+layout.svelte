@@ -50,15 +50,22 @@
       if (isMuteShortcut(event)) audio.toggleMuted();
     };
 
-    window.addEventListener('pointerdown', startAudio);
-    window.addEventListener('keydown', onKeyDown);
+    // Capture phase, both of them: a piano key's own `pointerdown` handler
+    // runs at the target, before anything bubbles back to the window, so a
+    // bubble-phase listener started the context one press too late and the
+    // first click on an on-screen key was silent (QA of slice 3 — the same
+    // ordering would have hit the runner's answer capture). `ensureStarted()`
+    // creates the context and the synth synchronously, before its first
+    // `await`, so the key handler that follows already has sound.
+    window.addEventListener('pointerdown', startAudio, { capture: true });
+    window.addEventListener('keydown', onKeyDown, { capture: true });
 
     const detach = computerKeyboard.attach(window);
     return () => {
       detach();
       unsubscribe();
-      window.removeEventListener('pointerdown', startAudio);
-      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('pointerdown', startAudio, { capture: true });
+      window.removeEventListener('keydown', onKeyDown, { capture: true });
       midiInput.onDeviceLost = null;
       audio.onFallback = null;
     };
@@ -66,14 +73,32 @@
 </script>
 
 <a class="skip visually-hidden" href="#main">Skip to content</a>
-<TopBar />
-<BannerStack />
-<main id="main" tabindex="-1">
-  {@render children?.()}
-</main>
+<div class="app">
+  <TopBar />
+  <BannerStack />
+  <main id="main" tabindex="-1">
+    {@render children?.()}
+  </main>
+</div>
 
 <style>
+  /*
+   * A column that always fills the viewport, so a screen that must not scroll
+   * (the exercise runner, UX §4.1) can simply take the space that is left —
+   * including whatever a banner used up.
+   */
+  .app {
+    display: flex;
+    flex-direction: column;
+    min-height: 100dvh;
+  }
+
   main {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    flex-direction: column;
+    width: 100%;
     max-width: var(--content-max);
     margin: 0 auto;
     padding: var(--space-7) var(--space-6);
