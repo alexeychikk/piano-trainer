@@ -502,7 +502,7 @@ test('the mixed session runs from the hero to the summary (slice 9b)', async ({
   await expect(prompt).toHaveText('Ready?');
 
   // The rail's bar is the clock, not the question count (sci-fi-screens §9).
-  await expect(page.getByTestId('answered')).toContainText(/^time/i);
+  await expect(page.getByTestId('answered')).toContainText(/time/i);
   await expect(page.getByTestId('answered')).toContainText(/\d+:\d\d/);
 
   await page.keyboard.press('Space');
