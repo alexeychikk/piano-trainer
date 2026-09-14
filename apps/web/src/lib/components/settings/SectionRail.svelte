@@ -50,7 +50,7 @@
   });
 </script>
 
-<nav class="rail" aria-label="Settings sections">
+<nav class="rail hud-glow" aria-label="Settings sections">
   <!-- A panel, so glow → edge → face as everywhere else (§8.1). The face is
        padded, so a link's focus ring never reaches the chamfered corner. -->
   <span class="edge hud-cut">
@@ -89,7 +89,9 @@
     flex: 1;
     /* The 1 px inset *is* the edge: clip-path would eat a real border. */
     margin: 1px;
-    padding: var(--space-2);
+    /* 12 px clears the 10 px chamfer, so a link's focus ring (3 px at 2 px
+       offset) is never nibbled by the panel's own clip at the cut corners. */
+    padding: var(--space-3);
     background: var(--grad-panel);
     background-color: var(--bg-1);
   }
