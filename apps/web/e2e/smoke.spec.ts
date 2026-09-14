@@ -8,12 +8,25 @@ import { expect, test, type Page } from '@playwright/test';
  */
 const SOUNDFONT_URLS = '**/midi-js-soundfonts/**';
 
+/**
+ * The runner's routes are not prerendered, so a static host answers them with
+ * the SPA fallback — `404.html`, with a real 404 status, exactly as GitHub
+ * Pages does (and as `e2e/static-server.mjs` reproduces). Chromium may log
+ * that status for the document; the app itself boots and hydrates from it, so
+ * it is expected, not a failure.
+ */
+function isSpaFallbackNotice(text: string, url: string): boolean {
+  return text.includes('status of 404') && url.includes('/practice/');
+}
+
 function watchConsole(page: Page): string[] {
   const errors: string[] = [];
   page.on('console', (message) => {
     if (message.type() !== 'error') return;
-    const from = `${message.text()} ${message.location().url}`;
+    const url = message.location().url;
+    const from = `${message.text()} ${url}`;
     if (from.includes('midi-js-soundfonts')) return;
+    if (isSpaFallbackNotice(message.text(), url)) return;
     errors.push(message.text());
   });
   page.on('pageerror', (error) => errors.push(error.message));
@@ -43,10 +56,17 @@ test('the shell renders and the nav reaches every v1 screen', async ({
   await page.getByRole('link', { name: 'Settings', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
 
-  // The runner route is client-rendered through the SPA fallback.
+  // The runner route is client-rendered through the SPA fallback (`404.html`,
+  // which is what the static server the suite runs against really returns).
   await page.goto('/practice/find-the-note/');
   await expect(
-    page.getByRole('heading', { name: 'Exercise: find-the-note' }),
+    page.getByRole('heading', { name: 'Find the note' }),
+  ).toBeVisible();
+
+  // An unknown id is a normal screen, not a crash.
+  await page.goto('/practice/nope/');
+  await expect(
+    page.getByRole('heading', { name: 'No such exercise' }),
   ).toBeVisible();
 
   expect(consoleErrors).toEqual([]);
@@ -156,6 +176,80 @@ test('the metronome toggles from the keyboard and keeps running across routes', 
 
   await settingsToggle.click();
   await expect(settingsToggle).toHaveAttribute('aria-pressed', 'false');
+
+  expect(consoleErrors).toEqual([]);
+});
+
+test('the find-the-note drill is playable with the computer keys alone', async ({
+  page,
+}) => {
+  const consoleErrors = watchConsole(page);
+
+  await page.goto('/practice/find-the-note/');
+  const prompt = page.getByTestId('prompt');
+  const replay = page.getByTestId('replay');
+  await expect(prompt).toHaveText('Ready?');
+
+  // Space starts the drill; the question plays, then the answer is accepted.
+  await page.keyboard.press('Space');
+  await expect(prompt).toHaveText('Which note?');
+  await expect(replay).toBeEnabled();
+
+  // Enter skips and reveals: the answer is named *and* shown on the keyboard,
+  // so the drill is usable with the sound off (a11y §8.6).
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('feedback')).toContainText(
+    'Skipped · Space to continue',
+  );
+  await expect(
+    page.locator('[data-piano-keyboard] button', { hasText: '◆' }),
+  ).toHaveCount(1);
+  await expect(page.getByTestId('answered')).toContainText('0/1');
+
+  // A miss never blocks: no dialog, and the drill waits for the user.
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+
+  await page.keyboard.press('Space');
+  await expect(page.getByTestId('feedback')).not.toContainText('Skipped');
+  await expect(replay).toBeEnabled();
+
+  // `A` on the computer keyboard is C4 — right or wrong, it is an answer.
+  await page.keyboard.press('a');
+  await expect(page.getByTestId('answered')).toContainText('/2');
+
+  // The runner never scrolls at a normal desktop viewport (§4.1).
+  const scrolls = await page.evaluate(
+    () => document.documentElement.scrollHeight > window.innerHeight + 1,
+  );
+  expect(scrolls).toBe(false);
+
+  expect(consoleErrors).toEqual([]);
+});
+
+test('the range wizard learns the keyboard from two presses', async ({
+  page,
+}) => {
+  const consoleErrors = watchConsole(page);
+
+  await page.goto('/settings/');
+  await expect(page.getByTestId('range-value')).toHaveText('C2 to C7');
+
+  await page.getByTestId('range-start').click();
+  await expect(page.getByTestId('range-prompt')).toHaveText(
+    'Press the lowest key on your piano.',
+  );
+  // Z drops the computer-key octave; A is then C3, K is C4 an octave up.
+  await page.keyboard.press('z');
+  await page.keyboard.press('a');
+  await expect(page.getByTestId('range-prompt')).toHaveText(
+    'Now press the highest key.',
+  );
+  await page.keyboard.press('k');
+  await expect(page.getByTestId('range-value')).toHaveText('C3 to C4');
+
+  // It is settings, so it survives a reload.
+  await page.reload();
+  await expect(page.getByTestId('range-value')).toHaveText('C3 to C4');
 
   expect(consoleErrors).toEqual([]);
 });

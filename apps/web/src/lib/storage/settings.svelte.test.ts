@@ -94,3 +94,42 @@ describe('SettingsStore', () => {
     expect(reloaded.value.noteLabels).toBe('c-only');
   });
 });
+
+describe('slice-4 settings', () => {
+  it('defaults to a 61-key range, no count-in and no focus mode', () => {
+    const parsed = parseSettings(null);
+    expect(parsed.keyboardLow).toBe(36);
+    expect(parsed.keyboardHigh).toBe(96);
+    expect(parsed.countIn).toBe('off');
+    expect(parsed.focusMode).toBe(false);
+  });
+
+  it('keeps a range the range wizard could have produced', () => {
+    const parsed = parseSettings(
+      JSON.stringify({ keyboardLow: 28, keyboardHigh: 103 }),
+    );
+    expect(parsed.keyboardLow).toBe(28);
+    expect(parsed.keyboardHigh).toBe(103);
+  });
+
+  it('falls back to the default range when the stored one is unusable', () => {
+    for (const stored of [
+      { keyboardLow: 96, keyboardHigh: 36 },
+      { keyboardLow: 60, keyboardHigh: 64 },
+      { keyboardLow: 'C2', keyboardHigh: 'C7' },
+    ]) {
+      const parsed = parseSettings(JSON.stringify(stored));
+      expect(parsed.keyboardLow, JSON.stringify(stored)).toBe(36);
+      expect(parsed.keyboardHigh, JSON.stringify(stored)).toBe(96);
+    }
+  });
+
+  it('rejects a count-in value it does not know', () => {
+    expect(parseSettings(JSON.stringify({ countIn: '2-bars' })).countIn).toBe(
+      'off',
+    );
+    expect(parseSettings(JSON.stringify({ countIn: '1-bar' })).countIn).toBe(
+      '1-bar',
+    );
+  });
+});

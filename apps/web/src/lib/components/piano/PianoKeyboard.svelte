@@ -13,7 +13,13 @@
    * and exercise display surface. Pure presentation: props in, note callbacks
    * out. It holds no exercise knowledge and never plays audio itself.
    */
-  import { midiToName, pcOf, spokenNoteName, type Midi } from '$lib/theory';
+  import {
+    midiToName,
+    pcOf,
+    spokenNoteName,
+    type Midi,
+    type NoteName,
+  } from '$lib/theory';
   import type { LabelMode } from '$lib/storage/settings.svelte';
   import {
     DEFAULT_MAX_HEIGHT,
@@ -37,7 +43,13 @@
     /** Display state per key; `played` comes from the held-note set. */
     highlights?: ReadonlyMap<Midi, KeyHighlight>;
     labels?: LabelMode;
-    labelStyle?: 'sharp' | 'flat';
+    /**
+     * `'context'` spells a key the way the current question does — the
+     * `spellings` map below — and falls back to sharps for everything else.
+     */
+    labelStyle?: 'sharp' | 'flat' | 'context';
+    /** Spelling per key, used by `labelStyle: 'context'` (UX §5.1). */
+    spellings?: ReadonlyMap<Midi, NoteName>;
     /** `false` = display only: no pointer, no keyboard input. */
     interactive?: boolean;
     maxHeightPx?: number;
@@ -51,6 +63,7 @@
     highlights,
     labels = 'c-only',
     labelStyle = 'sharp',
+    spellings,
     interactive = true,
     maxHeightPx = DEFAULT_MAX_HEIGHT,
     onNoteOn,
@@ -113,12 +126,55 @@
     return highlights?.get(midi) ?? null;
   }
 
+  /** Does DOM focus currently sit on one of our keys? */
+  let hasFocus = $state(false);
+
+  /**
+   * Focus left a key. When it moved somewhere else the keyboard is no longer
+   * ours; when it was *dropped* (`relatedTarget === null`, which is what
+   * disabling the focused element does) we keep ownership so the effect below
+   * can put it back.
+   */
+  function handleFocusOut(event: FocusEvent) {
+    const next = event.relatedTarget;
+    if (next === null) return;
+    if (next instanceof Node && event.currentTarget instanceof HTMLElement) {
+      if (event.currentTarget.contains(next)) return;
+    }
+    hasFocus = false;
+  }
+
+  /**
+   * A key that goes `dim` under the user's fingers renders `disabled`, and a
+   * disabled element silently drops focus to `<body>` — the keyboard would go
+   * dead mid-exercise. Move focus to the tab stop instead, so arrow keys keep
+   * working when a question narrows the range (UX §5.2, §5.5).
+   */
+  $effect(() => {
+    if (!hasFocus || focusMidi === null) return;
+    if (isFocusableKey(focusMidi)) return;
+    const next = rovingMidi;
+    if (next === focusMidi) return;
+    focusMidi = next;
+    document.getElementById(keyId(next))?.focus();
+  });
+
+  /** Sharps are the fallback spelling; `'context'` asks the question first. */
+  const fallbackStyle = $derived(labelStyle === 'flat' ? 'flat' : 'sharp');
+
+  function nameOf(midi: Midi): NoteName {
+    if (labelStyle === 'context') {
+      const spelled = spellings?.get(midi);
+      if (spelled) return spelled;
+    }
+    return midiToName(midi, fallbackStyle);
+  }
+
   function labelFor(midi: Midi, black: boolean): string | null {
     if (labels === 'none') return null;
-    if (labels === 'c-only')
-      return pcOf(midi) === 0 ? midiToName(midi, labelStyle) : null;
+    if (labels === 'c-only') return pcOf(midi) === 0 ? nameOf(midi) : null;
     if (labels === 'white' && black) return null;
-    return midiToName(midi, labelStyle);
+    return nameOf(midi);
   }
 
   // ---- press bookkeeping -------------------------------------------------
@@ -211,16 +267,17 @@
   const keyId = (midi: Midi) => `key-${instance}-${midi}`;
 
   const groupLabel = $derived(
-    `Piano keyboard, ${midiToName(keyRange.low, labelStyle)} to ${midiToName(keyRange.high, labelStyle)}`,
+    `Piano keyboard, ${midiToName(keyRange.low, fallbackStyle)} to ${midiToName(keyRange.high, fallbackStyle)}`,
   );
 </script>
 
 <svelte:window onpointerup={releaseAll} onpointercancel={releaseAll} />
 
-<div class="frame" bind:clientWidth={containerWidth}>
+<!-- Marked so screens can tell a key press apart from a shell shortcut. -->
+<div class="frame" data-piano-keyboard bind:clientWidth={containerWidth}>
   <div class="edge left" class:visible={offRangeBelow.length > 0}>
     {#if offRangeBelow.length > 0}
-      <span>◂ {midiToName(offRangeBelow[0], labelStyle)}</span>
+      <span>◂ {nameOf(offRangeBelow[0])}</span>
     {/if}
   </div>
 
@@ -228,6 +285,8 @@
     class="keys"
     role="group"
     aria-label={groupLabel}
+    onfocusin={() => (hasFocus = true)}
+    onfocusout={handleFocusOut}
     style:width="{metrics.width}px"
     style:height="{metrics.whiteHeight}px"
   >
@@ -272,7 +331,7 @@
 
   <div class="edge right" class:visible={offRangeAbove.length > 0}>
     {#if offRangeAbove.length > 0}
-      <span>{midiToName(offRangeAbove[0], labelStyle)} ▸</span>
+      <span>{nameOf(offRangeAbove[0])} ▸</span>
     {/if}
   </div>
 </div>

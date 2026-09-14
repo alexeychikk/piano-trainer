@@ -1,7 +1,10 @@
 <script lang="ts">
-  // Home / "Practice now" (UX spec §3). The hero stays disabled until the
-  // first exercise is registered (slice 4) — the length control and the Today
-  // card arrive with persistence (slice 5) and sessions (slice 9).
+  // Home / "Practice now" (UX spec §3). With the first exercise registered
+  // (slice 4) the hero starts a drill; the length control, the Today card and
+  // the due counts arrive with persistence (slice 5) and sessions (slice 9),
+  // so the hero uses the copy deck's empty-state wording until then.
+  import { base } from '$app/paths';
+  import { DEFAULT_EXERCISE_ID, EXERCISES } from '$lib/exercises/registry';
 </script>
 
 <svelte:head>
@@ -12,10 +15,12 @@
 
 <div class="hero-row">
   <div class="hero-col">
-    <button class="hero" type="button" disabled>
-      <span class="label"><span aria-hidden="true">▶</span> Practice</span>
-      <span class="sub">No exercises yet</span>
-    </button>
+    <a class="hero" href={`${base}/practice/${DEFAULT_EXERCISE_ID}/`}>
+      <span class="label">
+        <span aria-hidden="true">▶</span> Start your first session
+      </span>
+      <span class="sub">Ten minutes is enough</span>
+    </a>
     <p class="how">
       Sit at your piano. Connect it, or use the on-screen keyboard. You answer
       by playing — space replays the sound.
@@ -23,10 +28,17 @@
   </div>
 
   <aside class="card">
-    <h2>Today</h2>
+    <h2>Exercises</h2>
+    <ul class="exercises">
+      {#each EXERCISES as exercise (exercise.id)}
+        <li>
+          <a href={`${base}/practice/${exercise.id}/`}>{exercise.title}</a>
+          <span class="desc">{exercise.description}</span>
+        </li>
+      {/each}
+    </ul>
     <p class="empty">
-      Practice numbers appear once the first exercise lands (slice 4) and
-      attempts are stored (slice 5).
+      Practice numbers appear once attempts are stored (slice 5).
     </p>
   </aside>
 </div>
@@ -46,6 +58,7 @@
 
   .hero {
     display: flex;
+    text-decoration: none;
     flex-direction: column;
     align-items: center;
     justify-content: center;
@@ -59,11 +72,25 @@
     cursor: pointer;
   }
 
-  .hero:disabled {
-    background: var(--bg-2);
+  .hero:hover {
+    text-decoration: none;
+    filter: brightness(1.08);
+  }
+
+  .exercises {
+    margin: var(--space-3) 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .exercises li + li {
+    margin-top: var(--space-3);
+  }
+
+  .desc {
+    display: block;
+    font-size: var(--fs-small);
     color: var(--text-3);
-    border: 1px solid var(--border);
-    cursor: not-allowed;
   }
 
   .label {

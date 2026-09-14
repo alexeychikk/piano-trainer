@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { NAV_ITEMS, isActive, normalizePath } from './nav';
+import { NAV_ITEMS, isActive, normalizePath, isRunnerRoute } from './nav';
 
 describe('normalizePath', () => {
   it('strips the deploy base prefix', () => {
@@ -50,5 +50,22 @@ describe('isActive', () => {
       const active = NAV_ITEMS.filter((item) => isActive(path, item.href));
       expect(active, path).toHaveLength(1);
     }
+  });
+});
+
+describe('isRunnerRoute', () => {
+  it('is true for the runner and the mixed session, and nowhere else', () => {
+    expect(isRunnerRoute('/practice/find-the-note/')).toBe(true);
+    expect(isRunnerRoute('/session')).toBe(true);
+    for (const path of ['/', '/progress/', '/settings/', '/play/']) {
+      expect(isRunnerRoute(path), path).toBe(false);
+    }
+  });
+
+  it('works under the GitHub Pages base path', () => {
+    expect(
+      isRunnerRoute('/piano-trainer/practice/find-the-note/', '/piano-trainer'),
+    ).toBe(true);
+    expect(isRunnerRoute('/piano-trainer/', '/piano-trainer')).toBe(false);
   });
 });

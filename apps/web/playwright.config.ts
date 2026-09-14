@@ -8,11 +8,14 @@ export default defineConfig({
   retries: ci ? 2 : 0,
   testDir: 'e2e',
   webServer: {
-    // CI builds in its own step, so preview the existing build there; locally
-    // `pnpm test:e2e` still builds so it works on its own.
+    // A plain static file server, not `vite preview`: the deploy target is
+    // GitHub Pages, where an unknown path is answered with `404.html` — the
+    // SPA fallback that `/practice/<id>/` depends on. Only a dumb server
+    // exercises that. CI builds in its own step; locally `pnpm test:e2e`
+    // still builds first, so it works on its own.
     command: ci
-      ? 'pnpm preview --port 4173'
-      : 'pnpm build && pnpm preview --port 4173',
+      ? 'node e2e/static-server.mjs 4173'
+      : 'pnpm build && node e2e/static-server.mjs 4173',
     port: 4173,
     reuseExistingServer: !ci,
   },

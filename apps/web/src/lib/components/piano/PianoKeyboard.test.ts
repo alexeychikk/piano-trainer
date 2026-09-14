@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { render } from '@testing-library/svelte';
+import { tick } from 'svelte';
 import PianoKeyboard from './PianoKeyboard.svelte';
 import type { KeyHighlight } from './highlights';
 
@@ -122,5 +123,46 @@ describe('PianoKeyboard input', () => {
     expect(body).toMatch(/tabindex="0" aria-label="D 4"/);
     // Exactly one tab stop, whatever is dimmed.
     expect((body.match(/tabindex="0"/g) ?? []).length).toBe(1);
+  });
+});
+
+describe('PianoKeyboard labelling', () => {
+  it('spells keys the way the question does with labelStyle "context"', () => {
+    const body = html({
+      labels: 'all',
+      labelStyle: 'context',
+      spellings: new Map([[61, 'Db4']]),
+    });
+    expect(body).toContain('>Db4<');
+    // Everything the question did not spell falls back to sharps.
+    expect(body).toContain('>D#4<');
+  });
+
+  it('falls back to sharps when no spelling is supplied', () => {
+    expect(html({ labels: 'all', labelStyle: 'context' })).toContain('>C#4<');
+  });
+});
+
+describe('PianoKeyboard focus', () => {
+  it('moves focus off a key that has just been dimmed', async () => {
+    const { container, rerender } = render(PianoKeyboard, {
+      props: { layout: 61 },
+    });
+    const key = (name: string) =>
+      container.querySelector<HTMLButtonElement>(`[aria-label="${name}"]`)!;
+
+    key('C 4').focus();
+    expect(document.activeElement).toBe(key('C 4'));
+
+    // A new question narrows the range: the focused key becomes display only,
+    // and a disabled element drops focus to <body> unless we move it.
+    await rerender({
+      highlights: new Map<number, KeyHighlight>([
+        [60, 'dim'],
+        [61, 'dim'],
+      ]),
+    });
+    await tick();
+    expect(document.activeElement).toBe(key('D 4'));
   });
 });

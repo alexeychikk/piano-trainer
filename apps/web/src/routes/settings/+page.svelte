@@ -6,13 +6,18 @@
    */
   import { base } from '$app/paths';
   import MetronomePanel from '$lib/components/audio/MetronomePanel.svelte';
+  import RangeWizard from '$lib/components/midi/RangeWizard.svelte';
   import PianoKeyboard from '$lib/components/piano/PianoKeyboard.svelte';
   import type { KeyHighlight } from '$lib/components/piano/highlights';
   import { audio } from '$lib/audio/engine.svelte';
   import { INSTRUMENTS } from '$lib/audio/instruments';
   import { audioExplanation } from '$lib/audio/status';
   import { midiInput } from '$lib/midi/input.svelte';
-  import { settings, type LabelMode } from '$lib/storage/settings.svelte';
+  import {
+    settings,
+    type CountIn,
+    type LabelMode,
+  } from '$lib/storage/settings.svelte';
   import { MIDDLE_C, type Midi } from '$lib/theory';
 
   /** A short arpeggio, so "Test" says something about the instrument. */
@@ -27,17 +32,20 @@
   const soundExplanation = $derived(audioExplanation({ status: audio.status }));
 
   async function testSound() {
+    // Pressing "Test" means "let me hear it": while the app is muted the
+    // button used to be silently inert (QA of slice 3), so it unmutes first —
+    // visibly, through the same call the checkbox and the chip read.
+    if (!settings.value.soundEnabled) audio.setMuted(false);
     await audio.ensureStarted();
     audio.playSequence(TEST_PHRASE, { velocity: 90 });
   }
 
+  const COUNT_INS: { value: CountIn; label: string }[] = [
+    { value: 'off', label: 'Off' },
+    { value: '1-bar', label: 'One bar' },
+  ];
+
   const PENDING_SECTIONS = [
-    {
-      id: 'practice',
-      title: 'Practice',
-      note: 'Session length, chord settling window and per-exercise settings.',
-      slice: 4,
-    },
     {
       id: 'data',
       title: 'Data',
@@ -138,9 +146,7 @@
     {/each}
   </fieldset>
 
-  <p class="slice">
-    The keyboard-range wizard arrives with the exercise runner (slice 4).
-  </p>
+  <RangeWizard />
 </section>
 
 <section id="sound">
@@ -199,6 +205,35 @@
   </div>
 
   <MetronomePanel />
+</section>
+
+<section id="practice">
+  <h2>Practice</h2>
+
+  <fieldset class="row">
+    <legend>Count-in</legend>
+    {#each COUNT_INS as option (option.value)}
+      <label class="choice">
+        <input
+          type="radio"
+          name="count-in"
+          value={option.value}
+          checked={settings.value.countIn === option.value}
+          onchange={() => settings.patch({ countIn: option.value })}
+        />
+        {option.label}
+      </label>
+    {/each}
+  </fieldset>
+  <p class="note">
+    One bar of metronome clicks before each question, at the tempo above — a
+    beat to settle your hands before you listen.
+  </p>
+
+  <p class="slice">
+    Session length and per-exercise settings arrive with the practice loop
+    (slice 9).
+  </p>
 </section>
 
 {#each PENDING_SECTIONS as section (section.id)}

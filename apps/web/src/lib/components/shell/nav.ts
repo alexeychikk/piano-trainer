@@ -30,6 +30,17 @@ export function normalizePath(pathname: string, base = ''): string {
   return path === '' ? '/' : path;
 }
 
+/**
+ * Is this a screen the exercise runner owns? Focus mode (UX §4.7) hides the
+ * shell there and only there, so leaving the runner always brings it back.
+ */
+export function isRunnerRoute(pathname: string, base = ''): boolean {
+  const path = normalizePath(pathname, base);
+  return PRACTICE_ROUTES.some(
+    (route) => path === route || path.startsWith(`${route}/`),
+  );
+}
+
 /** Is `href` the nav item that should be marked current for `pathname`? */
 export function isActive(pathname: string, href: string, base = ''): boolean {
   const path = normalizePath(pathname, base);
