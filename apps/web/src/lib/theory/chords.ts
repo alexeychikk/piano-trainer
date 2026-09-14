@@ -14,7 +14,7 @@
  */
 
 import { Chord } from 'tonal';
-import { midiToName, nameToMidi, pcOf } from './notes';
+import { midiToName, nameToMidi, pcOf, pitchClassName } from './notes';
 import type {
   ChordQuality,
   ChordSymbol,
@@ -194,6 +194,19 @@ export function chordQualityName(quality: ChordQuality): string {
 /** The abbreviated name, e.g. `m7b5` — dense grids only, never feedback. */
 export function chordQualityShortName(quality: ChordQuality): string {
   return SHORT_BY_QUALITY[quality];
+}
+
+/**
+ * The chord symbol a chart would print — `Cmaj7`, `Db7`, `Bbm7`: the root's
+ * spelling plus the quality's suffix. Flats by default, like every other
+ * spelling in the app. Display only; a chord is never *graded* on its name.
+ */
+export function chordSymbolText(
+  rootPc: PitchClass,
+  quality: ChordQuality,
+  style: 'sharp' | 'flat' = 'flat',
+): string {
+  return `${pitchClassName(rootPc, style)}${chordQualityShortName(quality)}`;
 }
 
 /**
