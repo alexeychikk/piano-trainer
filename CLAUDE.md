@@ -189,6 +189,35 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
     showing. A row of its own pushed it into a scroll, which §4.1 forbids.
   - `AnyExercise` erases settings as `Record<string, unknown>`, so **an exercise's settings type must
     be a type alias, not an `interface`** (only an alias gets the implicit index signature).
+- **Chord quality (slice 7)** — `$lib/exercises/chord-quality/`, the third exercise and the second
+  ear-training drill: one block chord sounds, the user plays it back.
+  - **The graded quantity is the quality, not the pitches** (slice 6's rule, one dimension up):
+    `grade()` compares `intervalsAboveBass(played)` — the semitones above the **lowest note played**,
+    folded into one octave and deduped — to the asked quality's interval set. So the chord may be
+    played back from **any root** (no `Question.range`, nothing dims), in **any octave, spacing and
+    doubling**, with **enharmonics equal for free** (integer arithmetic), but **in root position**:
+    a pitch-class set alone does not name one quality (Cm7 and Eb6 are the same four notes, and
+    slice 8's 6th chords make that ambiguity real), so the lowest note played is read as the root.
+    A right chord over the wrong bass is a *named* miss, never a silent one
+    (`spellsQualityInAnyInversion`). Scoring is **binary** (ADR §10).
+  - The **answer mode is `note-sequence`**, not the UX spec's `chord-sustained`/`chord-released`:
+    those two need notes held together, which a mouse on the on-screen keyboard cannot do at all
+    (one pointer, one key), and the acceptance rule is that every drill is playable with no MIDI
+    device. `note-sequence` behaves identically for a held MIDI chord (four note-ons), the computer
+    keys and the mouse, and grading is **order-insensitive**, so QA's slice-6 observation (notes
+    struck together arrive in note-on order) cannot reach it. The runner needed **no change**.
+  - Chord **vocabulary lives in `$lib/theory/chords.ts`**, never in the exercise — the
+    `intervals.ts` rule: `chordIntervals`/`chordNotes` (build), `intervalsAboveBass`/
+    `qualityOfIntervals`/`spellsQuality`/`spellsQualityInAnyInversion` (read) and the three names
+    (`chordQualityName` `Dominant 7th chord` for feedback, `chordQualityShortName` `7` for the
+    grid, `spokenChordQuality` `a dominant 7th chord` for a sentence). **A quality's name carries
+    the noun** (`Major 7th chord`), because `Major 7th` alone is an interval. `dom7alt` has **no**
+    interval set — an altered dominant is a family of voicings, so `chordIntervals()` returns
+    `null` and `generate()` skips any quality it cannot build.
+  - `SkillId` is `chord-quality:<quality>` (one skill per colour); `skillLabel()` renders the
+    chord-symbol suffix (`maj7`, `7`, `m7`, `m7b5`, `dim7`). The starter set is those five
+    four-note sevenths — all the same size, so the drill is about colour and not about counting
+    notes; triads and 6ths join when the runner can render `settingsFields`.
 - **Settings** are `localStorage` via the `settings` store (`$lib/storage/settings.svelte.ts`) and
   are read only in `hydrate()`, called from the root layout after mount — module init must not touch
   storage or prerendered HTML and the first client render disagree. Slice 4 added `keyboardLow`/

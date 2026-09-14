@@ -4,6 +4,7 @@
  * one array entry — nothing else in the app changes.
  */
 
+import { chordQuality } from './chord-quality';
 import { findTheNote } from './find-the-note';
 import { intervalRecognition } from './interval-recognition';
 import type { AnyExercise, ExerciseId } from './types';
@@ -12,6 +13,7 @@ import type { AnyExercise, ExerciseId } from './types';
 export const EXERCISES: readonly AnyExercise[] = [
   findTheNote,
   intervalRecognition,
+  chordQuality,
 ];
 
 export function getExercise(id: ExerciseId): AnyExercise | null {
