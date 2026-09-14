@@ -33,6 +33,7 @@
   import { midiToName, type Midi } from '$lib/theory';
   import { midiInput } from '$lib/midi/input.svelte';
   import { buildPlan, targetSkillsFor } from '$lib/practice/planner';
+  import type { SessionRun } from '$lib/practice/session.svelte';
   import { practice } from '$lib/practice/store.svelte';
   import { COMPUTER_KEY_HINT, isTypingTarget } from '$lib/midi/keymap';
   import { settings } from '$lib/storage/settings.svelte';
@@ -47,7 +48,19 @@
      * exercise; the planner decides what is in it.
      */
     dueFirst = false,
-  }: { definition: AnyExercise; dueFirst?: boolean } = $props();
+    /**
+     * A mixed session (`/session`, slice 9b): it supplies the exercise per
+     * question, the skills to favour and the clock. The frame is the same
+     * one, with the two differences the spec fixes (sci-fi-screens.md §9) —
+     * the rail's title follows the *current* exercise and its bar shows time
+     * instead of question count. Absent for a plain drill.
+     */
+    session = null,
+  }: {
+    definition: AnyExercise;
+    dueFirst?: boolean;
+    session?: SessionRun | null;
+  } = $props();
 
   // The route remounts this component for a different exercise (`{#key}`), so
   // capturing the definition once is exactly right.
@@ -60,24 +73,36 @@
     // answered (a skill just passed drops out of it), and a run that started
     // before the store hydrated still picks the schedule up.
     targetSkills: () =>
-      dueFirst
-        ? targetSkillsFor(
-            buildPlan(
-              [
-                {
-                  id: definition.id,
-                  skillIds: definition.skillsCovered(
-                    definition.defaultSettings,
-                  ),
-                },
-              ],
-              practice.byId,
-              Date.now(),
-            ),
-            definition.id,
-          )
-        : [],
-    onAttempt: (attempt) => practice.record(attempt),
+      session
+        ? session.targetSkills()
+        : dueFirst
+          ? targetSkillsFor(
+              buildPlan(
+                [
+                  {
+                    id: definition.id,
+                    skillIds: definition.skillsCovered(
+                      definition.defaultSettings,
+                    ),
+                  },
+                ],
+                practice.byId,
+                Date.now(),
+              ),
+              definition.id,
+            )
+          : [],
+    pickExercise: session ? () => session.pickExercise() : undefined,
+    shouldContinue: session ? () => session.shouldContinue() : undefined,
+    onEnd: session ? () => session.end() : undefined,
+    onAttempt: (attempt) => {
+      // The store is the one authority on mastery, so the session's delta is
+      // read from it — before the attempt lands and after (slice 9b).
+      const before = practice.byId.get(attempt.skillId)?.mastery ?? null;
+      practice.record(attempt);
+      const after = practice.byId.get(attempt.skillId)?.mastery ?? 0;
+      session?.record(attempt, before, after, runner.streak);
+    },
   });
 
   /** Keyboard height, so a short viewport shrinks the keys (UX §4.1). */
@@ -163,10 +188,18 @@
     settings.patch({ focusMode: !settings.value.focusMode });
   }
 
-  /** `Esc` leaves focus mode first, then the drill (UX §4.5, §4.7). */
+  /**
+   * `Esc` leaves focus mode first, then the drill (UX §4.5, §4.7). In a
+   * session it ends the run and the summary replaces the frame (§4.8) rather
+   * than navigating away — a session that is over still has something to say.
+   */
   async function end() {
     if (settings.value.focusMode) {
       settings.patch({ focusMode: false });
+      return;
+    }
+    if (session) {
+      runner.end();
       return;
     }
     await goto(`${base}/`);
@@ -241,13 +274,24 @@
   <!-- ② The status rail (§5.2): full-bleed chrome, like the top bar, and the
        one element that survives focus mode. Never chamfered (deviation 20). -->
   <div class="rail">
-    <h1 class="exercise">{definition.title}</h1>
+    <!-- The *current* exercise: in a session the questions are mixed, so the
+         title follows the question, never the route (§9). -->
+    <h1 class="exercise">{runner.definition.title}</h1>
     <div class="progress" data-testid="answered">
-      <ProgressBar
-        value={answeredFraction}
-        label="Answered"
-        readout="{runner.correctCount}/{runner.answered}"
-      />
+      {#if session}
+        <!-- §9: the session's bar is the clock, counting down. -->
+        <ProgressBar
+          value={session.timeValue}
+          label="Time"
+          readout={session.timeReadout}
+        />
+      {:else}
+        <ProgressBar
+          value={answeredFraction}
+          label="Answered"
+          readout="{runner.correctCount}/{runner.answered}"
+        />
+      {/if}
     </div>
     <p class="readouts">
       <span class="readout" data-testid="streak">

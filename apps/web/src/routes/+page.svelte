@@ -2,30 +2,44 @@
   // Home / "Practice now" (UX spec §3, re-skinned by the sci-fi visual
   // language §8). The regions and the copy are the spec's; only the treatment
   // is new. With the first exercise registered (slice 4) the hero starts a
-  // drill, since slice 5a the cards' mastery pips are real, and since slice 9a
-  // the **scheduler** picks where `Practice now` goes: the hero opens the
-  // exercise holding the most urgent skill, with `?due=1` so the drill favours
-  // it (`$lib/practice/planner.ts`).
+  // drill, since slice 5a the cards' mastery pips are real, since slice 9a the
+  // **scheduler** decides what is due — and since slice 9b the hero opens the
+  // **mixed session** the spec always meant it to (`/session`), with the
+  // length control beneath it and the Today card beside it.
   //
-  // Still slice 9b's: the length control, the Today card, and `Space` starting
-  // a mixed session at `/session` — all three are statements about a session,
-  // which does not exist yet. So the Today card stays the "How this works"
-  // well the spec prescribes for the empty state.
+  // `Space` — or any MIDI key — starts the session from anywhere on this
+  // screen (§3): the user's hands are already on the piano.
+  import { goto } from '$app/navigation';
   import { base } from '$app/paths';
-  import { DEFAULT_EXERCISE_ID, EXERCISES } from '$lib/exercises/registry';
+  import { onMount } from 'svelte';
+  import { EXERCISES } from '$lib/exercises/registry';
   import { midiInput } from '$lib/midi/input.svelte';
+  import { isTypingTarget } from '$lib/midi/keymap';
   import { dueNow, skillsDueToday } from '$lib/practice/copy';
   import { buildPlan } from '$lib/practice/planner';
+  import {
+    ACCURACY_DAYS,
+    accuracyOver,
+    dailyCounts,
+    normalise,
+    streakDays,
+  } from '$lib/practice/progress';
+  import { SESSION_LENGTHS_MIN } from '$lib/practice/session';
   import { practice } from '$lib/practice/store.svelte';
+  import { settings } from '$lib/storage/settings.svelte';
   import Badge from '$lib/components/hud/Badge.svelte';
   import Button from '$lib/components/hud/Button.svelte';
+  import Chip from '$lib/components/hud/Chip.svelte';
   import HudPanel from '$lib/components/hud/HudPanel.svelte';
   import MasteryPips from '$lib/components/hud/MasteryPips.svelte';
+  import Meter from '$lib/components/hud/Meter.svelte';
+  import MicroLabel from '$lib/components/hud/MicroLabel.svelte';
   import IconKeyboard from '$lib/components/icons/IconKeyboard.svelte';
   import IconPlay from '$lib/components/icons/IconPlay.svelte';
 
   /** One clock for the screen, read when it opens — as `/progress` does. */
   const now = Date.now();
+  const SESSION_HREF = `${base}/session/`;
 
   const plan = $derived(
     buildPlan(
@@ -39,17 +53,6 @@
   );
 
   /**
-   * Where the hero goes. The planner's first pick, or the default exercise
-   * when there is nothing to schedule at all (an empty registry, or every
-   * skill solid and still in the future) — the hero is never a dead end.
-   * `?due=1` only makes sense when something is actually due.
-   */
-  const heroHref = $derived(
-    plan.dueCount > 0
-      ? `${base}/practice/${plan.pick?.exerciseId}/?due=1`
-      : `${base}/practice/${plan.pick?.exerciseId ?? DEFAULT_EXERCISE_ID}/`,
-  );
-  /**
    * The copy deck's two hero labels (UX §3): `Start your first session` until
    * there is a history, `Practice now` after — with the spec's own sub-label
    * once the schedule has something to say.
@@ -61,6 +64,50 @@
   const heroSub = $derived(
     plan.dueCount > 0 ? skillsDueToday(plan.dueCount) : 'Ten minutes is enough',
   );
+
+  /** The Today card's three numbers and its 7-day sparkline (UX §3). */
+  const todayCounts = $derived(
+    dailyCounts(practice.attempts, now, ACCURACY_DAYS),
+  );
+  const todayAttempts = $derived(todayCounts[todayCounts.length - 1] ?? 0);
+  const todayAccuracy = $derived(accuracyOver(practice.attempts, now, 1));
+  const dayStreak = $derived(streakDays(practice.attempts, now));
+  const sparkline = $derived(normalise(todayCounts));
+  const sparklineLabel = $derived(
+    `Attempts over the last ${ACCURACY_DAYS} days, ending today: ${todayCounts.join(', ')}`,
+  );
+
+  /** UX §3: 5 / 10 / 20 minutes, persisted; arrow keys move the selection. */
+  const sessionLength = $derived(settings.value.sessionLengthMin);
+
+  async function startSession() {
+    await goto(SESSION_HREF);
+  }
+
+  /**
+   * `Space` anywhere on `/` starts the session, and so does any MIDI note-on
+   * (UX §3) — hands stay on the piano. Ignored while a control is being
+   * typed in, and `preventDefault` so `Space` does not also press a focused
+   * button; the length radios keep their own arrow keys.
+   */
+  function onKeyDown(event: KeyboardEvent) {
+    if (event.repeat || isTypingTarget(event.target)) return;
+    if (event.ctrlKey || event.metaKey || event.altKey) return;
+    if (event.key !== ' ') return;
+    event.preventDefault();
+    void startSession();
+  }
+
+  onMount(() => {
+    const unsubscribe = midiInput.subscribe((event) => {
+      if (event.type === 'on') void startSession();
+    });
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      unsubscribe();
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  });
 </script>
 
 <svelte:head>
@@ -79,22 +126,77 @@
       variant="primary"
       size="hero"
       block
-      href={heroHref}
+      href={SESSION_HREF}
       sub={heroSub}
       glyph={playGlyph}
       testId="hero"
     >
       {heroLabel}
+      <span class="keycap"><Chip variant="key">Space</Chip></span>
     </Button>
+
+    <!-- UX §3 / part 1 §5.11: the segmented length picker. Native radios, so
+         the arrow keys the spec asks for are the platform's own. -->
+    <fieldset class="lengths">
+      <legend><MicroLabel>Session length</MicroLabel></legend>
+      <div class="segments">
+        {#each SESSION_LENGTHS_MIN as minutes (minutes)}
+          <label class="segment" class:selected={sessionLength === minutes}>
+            <input
+              type="radio"
+              name="session-length"
+              value={minutes}
+              checked={sessionLength === minutes}
+              onchange={() => settings.patch({ sessionLengthMin: minutes })}
+            />
+            {minutes} min
+          </label>
+        {/each}
+      </div>
+    </fieldset>
   </div>
 
   <aside class="side">
-    <HudPanel header="How this works" chamfer="md" well padding="md">
-      <p class="how">
-        Sit at your piano. Connect it, or use the on-screen keyboard. You answer
-        by playing — space replays the sound.
-      </p>
-    </HudPanel>
+    {#if started}
+      <!-- UX §3: three numbers plus the 7-day sparkline. Every one of them is
+           `$lib/practice/progress.ts`'s; nothing is computed in the markup. -->
+      <HudPanel header="Today" headerAs="h2" chamfer="md" padding="md">
+        <p class="today">
+          <span class="today-item">
+            <span class="today-value tabular">{todayAttempts}</span>
+            <MicroLabel>Attempts</MicroLabel>
+          </span>
+          <span class="today-item">
+            <span class="today-value tabular">
+              {todayAccuracy === null
+                ? '—'
+                : `${Math.round(todayAccuracy * 100)}%`}
+            </span>
+            <MicroLabel>Accuracy</MicroLabel>
+          </span>
+          <span class="today-item">
+            <span class="today-value tabular">{dayStreak}</span>
+            <MicroLabel>Day streak</MicroLabel>
+          </span>
+        </p>
+        <div class="spark">
+          <Meter
+            values={sparkline}
+            markIndex={sparkline.length - 1}
+            height={40}
+            srLabel={sparklineLabel}
+          />
+          <MicroLabel>Last {ACCURACY_DAYS} days</MicroLabel>
+        </div>
+      </HudPanel>
+    {:else}
+      <HudPanel header="How this works" chamfer="md" well padding="md">
+        <p class="how">
+          Sit at your piano. Connect it, or use the on-screen keyboard. You
+          answer by playing — space replays the sound.
+        </p>
+      </HudPanel>
+    {/if}
   </aside>
 </div>
 
@@ -161,6 +263,87 @@
   .how {
     font-size: var(--fs-body);
     color: var(--text-2);
+  }
+
+  .keycap {
+    margin-left: var(--space-2);
+  }
+
+  /* The segmented control (part 1 §5.11): one `--bg-well` group, the selected
+     segment on `--grad-primary` with white ink — the one place a filled accent
+     surface is legal (§9). */
+  .lengths {
+    margin-top: var(--space-3);
+    padding: 0;
+    border: none;
+  }
+
+  .segments {
+    display: inline-flex;
+    margin-top: var(--space-2);
+    background: var(--bg-well);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+  }
+
+  .segment {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--hit-min);
+    padding: 0 var(--space-4);
+    color: var(--text-2);
+    font-family: var(--font-display);
+    font-size: var(--fs-body);
+    letter-spacing: var(--track-hud);
+    cursor: pointer;
+  }
+
+  .segment.selected {
+    background: var(--grad-primary);
+    color: var(--on-accent);
+  }
+
+  /* The radio itself is the control — hidden visually, never removed, so the
+     arrow keys and the accessible name stay the platform's. */
+  .segment input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  /* The global ring, drawn *inside* the group: the segments share one border,
+     so an outset ring would cover the neighbour (app.css §focus). */
+  .segment:has(input:focus-visible) {
+    outline: 3px solid var(--focus);
+    outline-offset: -3px;
+  }
+
+  .today {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-5);
+  }
+
+  .today-item {
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* §8: the three numbers are HUD readouts — display, tabular, with the text
+     glow; their labels are micro-labels. */
+  .today-value {
+    font-family: var(--font-display);
+    font-size: var(--fs-h1);
+    line-height: var(--lh-tight);
+    color: var(--text-1);
+    text-shadow: var(--glow-text);
+  }
+
+  .spark {
+    margin-top: var(--space-4);
   }
 
   .drill {

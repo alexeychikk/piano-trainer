@@ -233,6 +233,7 @@
       keyboardHigh: imported.keyboardHigh,
       countIn: imported.countIn,
       focusMode: imported.focusMode,
+      sessionLengthMin: imported.sessionLengthMin,
     });
     midiInput.select(imported.midiDeviceKey);
     audio.setVolume(imported.volume);

@@ -25,6 +25,9 @@ const PHASE_LABELS: Readonly<Record<RunnerPhase, PhaseLabel>> = {
   awaiting: { label: 'Answer', hot: true },
   feedback: { label: 'Result', hot: false },
   paused: { label: 'Paused', hot: false },
+  // The run is over (slice 9b). The summary replaces the frame, so this label
+  // is only ever seen for the frame the state machine leaves behind.
+  summary: { label: 'Complete', hot: false },
 };
 
 export function phaseLabel(phase: RunnerPhase): PhaseLabel {

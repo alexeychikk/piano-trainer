@@ -483,3 +483,59 @@ test('an answered question survives a reload and shows on /progress', async ({
 
   expect(consoleErrors).toEqual([]);
 });
+
+test('the mixed session runs from the hero to the summary (slice 9b)', async ({
+  page,
+}) => {
+  const consoleErrors = watchConsole(page);
+
+  await page.goto('/');
+  // The hero is a link, so this navigation needs no hydration wait; every
+  // keypress below waits on a signal the app itself gives.
+  await page.getByTestId('hero').click();
+  await expect(page).toHaveURL(/\/session\/$/);
+
+  // The runner is only rendered once the practice store has been read, so the
+  // idle prompt *is* the "the session is ready" signal.
+  const prompt = page.getByTestId('prompt');
+  const replay = page.getByTestId('replay');
+  await expect(prompt).toHaveText('Ready?');
+
+  // The rail's bar is the clock, not the question count (sci-fi-screens §9).
+  await expect(page.getByTestId('answered')).toContainText(/time/i);
+  await expect(page.getByTestId('answered')).toContainText(/\d+:\d\d/);
+
+  await page.keyboard.press('Space');
+  await expect(replay).toBeEnabled();
+  // `A` is C4 — right or wrong, it is an answer, and the session logs it.
+  await page.keyboard.press('a');
+  await expect(page.getByTestId('feedback')).not.toBeEmpty();
+
+  // `Esc` ends the session and the summary replaces the runner (UX §4.5).
+  await page.keyboard.press('Escape');
+  const summary = page.getByTestId('session-summary');
+  await expect(summary).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: /^session complete · \d+:\d\d$/i }),
+  ).toBeVisible();
+  await expect(page.getByTestId('summary-answers')).toHaveText('1');
+  // Direction is a glyph and a signed number, never colour alone (UX §4.8).
+  await expect(summary).toContainText(/[+−±]\d+%/);
+  // A full screen, not a dialog — the drill is over, but the rule holds.
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+
+  // `Space` starts another session, on the same screen.
+  await page.keyboard.press('Space');
+  await expect(prompt).toHaveText('Ready?');
+  await expect(page.getByTestId('session-summary')).toHaveCount(0);
+
+  // The attempt from the first session is real practice data: it is on
+  // `/progress` and it survives a reload (only IndexedDB can do that).
+  await page.getByRole('link', { name: /^progress$/i }).click();
+  await expect(page).toHaveURL(/\/progress\/$/);
+  await page.reload();
+  await expect(page.getByRole('heading', { name: /^today$/i })).toBeVisible();
+  await expect(page.getByText('No attempts yet.')).toHaveCount(0);
+
+  expect(consoleErrors).toEqual([]);
+});

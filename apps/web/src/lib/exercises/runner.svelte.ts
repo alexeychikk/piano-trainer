@@ -72,7 +72,13 @@ const HISTORY_LENGTH = 8;
 const TARGET_SAMPLE_TRIES = 16;
 
 export type RunnerPhase =
-  'idle' | 'presenting' | 'awaiting' | 'feedback' | 'paused';
+  | 'idle'
+  | 'presenting'
+  | 'awaiting'
+  | 'feedback'
+  | 'paused'
+  /** The run is over: a mixed session out of time, or `Esc` (UX §4.2). */
+  | 'summary';
 
 export interface RunnerOptions {
   playback?: PlaybackApi;
@@ -88,6 +94,21 @@ export interface RunnerOptions {
    * which is what a plain `/practice/<id>` run passes.
    */
   targetSkills?: () => readonly SkillId[];
+  /**
+   * Which exercise the next question comes from — a **mixed session**
+   * (slice 9b) hands one per question, a plain drill hands none and the
+   * definition never changes. The runner asks before it generates and grades
+   * with whatever came back, so it still knows nothing about any exercise.
+   */
+  pickExercise?: () => AnyExercise | null;
+  /**
+   * Whether there is another question at all. Checked between questions only,
+   * so a session that runs out of time never cuts an answer in half; `false`
+   * ends the run in `summary` (UX §4.2).
+   */
+  shouldContinue?: () => boolean;
+  /** The run ended — the screen shows the summary (UX §4.8). */
+  onEnd?: () => void;
   onAttempt?: (attempt: AttemptResult) => void;
 }
 
@@ -121,13 +142,22 @@ export class ExerciseRunner {
       : Math.round((this.correctCount / this.answered) * 100),
   );
 
-  readonly definition: AnyExercise;
+  /**
+   * The exercise the current question came from. Reactive because a mixed
+   * session changes it per question (the rail shows *this* exercise's title,
+   * §9) — for a plain drill it is the definition it was constructed with and
+   * never moves.
+   */
+  definition: AnyExercise = $state<AnyExercise>()!;
 
   #playback: PlaybackApi;
   #now: () => number;
   #seed: () => number;
   #range: () => KeyRange;
   #targetSkills: () => readonly SkillId[];
+  #pickExercise: () => AnyExercise | null;
+  #shouldContinue: () => boolean;
+  #onEnd: (() => void) | null;
   #onAttempt: ((attempt: AttemptResult) => void) | null;
 
   #timer: ReturnType<typeof setTimeout> | null = null;
@@ -162,6 +192,9 @@ export class ExerciseRunner {
         high: settings.value.keyboardHigh,
       }));
     this.#targetSkills = options.targetSkills ?? (() => []);
+    this.#pickExercise = options.pickExercise ?? (() => null);
+    this.#shouldContinue = options.shouldContinue ?? (() => true);
+    this.#onEnd = options.onEnd ?? null;
     this.#onAttempt = options.onAttempt ?? null;
   }
 
@@ -286,8 +319,35 @@ export class ExerciseRunner {
     this.#next();
   }
 
+  /**
+   * End the run now — `Esc` in a session (UX §4.5), which goes to the summary
+   * rather than back to the exercise list. Idempotent, and a no-op for a run
+   * that has already ended.
+   */
+  end(): void {
+    if (this.phase === 'summary') return;
+    this.#end();
+  }
+
+  #end(): void {
+    this.#clearTimer();
+    this.#clearIdleTimer();
+    this.#resetSequence();
+    this.#pausedInFeedback = false;
+    this.#playback.stop();
+    this.playing = false;
+    this.phase = 'summary';
+    this.#onEnd?.();
+  }
+
   pause(): void {
-    if (this.phase === 'idle' || this.phase === 'paused') return;
+    if (
+      this.phase === 'idle' ||
+      this.phase === 'paused' ||
+      this.phase === 'summary'
+    ) {
+      return;
+    }
     this.#pausedInFeedback = this.phase === 'feedback';
     this.#clearTimer();
     this.#clearIdleTimer();
@@ -403,6 +463,16 @@ export class ExerciseRunner {
   // ---- machine -----------------------------------------------------------
 
   #next(): void {
+    // Between questions is the only place a run can end: an answer in
+    // progress is never cut off, and a reveal is never taken off the screen
+    // before it has been read (UX §4.3).
+    if (!this.#shouldContinue()) {
+      this.#end();
+      return;
+    }
+    // A mixed session picks the exercise first; everything below — the
+    // question, the grading, the attempt it emits — is that exercise's.
+    this.definition = this.#pickExercise() ?? this.definition;
     const question = this.#generate();
     this.#recent = [question.skillId, ...this.#recent].slice(0, HISTORY_LENGTH);
     this.question = question;

@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render } from '@testing-library/svelte';
 import DataSection from './DataSection.svelte';
 import { practice } from '$lib/practice/store.svelte';
+import { settings } from '$lib/storage/settings.svelte';
 import { PRACTICE_SCHEMA_VERSION, type NewAttempt } from '$lib/storage/db';
 
 /**
@@ -241,6 +242,31 @@ describe('Settings → Data, a file that would empty the log', () => {
         .querySelector('[data-testid="reset-word"]')
         ?.getAttribute('aria-describedby'),
     ).toBeNull();
+  });
+
+  /**
+   * A preference is restored by a backup. `applySettings()` enumerates the
+   * fields it patches, so every field added to `AppSettings` has to be added
+   * there too — only `lastExportAt`, which describes *this* browser, is
+   * deliberately left alone. `sessionLengthMin` was missed once.
+   */
+  it('restores the preferences a backup carries, session length included', async () => {
+    settings.patch({ sessionLengthMin: 5, countIn: 'off' });
+
+    const { container } = render(DataSection);
+    await pick(
+      container,
+      JSON.stringify({
+        schemaVersion: PRACTICE_SCHEMA_VERSION,
+        exportedAt: 1_700_000_000_000,
+        settings: { sessionLengthMin: 20, countIn: '1-bar' },
+        skills: [],
+        attempts: [{ ...attempt, ts: 1 }],
+      }),
+    );
+
+    expect(settings.value.sessionLengthMin).toBe(20);
+    expect(settings.value.countIn).toBe('1-bar');
   });
 
   it('a file that carries something still imports without a question', async () => {
