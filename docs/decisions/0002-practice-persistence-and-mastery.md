@@ -27,6 +27,15 @@ not the right shape is dropped. Storage that is missing, blocked or **written by
 resolves to `null` and the session runs in memory, with the copy deck's one-liner in a banner —
 practice never stops because a write failed (ADR §6's "assume storage can vanish").
 
+Because that fallback is how `degraded` is reported, **the store memoises the promise of the open,
+not a flag saying it has started one**: the mount read and the first queued write both call it, and a
+flag would give the second caller a still-`null` storage — which the write path cannot distinguish
+from storage that does not exist. It would degrade the session and drop the attempt in exactly the
+window `hydrate()`'s merge exists for. Sharing the promise makes a queued write wait for the open
+instead (memory-first still holds: `record()` is synchronous), so `degraded` only ever means storage
+is genuinely unavailable. This matters beyond the few milliseconds of `onMount`: `openDB` waits
+indefinitely while another tab holds an older connection open.
+
 `PRACTICE_SCHEMA_VERSION` is both the payload version (what slice 5b's export carries) and the
 IndexedDB version, so an older build meeting a newer database fails at `open` rather than halfway
 through a read.

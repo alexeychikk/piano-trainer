@@ -180,6 +180,12 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
     answer given while the read was in flight survives; `reload()` **replaces**, which is what
     slice 5b's import needs after it swaps the log out. A failed write sets `degraded` and reports
     the copy deck's line once through `onError` → a banner.
+  - **The store memoises the *promise* of `openPracticeStorage()`, never a "have I opened yet" flag**
+    — every caller awaits the same open. A flag hands the second caller a still-`null` storage, which
+    the write path cannot tell from *no* storage: it would degrade the session and drop the attempt,
+    in exactly the window `hydrate()` merges for. So `degraded` means storage is genuinely
+    unavailable, and a queued write just waits for the open (`openDB` can wait indefinitely while
+    another tab holds an older connection open).
   - **An attempt is keyed by the attempt, not the question**: `attemptId` = `${ts}:${questionId}`,
     stamped by `record()` (`attemptKey()` in `db.ts`), never by a caller. A question id repeats — a
     seed collision, or a 5b import from another device — and keying on it would silently overwrite a
