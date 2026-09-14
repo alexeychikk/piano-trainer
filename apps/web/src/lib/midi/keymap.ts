@@ -31,6 +31,16 @@ export const OCTAVE_UP_KEY = 'KeyX';
 /** Shown in the shortcut bar and the "no MIDI" strip, verbatim (copy deck). */
 export const COMPUTER_KEY_HINT = 'A W S E D F T G Y H U J K';
 
+/**
+ * The octave shift, advertised wherever the mapping is (UX §4.6: the bar shows
+ * the mapping *including* `Z` / `X`). The keycaps are derived from the codes
+ * the handler listens to, so the manual cannot drift from the behaviour, and
+ * the label is a label — no copy-deck sentence says this.
+ */
+export const OCTAVE_DOWN_HINT = OCTAVE_DOWN_KEY.replace('Key', '');
+export const OCTAVE_UP_HINT = OCTAVE_UP_KEY.replace('Key', '');
+export const OCTAVE_SHIFT_HINT_LABEL = 'octave';
+
 /** `A` starts on C4 by default — middle C is where a beginner orients. */
 export const DEFAULT_BASE_OCTAVE = 4;
 export const MIN_BASE_OCTAVE = 0;

@@ -129,4 +129,12 @@ describe('chordSymbolText', () => {
   it('spells sharp when asked to', () => {
     expect(chordSymbolText(6, 'dom7', 'sharp')).toBe('F#7');
   });
+
+  it('prints a major triad bare — a chart writes `C`, never `Cmaj`', () => {
+    expect(chordSymbolText(0, 'maj')).toBe('C');
+    expect(chordSymbolText(4, 'maj')).toBe('E');
+    // The grid still needs the word, and the other qualities are unchanged.
+    expect(chordQualityShortName('maj')).toBe('maj');
+    expect(chordSymbolText(0, 'min')).toBe('Cm');
+  });
 });

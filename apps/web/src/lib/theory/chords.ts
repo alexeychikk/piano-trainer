@@ -197,8 +197,18 @@ export function chordQualityShortName(quality: ChordQuality): string {
 }
 
 /**
- * The chord symbol a chart would print — `Cmaj7`, `Db7`, `Bbm7`: the root's
- * spelling plus the quality's suffix. Flats by default, like every other
+ * The chart's suffix, where it is not the grid's short name. A major triad is
+ * written `C`: the grid needs the word `maj` to tell that column from `m`, a
+ * chord symbol never prints it. Every other quality's short name *is* its
+ * suffix, so this table stays a list of exceptions.
+ */
+const SYMBOL_SUFFIX_BY_QUALITY: Partial<Record<ChordQuality, string>> = {
+  maj: '',
+};
+
+/**
+ * The chord symbol a chart would print — `Cmaj7`, `Db7`, `Bbm7`, `C`: the
+ * root's spelling plus the quality's suffix. Flats by default, like every other
  * spelling in the app. Display only; a chord is never *graded* on its name.
  */
 export function chordSymbolText(
@@ -206,7 +216,9 @@ export function chordSymbolText(
   quality: ChordQuality,
   style: 'sharp' | 'flat' = 'flat',
 ): string {
-  return `${pitchClassName(rootPc, style)}${chordQualityShortName(quality)}`;
+  const suffix =
+    SYMBOL_SUFFIX_BY_QUALITY[quality] ?? chordQualityShortName(quality);
+  return `${pitchClassName(rootPc, style)}${suffix}`;
 }
 
 /**

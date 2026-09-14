@@ -320,6 +320,30 @@ describe('missDetail', () => {
     );
   });
 
+  it('calls out the 3rd, the note a shell cannot lose', () => {
+    // C7 played C-G-Bb: the 7th is there, the colour is not.
+    expect(missDetail(0, 'dom7', [48, 55, 58])).toBe(
+      'The 3rd is the colour — a shell keeps the 3rd and the 7th',
+    );
+    // Dm7 played D-A-C, same shape a tone up.
+    expect(missDetail(2, 'min7', [50, 57, 60])).toBe(
+      'The 3rd is the colour — a shell keeps the 3rd and the 7th',
+    );
+  });
+
+  it('leaves an answer that has the other 3rd to the naming branch', () => {
+    // Asked Cm7, played the C7 shell: the mirror of the maj7/dom7 pair below,
+    // and the one that differs in the *3rd*. The answer has a 3rd — the wrong
+    // one — so "the 3rd is the colour" would be false and the shell is named.
+    expect(missDetail(0, 'min7', shellNotes(48, 'dom7') ?? [])).toBe(
+      'You played the C7 shell',
+    );
+    // And the other way round: asked Cmaj7, played the minor/major 7th shell.
+    expect(missDetail(0, 'maj7', [48, 51, 59])).toBe(
+      'You played the CmMaj7 shell',
+    );
+  });
+
   it('names the shell that was played instead', () => {
     // Asked Cmaj7, played the C7 shell.
     expect(missDetail(0, 'maj7', shellNotes(48, 'dom7') ?? [])).toBe(

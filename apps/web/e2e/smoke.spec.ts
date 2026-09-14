@@ -283,6 +283,14 @@ test('the find-the-note drill is playable with the computer keys alone', async (
   await page.keyboard.press('a');
   await expect(page.getByTestId('answered')).toContainText('/2');
 
+  // The bar is the manual (§5.7): with no MIDI device it shows the *whole*
+  // computer mapping, the `Z` / `X` octave shift included (§4.6).
+  const shortcuts = page.getByTestId('shortcuts');
+  await expect(shortcuts).toContainText('A W S E D F T G Y H U J K');
+  await expect(shortcuts).toContainText('octave');
+  await expect(shortcuts.locator('kbd', { hasText: /^Z$/ })).toHaveCount(1);
+  await expect(shortcuts.locator('kbd', { hasText: /^X$/ })).toHaveCount(1);
+
   // The runner never scrolls at a normal desktop viewport (§4.1).
   const scrolls = await page.evaluate(
     () => document.documentElement.scrollHeight > window.innerHeight + 1,
@@ -461,8 +469,10 @@ test('an answered question survives a reload and shows on /progress', async ({
   await expect(page.getByTestId('answered')).toContainText('/1');
 
   // Leave the way a user does — the nav link, a client-side navigation, with
-  // no pause after the answer. The write queue is drained by `onNavigate`
-  // (`$lib/practice/leave.ts`), so what follows cannot outrun the transaction;
+  // no pause after the answer. The write queue is drained by the root layout's
+  // `onNavigate`, which awaits `practice.flush()` (the `visibilitychange` /
+  // `pagehide` half is `$lib/practice/leave.ts`), so nothing here can outrun
+  // the transaction;
   // a `goto` here would have reloaded the page and hidden the race instead.
   await page.getByRole('link', { name: /^progress$/i }).click();
   await expect(page).toHaveURL(/\/progress\/$/);

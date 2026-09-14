@@ -35,7 +35,13 @@
   import { buildPlan, targetSkillsFor } from '$lib/practice/planner';
   import type { SessionRun } from '$lib/practice/session.svelte';
   import { practice } from '$lib/practice/store.svelte';
-  import { COMPUTER_KEY_HINT, isTypingTarget } from '$lib/midi/keymap';
+  import {
+    COMPUTER_KEY_HINT,
+    OCTAVE_DOWN_HINT,
+    OCTAVE_SHIFT_HINT_LABEL,
+    OCTAVE_UP_HINT,
+    isTypingTarget,
+  } from '$lib/midi/keymap';
   import { settings } from '$lib/storage/settings.svelte';
   import { runnerHighlights } from './highlights';
 
@@ -419,7 +425,7 @@
   </div>
 
   {#if !focusMode}
-    <p class="shortcuts">
+    <p class="shortcuts" data-testid="shortcuts">
       <Chip variant="key">Space</Chip> replay ·
       <Chip variant="key">Enter</Chip> skip &amp; reveal ·
       {#if sequenceMode}
@@ -427,7 +433,12 @@
       {/if}
       <Chip variant="key">Esc</Chip> end
       {#if !midiInput.connected}
+        <!-- The whole mapping, `Z` / `X` included (§4.6): with the root at the
+             bottom of a voicing, most answers need the shift between notes. -->
         · piano keys <Chip variant="key">{COMPUTER_KEY_HINT}</Chip>
+        · <Chip variant="key">{OCTAVE_DOWN_HINT}</Chip> /
+        <Chip variant="key">{OCTAVE_UP_HINT}</Chip>
+        {OCTAVE_SHIFT_HINT_LABEL}
       {/if}
     </p>
   {/if}

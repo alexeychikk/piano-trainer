@@ -15,7 +15,11 @@
   import type { KeyHighlight } from '$lib/components/piano/highlights';
   import { computerKeyboard } from '$lib/midi/computer-keys.svelte';
   import { midiInput } from '$lib/midi/input.svelte';
-  import { COMPUTER_KEY_HINT } from '$lib/midi/keymap';
+  import {
+    COMPUTER_KEY_HINT,
+    OCTAVE_DOWN_HINT,
+    OCTAVE_UP_HINT,
+  } from '$lib/midi/keymap';
   import { settings } from '$lib/storage/settings.svelte';
   import {
     detectChords,
@@ -145,7 +149,8 @@
 <p class="hint">
   Computer keys <Chip variant="key">{COMPUTER_KEY_HINT}</Chip> play from {octaveLabel}
   upwards;
-  <Chip variant="key">Z</Chip> / <Chip variant="key">X</Chip> shift the octave.
+  <Chip variant="key">{OCTAVE_DOWN_HINT}</Chip> /
+  <Chip variant="key">{OCTAVE_UP_HINT}</Chip> shift the octave.
 </p>
 
 <MetronomePanel />

@@ -160,6 +160,11 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
   deliberately **not** a shortcut: `F` is a note key and §4.6 keeps that mapping live — the `⤢`
   button is the keyboard path. The runner sizes itself to the space the shell leaves (`.app` is a
   full-height flex column in `+layout.svelte`) and clips: it must never scroll.
+  **The shortcut bar is the manual (§5.7) and carries the *whole* computer mapping when no MIDI
+  device is connected** — `A W S E D F T G Y H U J K` **and** the `Z` / `X` octave shift (§4.6;
+  with the root at the bottom of a voicing most answers need the shift between notes). Its wording
+  lives in `$lib/midi/keymap.ts`, and the keycaps (`OCTAVE_DOWN_HINT` / `OCTAVE_UP_HINT`) are
+  derived from the codes the handler listens to, so the manual cannot drift from the behaviour.
 - **Interval recognition + `note-sequence` (slice 6)** — `$lib/exercises/interval-recognition/`, the
   second exercise and the first ear-training drill:
   - **The graded quantity is the interval, not the pitches**: a question is asked from a random root,
@@ -276,9 +281,10 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
     is not left behind), and `$lib/practice/leave.ts` attaches it to `visibilitychange` → `hidden`
     and `pagehide` while the root layout's `onNavigate` **awaits** it — SvelteKit holds the
     navigation until the hook resolves, and that is the one moment waiting for a write is correct
-    (no question is on screen). Nothing is ever awaited during a drill. `flush()` is a synchronous
-    no-op on an empty queue (so a leave path may fire it every time), never throws and reports
-    nothing of its own — a failed write already said its sentence once, through `onError`. It gives
+    (no question is on screen). Nothing is ever awaited during a drill. `flush()` is a no-op on an
+    empty queue — one microtask, no waiting (it is `async`, so never literally *synchronous*), so a
+    leave path may fire it every time — never throws and reports nothing of its own — a failed write
+    already said its sentence once, through `onError`. It gives
     up after `FLUSH_DEADLINE_MS` (2 s), because `openPracticeStorage()` may legitimately wait
     forever (another tab holding an older database version open) and a navigation may not: a missed
     write is a failure we already survive, a hung app is not. `sync()` is `flush(0)` + `reload()`.
