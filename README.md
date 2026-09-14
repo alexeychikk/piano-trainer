@@ -6,11 +6,8 @@ A local-first web app: no accounts, no backend, no installs. Practice data stays
 is exportable. Desktop browser first — Web MIDI needs Chrome, Edge or Opera; everything is also
 playable with the on-screen keyboard.
 
-Deploys to <https://alexeychikk.github.io/piano-trainer/> from `master` by the Pages deploy workflow.
-
-> **Not live yet** (as of 2026-09-13): publishing is blocked on a one-time repo-admin setting —
-> _Settings → Pages → Build and deployment → Source: `GitHub Actions`_. Delete this note once the
-> site loads.
+Live at <https://alexeychikk.github.io/piano-trainer/>, deployed from `master` by the Pages deploy
+workflow.
 
 ## Run it locally
 

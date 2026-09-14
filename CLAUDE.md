@@ -41,9 +41,10 @@ requests comes from a third-party marketplace app and must never be a required c
 create the site — that needs repo admin, which neither `GITHUB_TOKEN` nor an app token has, so the
 first deploy died on `Create Pages site failed. Error: Resource not accessible by integration`. A repo
 admin must therefore set *Settings → Pages → Build and deployment → Source: `GitHub Actions`* once.
-**Owner action, pending as of 2026-09-13**: until it is done, `deploy.yml` fails at `configure-pages`
-and https://alexeychikk.github.io/piano-trainer/ stays a 404 — a red deploy run on `master` means
-this, not a workflow bug. Once it is set, no code change is needed; re-run the deploy workflow. Never
+**Done — the owner set it on 2026-09-14**: `GET /repos/alexeychikk/piano-trainer/pages` returns
+`build_type: "workflow"`, every push to `master` deploys, and the site is live at
+https://alexeychikk.github.io/piano-trainer/ . No code change was needed. So a red
+`Deploy to GitHub Pages` run on `master` is now a **real failure** to investigate, not this. Never
 "fix" a Pages problem with the platform's `enable_pages` tool: it sets a **branch** source, which is
 the wrong source for an Actions deploy.
 
