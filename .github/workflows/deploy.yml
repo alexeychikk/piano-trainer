@@ -38,9 +38,11 @@ jobs:
       #   Create Pages site failed. Error: Resource not accessible by integration
       # so the Pages source must be set by hand, once, by a repo admin:
       #   Settings -> Pages -> Build and deployment -> Source: GitHub Actions
-      # Still pending as of 2026-09-13 — until it is set this step fails here
-      # and nothing is published. It is kept `true` because it is a no-op once
-      # the site exists (and lets a fork with an admin token bootstrap itself).
+      # The owner did that on 2026-09-14 (`build_type: "workflow"`), so this
+      # step is now the no-op it is kept `true` for — it only still matters to a
+      # fork whose admin token can bootstrap its own site. A red run here is a
+      # real failure to investigate, not the old owner-action wall; never "fix"
+      # it with a branch source, which is wrong for an Actions deploy.
       - uses: actions/configure-pages@v5
         with:
           enablement: true
