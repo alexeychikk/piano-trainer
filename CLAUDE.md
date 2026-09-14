@@ -635,6 +635,15 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
   `computerKeyboard.attach(window)`, the capture-phase audio starter and `settings`/`practice`
   hydration. The same wait is what makes a *negative* assertion on a prerendered screen mean
   anything.
+- **A unit test waits the same way: on a signal, never on a number of ticks.** For anything queued
+  behind the practice write queue that is `await store.flush()` (it loops until the queue's tail
+  stops moving), per store — a case with two stores flushes the one whose write it is about. A
+  fixed drain (`for (…20…) await Promise.resolve()` + one `setTimeout(0)`) is a guess: a write that
+  queues behind `openPracticeStorage()` can need far more turns on a loaded runner, which is what
+  made `store.svelte.test.ts` flake `master` red on `5836f1a`. The one surviving drain is
+  `components/settings/DataSection.test.ts`, whose wait spans the file picker's `await`s and the
+  component's re-render as well as the queue — `flush()` cannot express those, and the comment
+  there says so.
 - **The runner's no-scroll guard (§4.1) is measured in the tallest state**: 1280×720 (the config's
   default viewport, spelled out where it is the point) with the **no-MIDI strip showing** — `Got it`
   is the stable handle on that strip, since its sentence depends on what the browser says about Web

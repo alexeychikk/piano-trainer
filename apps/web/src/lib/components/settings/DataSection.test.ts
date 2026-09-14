@@ -72,6 +72,13 @@ async function pick(container: HTMLElement, text: string): Promise<void> {
  * Let the picker's `await`s, the write queue, the open and the `reload()`
  * behind a replace all run out — several rounds, because each IndexedDB
  * transaction needs a macrotask turn of its own.
+ *
+ * The one drain left in the suite, and deliberately: `practice.flush()` — the
+ * signal `store.svelte.test.ts` waits on — only covers the write queue, and at
+ * the moment this is called nothing is queued yet (the component is still
+ * awaiting `file.text()` and the parse). There is no signal here for "the
+ * handler and the re-render behind it are done"; a component-level one would
+ * have to come from the component.
  */
 async function settle(): Promise<void> {
   for (let round = 0; round < 6; round += 1) {
