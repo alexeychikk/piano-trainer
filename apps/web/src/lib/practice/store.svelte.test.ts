@@ -333,6 +333,105 @@ describe('PracticeStore', () => {
     ]);
   });
 
+  it('`flush()` makes an attempt durable before the user has left', async () => {
+    // The leave paths' promise: answer, navigate, and what the next screen
+    // (or the next page load) reads already includes it. No `settle()` — the
+    // flush is the only thing waited on.
+    const store = new PracticeStore();
+    store.record(attempt());
+    await expect(store.flush()).resolves.toBe(true);
+
+    const reopened = new PracticeStore();
+    await reopened.hydrate();
+    expect(reopened.attempts.map((item) => item.questionId)).toEqual([
+      'find-the-note:7:60',
+    ]);
+  });
+
+  it('`flush()` on an empty queue is a no-op, and is idempotent', async () => {
+    const store = new PracticeStore();
+    const timer = vi.spyOn(globalThis, 'setTimeout');
+
+    // Nothing recorded: no deadline timer, nothing to wait for — a leave path
+    // may fire this on every navigation.
+    await expect(store.flush()).resolves.toBe(true);
+    expect(timer).not.toHaveBeenCalled();
+
+    store.record(attempt());
+    await store.flush();
+    // Flushed twice over: the queue is empty the second time, so it takes the
+    // same free path.
+    timer.mockClear();
+    await expect(store.flush()).resolves.toBe(true);
+    expect(timer).not.toHaveBeenCalled();
+    timer.mockRestore();
+  });
+
+  it('`flush()` waits for an attempt recorded while it was waiting', async () => {
+    // Answer, leave, and the reveal's last attempt lands mid-flush: awaiting
+    // the queue once would capture the chain as it was and leave it behind.
+    const store = new PracticeStore();
+    store.record(attempt());
+    const flushed = store.flush();
+    store.record(attempt({ ts: 1_700_000_030_000, questionId: 'late' }));
+    await expect(flushed).resolves.toBe(true);
+
+    const reopened = new PracticeStore();
+    await reopened.hydrate();
+    expect(reopened.attempts.map((item) => item.questionId)).toEqual([
+      'find-the-note:7:60',
+      'late',
+    ]);
+  });
+
+  it('`flush()` without storage does not throw and reports nothing of its own', async () => {
+    Reflect.deleteProperty(globalThis, 'indexedDB');
+    const store = new PracticeStore();
+    const onError = vi.fn();
+    store.onError = onError;
+
+    // Nothing was ever recorded, so nothing was lost: the flush is silent.
+    await expect(store.flush()).resolves.toBe(true);
+    expect(onError).not.toHaveBeenCalled();
+    expect(store.degraded).toBe(false);
+
+    // And with a queued write that cannot land, the sentence comes from the
+    // write (once), never from the flush.
+    store.record(attempt());
+    await expect(store.flush()).resolves.toBe(true);
+    await expect(store.flush()).resolves.toBe(true);
+    expect(store.degraded).toBe(true);
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(onError).toHaveBeenCalledWith(PRACTICE_COPY.storageFailed);
+  });
+
+  it('`flush()` gives up on its deadline rather than hanging a navigation', async () => {
+    // `openPracticeStorage()` may legitimately wait forever — another tab
+    // holding an older database version open. A navigation may not.
+    // A request that never fires `success` or `error`: `openDB` promisifies it
+    // and waits, which is exactly what a blocked open looks like.
+    const stuck = Object.assign(Object.create(IDBRequest.prototype), {
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    });
+    Object.defineProperty(globalThis, 'indexedDB', {
+      value: { open: () => stuck },
+      configurable: true,
+      writable: true,
+    });
+    const store = new PracticeStore();
+    store.record(attempt());
+
+    vi.useFakeTimers();
+    try {
+      const flushed = store.flush(50);
+      await vi.advanceTimersByTimeAsync(50);
+      await expect(flushed).resolves.toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('keeps practising without storage, and says so once', async () => {
     Reflect.deleteProperty(globalThis, 'indexedDB');
     const store = new PracticeStore();

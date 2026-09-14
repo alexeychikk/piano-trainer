@@ -420,7 +420,12 @@ test('an answered question survives a reload and shows on /progress', async ({
   await page.keyboard.press('a');
   await expect(page.getByTestId('answered')).toContainText('/1');
 
-  await page.goto('/progress/');
+  // Leave the way a user does — the nav link, a client-side navigation, with
+  // no pause after the answer. The write queue is drained by `onNavigate`
+  // (`$lib/practice/leave.ts`), so what follows cannot outrun the transaction;
+  // a `goto` here would have reloaded the page and hidden the race instead.
+  await page.getByRole('link', { name: /^progress$/i }).click();
+  await expect(page).toHaveURL(/\/progress\/$/);
   await expect(page.getByRole('heading', { name: /^today$/i })).toBeVisible();
 
   // The point of the slice: a full reload, and it is still there — which only

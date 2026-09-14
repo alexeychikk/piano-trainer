@@ -8,6 +8,8 @@
   import { computerKeyboard } from '$lib/midi/computer-keys.svelte';
   import { midiInput } from '$lib/midi/input.svelte';
   import { practice } from '$lib/practice/store.svelte';
+  import { attachFlushOnLeave } from '$lib/practice/leave';
+  import { onNavigate } from '$app/navigation';
   import { deviceLostMessage } from '$lib/midi/status';
   import { isTypingTarget } from '$lib/midi/keymap';
   import { audio } from '$lib/audio/engine.svelte';
@@ -17,6 +19,19 @@
   import { onMount } from 'svelte';
 
   const { children } = $props();
+
+  /**
+   * Answer, click a nav link: the attempt is in memory but its transaction may
+   * not have committed, and `/progress` would hydrate without it (or the tab
+   * closes and it is gone). SvelteKit awaits what `onNavigate` returns, so the
+   * queue is drained *before* the next screen renders — the one place waiting
+   * for a write is correct, because no question is on screen. `flush()` is a
+   * no-op with nothing queued, and gives up on its own deadline rather than
+   * hanging a navigation.
+   */
+  onNavigate(async () => {
+    await practice.flush();
+  });
 
   /**
    * App-wide input and audio wiring (ADR §2, §3). The computer keyboard is
@@ -66,8 +81,13 @@
     window.addEventListener('pointerdown', startAudio, { capture: true });
     window.addEventListener('keydown', onKeyDown, { capture: true });
 
+    // The other two leave paths — a hidden tab, a reload or a closing window.
+    // Neither can be awaited, so the flush is started and not waited for.
+    const detachLeave = attachFlushOnLeave(window, () => void practice.flush());
+
     const detach = computerKeyboard.attach(window);
     return () => {
+      detachLeave();
       detach();
       unsubscribe();
       window.removeEventListener('pointerdown', startAudio, { capture: true });

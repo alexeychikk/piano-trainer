@@ -7,6 +7,11 @@
  *   synchronously and returns; the IndexedDB write is queued behind it, so a
  *   slow disk can never sit in the runner's callback — which runs while audio
  *   is scheduled (ticket: writes stay off the scheduling hot path).
+ * - **…but the queue is drained before the user leaves.** Because the write
+ *   trails the answer, a user who answers and immediately navigates (or hides
+ *   the tab, or closes it) could outrun the transaction and lose the attempt.
+ *   `flush()` waits for the queue on the leave paths only — never while a
+ *   question is on screen.
  * - **Writes are best-effort.** No storage, a quota, a database from a newer
  *   build: the session still works, in memory, and `onError` puts the copy
  *   deck's one-liner in a banner (the layout wires it, the same way it wires
@@ -26,6 +31,13 @@ import {
 } from '$lib/storage/db';
 import { PRACTICE_COPY } from './copy';
 import { applyAttempt, deriveSkills, exerciseMastery } from './mastery';
+
+/**
+ * How long a leave path waits for the write queue before it gives up and lets
+ * the user go (ms). Generous next to an IndexedDB commit, short next to a
+ * navigation a human would call broken.
+ */
+export const FLUSH_DEADLINE_MS = 2000;
 
 export class PracticeStore {
   /** Every attempt, oldest first. */
@@ -56,6 +68,8 @@ export class PracticeStore {
   #opening: Promise<PracticeStorage | null> | null = null;
   /** Serialises writes: one transaction at a time, in the order recorded. */
   #queue: Promise<void> = Promise.resolve();
+  /** How many queued writes have not finished yet — `flush()`'s fast path. */
+  #pending = 0;
   #reported = false;
 
   /**
@@ -85,8 +99,60 @@ export class PracticeStore {
    * stands, which is the most current thing there is.
    */
   async sync(): Promise<void> {
-    await this.#queue;
+    await this.flush(0);
     await this.reload();
+  }
+
+  /**
+   * Wait for the queued writes to land — the leave paths (`$lib/practice/
+   * leave.ts`: client-side navigation, `visibilitychange` → `hidden`,
+   * `pagehide`). `record()` returns before its transaction commits, so a user
+   * who answers and leaves in the same breath could otherwise outrun it and
+   * lose the attempt.
+   *
+   * Never throws (a queued write reports its own failure through `onError`,
+   * once) and never reports anything of its own: a flush is not an event the
+   * user did, so it has no sentence. With nothing queued — including every
+   * call after storage turned out to be unavailable, when the queue empties
+   * immediately — it is a synchronous no-op, so a leave path may call it on
+   * every navigation.
+   *
+   * Resolves `true` when the queue is empty, `false` when the deadline ran out
+   * first. The deadline exists because `openPracticeStorage()` may legitimately
+   * wait forever (another tab holding an older database version open), and a
+   * navigation that waits forever is a hung app — a missed write is the lesser
+   * failure, and it is the one we already survive.
+   */
+  async flush(deadlineMs: number = FLUSH_DEADLINE_MS): Promise<boolean> {
+    if (this.#pending === 0) return true;
+    if (deadlineMs <= 0) {
+      await this.#settle();
+      return true;
+    }
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const expired = new Promise<false>((resolve) => {
+      timer = setTimeout(() => resolve(false), deadlineMs);
+    });
+    try {
+      return await Promise.race([this.#settle().then(() => true), expired]);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /**
+   * Await the queue until its tail stops moving. Awaiting `#queue` once only
+   * captures the chain as it was at that microtask: a write queued while we
+   * waited — an answer given as the tab goes away, or an import landing on the
+   * same queue — extends it, and would be left behind.
+   */
+  async #settle(): Promise<void> {
+    let tail = this.#queue;
+    for (;;) {
+      await tail;
+      if (this.#queue === tail) return;
+      tail = this.#queue;
+    }
   }
 
   /**
@@ -100,7 +166,9 @@ export class PracticeStore {
    */
   async replaceAll(data: PracticeData): Promise<boolean> {
     // On the write queue, so an attempt recorded a moment ago cannot land on
-    // top of the imported log after the swap.
+    // top of the imported log after the swap — and counted on it, so a leave
+    // path flushing mid-import waits for the transaction like any other write.
+    this.#pending += 1;
     const task = this.#queue.then(async () => {
       const storage = await this.#open();
       if (!storage) return false;
@@ -112,8 +180,12 @@ export class PracticeStore {
       return true;
     });
     this.#queue = task.then(
-      () => {},
-      () => {},
+      () => {
+        this.#pending -= 1;
+      },
+      () => {
+        this.#pending -= 1;
+      },
     );
     let persisted = false;
     try {
@@ -205,6 +277,7 @@ export class PracticeStore {
   }
 
   #enqueue(attempt: StoredAttempt, skill: SkillState): void {
+    this.#pending += 1;
     this.#queue = this.#queue.then(async () => {
       try {
         const storage = await this.#open();
@@ -216,6 +289,8 @@ export class PracticeStore {
         await storage.write({ ...attempt }, { ...skill });
       } catch {
         this.#degrade();
+      } finally {
+        this.#pending -= 1;
       }
     });
   }
