@@ -23,11 +23,12 @@ function attempt(overrides: Partial<NewAttempt> = {}): NewAttempt {
   };
 }
 
-/** Let the queued write (and the open behind it) run to completion. */
-async function settle(): Promise<void> {
-  for (let i = 0; i < 20; i += 1) await Promise.resolve();
-  await new Promise((resolve) => setTimeout(resolve, 0));
-}
+// Waiting for a queued write is always `await store.flush()` — the signal the
+// store itself gives (it loops until the queue's tail stops moving), never a
+// guessed number of ticks. A fixed drain used to stand here and made this file
+// flaky on a loaded runner: a write that queues behind `openPracticeStorage()`
+// can need more turns than the guess allowed. Flush the store whose write is
+// being awaited — several cases have two.
 
 describe('PracticeStore', () => {
   beforeEach(() => {
@@ -56,7 +57,7 @@ describe('PracticeStore', () => {
     first.record(
       attempt({ questionId: 'find-the-note:8:62', correct: false, score: 0 }),
     );
-    await settle();
+    await first.flush();
 
     const second = new PracticeStore();
     await second.hydrate();
@@ -73,7 +74,7 @@ describe('PracticeStore', () => {
     const first = new PracticeStore();
     first.record(attempt({ ts: 1_700_000_000_000 }));
     first.record(attempt({ questionId: 'q2', ts: 1_700_000_060_000 }));
-    await settle();
+    await first.flush();
     const written = first.byId.get('find-the-note:pc:0');
     expect(written?.dueAt).toBe(1_700_000_060_000 + 24 * 60 * 60 * 1000);
     expect(written?.intervalDays).toBe(1);
@@ -94,7 +95,7 @@ describe('PracticeStore', () => {
     const first = new PracticeStore();
     first.record(attempt({ ts: 1_700_000_000_000 }));
     first.record(attempt({ ts: 1_700_000_030_000, correct: false, score: 0 }));
-    await settle();
+    await first.flush();
 
     const second = new PracticeStore();
     await second.hydrate();
@@ -109,7 +110,7 @@ describe('PracticeStore', () => {
   it('keeps an attempt recorded while hydration was still in flight', async () => {
     const first = new PracticeStore();
     first.record(attempt());
-    await settle();
+    await first.flush();
 
     const second = new PracticeStore();
     const onError = vi.fn();
@@ -120,7 +121,7 @@ describe('PracticeStore', () => {
     // so the write waits for storage instead of seeing `null` and degrading.
     second.record(attempt({ ts: 1_700_000_060_000, questionId: 'live' }));
     await reading;
-    await settle();
+    await second.flush();
 
     expect(second.attempts.map((item) => item.questionId)).toEqual([
       'find-the-note:7:60',
@@ -142,7 +143,7 @@ describe('PracticeStore', () => {
   it('rebuilds a missing skill record from the attempt log', async () => {
     const first = new PracticeStore();
     first.record(attempt());
-    await settle();
+    await first.flush();
     // A database whose `skills` store lost a record (a half-failed write, a
     // partial import): the log is the source of truth.
     const db = indexedDB.open('piano-trainer', 1);
@@ -204,7 +205,7 @@ describe('PracticeStore', () => {
     await store.hydrate();
     const writer = new PracticeStore();
     writer.record(attempt());
-    await settle();
+    await writer.flush();
 
     await store.hydrate();
     expect(store.attempts).toHaveLength(0);
@@ -215,7 +216,7 @@ describe('PracticeStore', () => {
   it('replaces everything on import, and persists it (slice 5b)', async () => {
     const store = new PracticeStore();
     store.record(attempt());
-    await settle();
+    await store.flush();
 
     const imported = {
       attemptId: '1700000900000:imported',
@@ -255,7 +256,7 @@ describe('PracticeStore', () => {
     // resurrect itself on top of the imported log.
     store.record(attempt());
     await store.replaceAll({ attempts: [], skills: [] });
-    await settle();
+    await store.flush();
 
     const reopened = new PracticeStore();
     await reopened.hydrate();
@@ -285,7 +286,7 @@ describe('PracticeStore', () => {
     const store = new PracticeStore();
     store.record(attempt());
     store.record(attempt({ ts: 1_700_000_030_000, questionId: 'second' }));
-    await settle();
+    await store.flush();
 
     const persisted = await store.resetAll();
 
@@ -307,7 +308,7 @@ describe('PracticeStore', () => {
     const store = new PracticeStore();
     store.record(attempt());
     await store.resetAll();
-    await settle();
+    await store.flush();
 
     const reopened = new PracticeStore();
     await reopened.hydrate();
@@ -343,10 +344,10 @@ describe('PracticeStore', () => {
     await store.hydrate();
     const writer = new PracticeStore();
     writer.record(attempt());
-    await settle();
+    await writer.flush();
 
-    // No `settle()` here: `sync()` is what export relies on to see its own
-    // writes and anything another tab has written.
+    // No `flush()` on `store` here: `sync()` is what export relies on to see
+    // its own writes and anything another tab has written.
     store.record(attempt({ ts: 1_700_000_500_000, questionId: 'mine' }));
     await store.sync();
     expect(store.attempts.map((item) => item.questionId)).toEqual([
@@ -357,8 +358,8 @@ describe('PracticeStore', () => {
 
   it('`flush()` makes an attempt durable before the user has left', async () => {
     // The leave paths' promise: answer, navigate, and what the next screen
-    // (or the next page load) reads already includes it. No `settle()` — the
-    // flush is the only thing waited on.
+    // (or the next page load) reads already includes it — and the flush is the
+    // only thing waited on, since it is the claim under test.
     const store = new PracticeStore();
     store.record(attempt());
     await expect(store.flush()).resolves.toBe(true);
@@ -462,7 +463,7 @@ describe('PracticeStore', () => {
 
     store.record(attempt());
     store.record(attempt({ questionId: 'second' }));
-    await settle();
+    await store.flush();
 
     expect(store.attempts).toHaveLength(2);
     expect(store.degraded).toBe(true);
