@@ -43,8 +43,16 @@ export class PracticeStore {
     new Map(this.skills.map((skill) => [skill.skillId, skill])),
   );
 
-  #storage: PracticeStorage | null = null;
-  #opened = false;
+  /**
+   * The **promise** of the one open, not its result: a second caller that
+   * arrives while the first open is still in flight has to await the same
+   * promise. Memoising a boolean instead would hand it `null` — and to
+   * `#enqueue` a `null` storage is indistinguishable from no storage at all, so
+   * it would `#degrade()` the whole session and drop the attempt. The window is
+   * usually the few ms of `onMount`, but `openDB` waits indefinitely while
+   * another tab holds an older connection open.
+   */
+  #opening: Promise<PracticeStorage | null> | null = null;
   /** Serialises writes: one transaction at a time, in the order recorded. */
   #queue: Promise<void> = Promise.resolve();
   #reported = false;
@@ -138,12 +146,9 @@ export class PracticeStore {
     });
   }
 
-  async #open(): Promise<PracticeStorage | null> {
-    if (!this.#opened) {
-      this.#opened = true;
-      this.#storage = await openPracticeStorage();
-    }
-    return this.#storage;
+  #open(): Promise<PracticeStorage | null> {
+    this.#opening ??= openPracticeStorage();
+    return this.#opening;
   }
 
   #degrade(): void {

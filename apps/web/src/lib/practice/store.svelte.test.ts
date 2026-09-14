@@ -90,9 +90,12 @@ describe('PracticeStore', () => {
     await settle();
 
     const second = new PracticeStore();
+    const onError = vi.fn();
+    second.onError = onError;
     const reading = second.hydrate();
     // Answered before the read came back: it belongs to the session, and its
-    // own write is already queued behind it.
+    // own write is already queued behind it. Both callers share the one open,
+    // so the write waits for storage instead of seeing `null` and degrading.
     second.record(attempt({ ts: 1_700_000_060_000, questionId: 'live' }));
     await reading;
     await settle();
@@ -101,6 +104,17 @@ describe('PracticeStore', () => {
       'find-the-note:7:60',
       'live',
     ]);
+    expect(second.degraded).toBe(false);
+    expect(onError).not.toHaveBeenCalled();
+
+    // …and it really reached the disk, which is what the promise claims.
+    const third = new PracticeStore();
+    await third.hydrate();
+    expect(third.attempts.map((item) => item.questionId)).toEqual([
+      'find-the-note:7:60',
+      'live',
+    ]);
+    expect(third.byId.get('find-the-note:pc:0')?.reps).toBe(2);
   });
 
   it('rebuilds a missing skill record from the attempt log', async () => {
