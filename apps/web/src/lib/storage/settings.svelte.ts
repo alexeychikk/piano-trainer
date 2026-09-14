@@ -234,6 +234,19 @@ export class SettingsStore {
     }, WRITE_DEBOUNCE_MS);
   }
 
+  /**
+   * Apply a change onto what is **stored**, not onto this tab's snapshot.
+   *
+   * `patch()` writes the whole in-memory object back, so a tab that has been
+   * open across another tab's edits would undo them to record one field. For a
+   * field a *reader* stamps (`lastExportAt`, written right after `read()`),
+   * re-reading first keeps last-write-wins to the field that actually changed.
+   */
+  patchStored(change: Partial<AppSettings>): void {
+    this.value = { ...this.read(), ...change };
+    this.#write();
+  }
+
   /** Persist a debounced change now. */
   flush(): void {
     if (this.#pending === null) return;

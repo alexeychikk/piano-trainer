@@ -54,6 +54,9 @@ export async function exportPracticeData(
     exportedAt,
   });
   downloadText(exportFilename(file.exportedAt), serialisePracticeFile(file));
-  settings.patch({ lastExportAt: file.exportedAt });
+  // Stamped onto storage, not onto this tab's snapshot: we read storage two
+  // lines ago precisely because the two can disagree, and recording one field
+  // must not write a stale copy of every other one back over another tab.
+  settings.patchStored({ lastExportAt: file.exportedAt });
   return { attempts: file.attempts.length, skills: file.skills.length };
 }

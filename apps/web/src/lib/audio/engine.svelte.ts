@@ -198,12 +198,24 @@ export class AudioEngine {
     this.setMuted(!this.muted);
   }
 
-  /** Switch instrument; the previous one stays cached. */
-  setInstrument(id: string): void {
+  /**
+   * Switch instrument; the previous one stays cached.
+   *
+   * The id is validated *before* it is persisted, not only before it is
+   * loaded: `/settings`' instrument `<select>` renders its options from
+   * `INSTRUMENTS`, so a stored id that is none of them selects no option and
+   * the control renders blank — the remembered-device defect again — while
+   * audio quietly plays the default. Display and sound must agree whatever
+   * the source (a hand-edited `localStorage`, an imported file), and the
+   * engine is where the guard lives because `storage` may not import this
+   * layer.
+   */
+  setInstrument(raw: string): void {
+    const id = isInstrumentId(raw) ? raw : DEFAULT_INSTRUMENT;
     settings.patch({ instrument: id });
     if (!this.#ctx) return;
     this.stopAll();
-    void this.#loadInstrument(isInstrumentId(id) ? id : DEFAULT_INSTRUMENT);
+    void this.#loadInstrument(id);
   }
 
   #applyGain(): void {

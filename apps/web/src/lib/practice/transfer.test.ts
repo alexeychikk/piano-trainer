@@ -120,7 +120,7 @@ describe('parsePracticeFile — a file we wrote', () => {
     if (!parsed.ok) return;
     expect(parsed.file.attempts).toEqual([attempt()]);
     expect(parsed.file.skills).toEqual([skill()]);
-    expect(parsed.file.settings.noteLabels).toBe('all');
+    expect(parsed.file.settings?.noteLabels).toBe('all');
     expect(parsed.file.exportedAt).toBe(EXPORTED_AT);
   });
 
@@ -240,16 +240,44 @@ describe('parsePracticeFile — a file we refuse', () => {
     expect(parsed.reason).toBe('invalid');
   });
 
-  it('falls back to default settings when the file has none it knows', () => {
+  it.each([
+    ['corrupt', 'corrupt'],
+    ['missing', undefined],
+    ['an empty block', {}],
+    ['an array', []],
+  ])(
+    'reports no settings when the block is %s, rather than the defaults',
+    (_label, value) => {
+      const raw = JSON.stringify({
+        schemaVersion: PRACTICE_SCHEMA_VERSION,
+        settings: value,
+        attempts: [attempt()],
+        skills: [],
+      });
+      const parsed = parsePracticeFile(raw);
+      expect(parsed.ok).toBe(true);
+      if (!parsed.ok) return;
+      // `null`, never `DEFAULT_SETTINGS`: importing an attempts-only file from
+      // another device must not reset the taught keyboard range, the
+      // remembered piano, the instrument or the tempo.
+      expect(parsed.file.settings).toBeNull();
+      expect(parsed.file.attempts).toHaveLength(1);
+    },
+  );
+
+  it('fills the gaps from the defaults when the file does carry settings', () => {
     const raw = JSON.stringify({
       schemaVersion: PRACTICE_SCHEMA_VERSION,
-      settings: 'corrupt',
+      settings: { noteLabels: 'all' },
       attempts: [attempt()],
       skills: [],
     });
     const parsed = parsePracticeFile(raw);
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) return;
-    expect(parsed.file.settings).toEqual(DEFAULT_SETTINGS);
+    expect(parsed.file.settings).toEqual({
+      ...DEFAULT_SETTINGS,
+      noteLabels: 'all',
+    });
   });
 });

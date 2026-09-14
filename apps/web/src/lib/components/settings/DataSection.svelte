@@ -84,7 +84,10 @@
         attempts: parsed.file.attempts,
         skills: parsed.file.skills,
       });
-      applySettings(parsed.file.settings);
+      // A file that carries no settings block restores the log only: the
+      // taught range, the remembered piano and the sound stay as they are
+      // (`parsePracticeFile` keeps the two cases apart).
+      if (parsed.file.settings) applySettings(parsed.file.settings);
       report(
         persisted,
         persisted

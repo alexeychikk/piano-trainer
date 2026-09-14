@@ -154,6 +154,24 @@ describe('SettingsStore — the debounced write (slice 5b)', () => {
     store.patchSoon({ volume: 0.33 });
     expect(store.read().volume).toBeCloseTo(0.33);
   });
+
+  it('patchStored records one field without undoing another tab', () => {
+    const store = new SettingsStore();
+    store.hydrate();
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ ...DEFAULT_SETTINGS, noteLabels: 'all' }),
+    );
+
+    store.patchStored({ lastExportAt: 1234 });
+
+    const stored = store.read();
+    expect(stored.lastExportAt).toBe(1234);
+    // The other tab's change survives — `patch()` would have written this
+    // tab's stale `c-only` back over it.
+    expect(stored.noteLabels).toBe('all');
+    expect(store.value.noteLabels).toBe('all');
+  });
 });
 
 describe('slice-4 settings', () => {

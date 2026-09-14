@@ -232,9 +232,20 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
     file that *offers* records of which **none** parse is refused, because importing it as nothing
     would quietly empty a real log. A higher `schemaVersion` is refused with the copy deck's line; a
     lower one is still read.
+  - **"The file carries no settings" is its own case**, not the defaults: `PracticeFile.settings` is
+    `AppSettings | null` and the import skips `applySettings` for `null`. `parseSettingsValue()` is
+    lenient on purpose (a half-written `localStorage` must still boot, so every missing field comes
+    back as its default), so collapsing a missing/corrupt/empty block into it would let an
+    attempts-only file from another device silently reset the taught keyboard range, the remembered
+    piano, the instrument and the tempo — while the banner only mentions attempts and skills. A block
+    with at least one key is ours (our export always writes them all) and still fills its gaps from
+    the defaults.
   - **Anything that reads storage re-reads it**: `settings.hydrate()` is one-shot, so export uses
     `settings.read()` (parses `localStorage` fresh) and `practice.sync()` (drains the write queue,
-    then re-reads). Never export the hydrated snapshot.
+    then re-reads). Never export the hydrated snapshot. A field that a *reader* stamps afterwards is
+    written with `settings.patchStored()` (re-read, then merge), not `patch()`, which would write
+    this tab's whole stale snapshot back over another tab's edits to record one field —
+    `lastExportAt` is the only such field today.
   - **The volume slider is the one continuously-changing control**: `audio.setVolume` moves the gain
     now and persists through `settings.patchSoon()` (250 ms trailing debounce); `settings.flush()`
     commits it early (the slider's `change`) and `read()` flushes first. Everything else still uses
@@ -249,6 +260,11 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
   - A remembered MIDI device that is switched off has no `<option>`, and a `<select>` whose value
     matches none renders **blank** instead of its placeholder: what it displays comes from the pure
     `deviceValue(key, devices)` in `$lib/midi/status.ts`. The key itself stays remembered.
+  - **The same blank-`<select>` rule binds the instrument**, which has no placeholder to fall back
+    to: `audio.setInstrument()` validates the id **before it persists it** (`isInstrumentId` →
+    `DEFAULT_INSTRUMENT`), not only before it loads it, so a junk id from a hand-edited
+    `localStorage` or an imported file can never leave `/settings` showing nothing while the default
+    plays. The guard lives in the engine because `storage` may not import `$lib/audio/instruments`.
 - **The `AudioContext` starts on a capture-phase listener** in `+layout.svelte`. A piano key's own
   `pointerdown` runs at the target first, so a bubble-phase start was always one press too late and
   the first click was silent.

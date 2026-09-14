@@ -38,7 +38,18 @@ export interface PracticeFile {
   schemaVersion: number;
   /** Epoch ms, like every other timestamp in the payload. */
   exportedAt: number;
-  settings: AppSettings;
+  /**
+   * `null` when the file offered no settings block at all — an attempts-only
+   * export from another device, or a hand-written log.
+   *
+   * `parseSettingsValue` is lenient by design (it fills every missing field
+   * from `DEFAULT_SETTINGS`, because a half-written `localStorage` must still
+   * boot), so collapsing "no settings" into it would let such a file silently
+   * reset the taught keyboard range, the remembered piano, the instrument and
+   * the tempo — while the banner talks only about attempts and skills. The
+   * two cases are therefore kept apart here, and the caller skips `null`.
+   */
+  settings: AppSettings | null;
   skills: SkillState[];
   attempts: StoredAttempt[];
 }
@@ -134,11 +145,27 @@ export function parsePracticeFile(text: string): ImportResult {
         Number.isFinite(record.exportedAt)
           ? record.exportedAt
           : 0,
-      settings: parseSettingsValue(record.settings),
+      // Only a settings *block* restores settings; see `PracticeFile`.
+      settings: parseSettingsBlock(record.settings),
       skills,
       attempts,
     },
   };
+}
+
+/**
+ * `null` unless the file really carries settings.
+ *
+ * Anything that is not an object offers nothing, and so does an object with no
+ * fields at all — `parseSettingsValue` would answer both with a full
+ * `DEFAULT_SETTINGS`, which the caller cannot tell from a file that genuinely
+ * asks for the defaults. Our own export always writes every field, so a block
+ * with at least one key is always ours.
+ */
+function parseSettingsBlock(value: unknown): AppSettings | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  if (Object.keys(value).length === 0) return null;
+  return parseSettingsValue(value);
 }
 
 /** A file may carry the same attempt twice (two exports, merged by hand). */
