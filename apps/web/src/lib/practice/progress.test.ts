@@ -176,7 +176,12 @@ describe('buildGroups', () => {
     );
     expect(group.attempts).toBe(3);
     expect(group.cells[0].mastery).toBeGreaterThan(0);
-    expect(group.cells[0].detail).toBe('3 attempts · 67% · last seen 2 h ago');
+    // Since slice 9a the line carries UX §6.2's `due …` clause too; the last
+    // attempt was correct, so the skill is ten minutes out.
+    expect(group.cells[0].detail).toBe(
+      '3 attempts · 67% · last seen 2 h ago · due now',
+    );
+    expect(group.cells[0].due).toBe(true);
     expect(group.cells[1].mastery).toBeNull();
   });
 

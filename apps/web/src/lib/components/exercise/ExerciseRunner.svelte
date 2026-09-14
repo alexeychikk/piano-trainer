@@ -32,12 +32,22 @@
   import type { AnyExercise } from '$lib/exercises/types';
   import { midiToName, type Midi } from '$lib/theory';
   import { midiInput } from '$lib/midi/input.svelte';
+  import { buildPlan, targetSkillsFor } from '$lib/practice/planner';
   import { practice } from '$lib/practice/store.svelte';
   import { COMPUTER_KEY_HINT, isTypingTarget } from '$lib/midi/keymap';
   import { settings } from '$lib/storage/settings.svelte';
   import { runnerHighlights } from './highlights';
 
-  const { definition }: { definition: AnyExercise } = $props();
+  const {
+    definition,
+    /**
+     * Drill the schedule rather than the whole exercise (`?due=1` — home's
+     * `Practice now` and `/progress`'s `Drill these`, slice 9a). The runner
+     * only ever sees a list of skill ids, so it still knows nothing about the
+     * exercise; the planner decides what is in it.
+     */
+    dueFirst = false,
+  }: { definition: AnyExercise; dueFirst?: boolean } = $props();
 
   // The route remounts this component for a different exercise (`{#key}`), so
   // capturing the definition once is exactly right.
@@ -46,6 +56,27 @@
   // and queues the write, so persistence never sits inside the state machine's
   // callback — and the runner keeps knowing nothing about storage.
   const runner = new ExerciseRunner(definition, {
+    // Read at every question, not captured: the plan moves as the drill is
+    // answered (a skill just passed drops out of it), and a run that started
+    // before the store hydrated still picks the schedule up.
+    targetSkills: () =>
+      dueFirst
+        ? targetSkillsFor(
+            buildPlan(
+              [
+                {
+                  id: definition.id,
+                  skillIds: definition.skillsCovered(
+                    definition.defaultSettings,
+                  ),
+                },
+              ],
+              practice.byId,
+              Date.now(),
+            ),
+            definition.id,
+          )
+        : [],
     onAttempt: (attempt) => practice.record(attempt),
   });
 

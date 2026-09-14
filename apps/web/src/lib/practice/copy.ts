@@ -88,6 +88,26 @@ export function dataStats(input: {
   return parts.join(' · ');
 }
 
+/**
+ * The schedule's readouts (UX §3, §6.1; sci-fi-screens.md §7). The word `due`
+ * is always in the text: the amber is never the signal (§2.3), the word is.
+ */
+
+/** `12 due` — the `DUE NOW` counter's value. */
+export function dueNow(n: number): string {
+  return `${n} due`;
+}
+
+/** `Due 4` — the panel band's badge; the primitive uppercases it. */
+export function dueBadge(n: number): string {
+  return `Due ${n}`;
+}
+
+/** `12 skills due today` — the hero's sub-label once there is a schedule. */
+export function skillsDueToday(n: number): string {
+  return `${count(n, 'skill')} due today`;
+}
+
 function count(n: number, noun: string): string {
   return `${n} ${noun}${n === 1 ? '' : 's'}`;
 }
@@ -105,9 +125,30 @@ export function timeAgo(ts: number, now: number): string {
 }
 
 /**
- * A practised skill's detail line — UX §6.2 verbatim, minus its `due in 3 h`
- * clause, because nothing schedules anything before slice 9 (ADR 0002 §3):
- * `12 attempts · 67% · last seen 2 h ago`.
+ * `in 3 h` / `now` — how far off the next review is, at the same granularity
+ * as `timeAgo` (UX §6.2 asks for `due in 3 h`, not a clock time). A schedule
+ * that has come round reads `now`, because "in 0 min" is not an English
+ * sentence and an overdue skill is asking *now*.
+ */
+export function timeUntil(ts: number, now: number): string {
+  const delta = ts - now;
+  if (delta <= 0) return 'now';
+  const minutes = Math.round(delta / 60_000);
+  if (minutes < 1) return 'in under a minute';
+  if (minutes < 60) return `in ${minutes} min`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `in ${hours} h`;
+  return `in ${Math.round(hours / 24)} d`;
+}
+
+/**
+ * A practised skill's detail line — UX §6.2 verbatim, and since slice 9a with
+ * the spec's `due in 3 h` clause it was missing while nothing scheduled
+ * anything (ADR 0002 §3):
+ * `12 attempts · 67% · last seen 2 h ago · due in 3 h`.
+ *
+ * `dueAt` is optional and `null`-able: a skill with no schedule yet (an
+ * imported record, slice 5b) simply has no clause, rather than a made-up one.
  *
  * There is deliberately no unpractised counterpart: the screen renders this
  * only for a skill with attempts behind it, and the pips already say `new`
@@ -119,11 +160,17 @@ export function skillDetail(input: {
   accuracyPercent: number;
   lastSeenAt: number;
   now: number;
+  /** Epoch ms of the next review; `0`/`null`/absent = unscheduled. */
+  dueAt?: number | null;
 }): string {
   const plural = input.attempts === 1 ? 'attempt' : 'attempts';
-  return [
+  const parts = [
     `${input.attempts} ${plural}`,
     `${input.accuracyPercent}%`,
     `last seen ${timeAgo(input.lastSeenAt, input.now)}`,
-  ].join(' · ');
+  ];
+  if (input.dueAt) {
+    parts.push(`due ${timeUntil(input.dueAt, input.now)}`);
+  }
+  return parts.join(' · ');
 }

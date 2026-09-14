@@ -60,6 +60,16 @@ export const SEQUENCE_GAP_MS = 1200;
 
 /** How many recent skills an exercise may see, to avoid immediate repeats. */
 const HISTORY_LENGTH = 8;
+/**
+ * How many seeds a targeted run (`?due=1`) may try before it accepts whatever
+ * `generate()` gave it. Rejection sampling is how the runner biases a drill
+ * towards the planner's skills **without learning anything about the
+ * exercise**: it only compares `Question.skillId` with the list it was handed,
+ * and `generate()` stays the only thing that knows how to build a question.
+ * An exercise that reads `GenerateContext.targetSkillId` (none does yet) hits
+ * the target on the first try and the loop costs nothing.
+ */
+const TARGET_SAMPLE_TRIES = 16;
 
 export type RunnerPhase =
   'idle' | 'presenting' | 'awaiting' | 'feedback' | 'paused';
@@ -72,6 +82,12 @@ export interface RunnerOptions {
   seed?: () => number;
   /** The instrument range; defaults to the user's configured keyboard. */
   range?: () => KeyRange;
+  /**
+   * The skills this run should favour, most urgent first — the planner's
+   * (slice 9a, `$lib/practice/planner.ts`). Empty or absent means "anything",
+   * which is what a plain `/practice/<id>` run passes.
+   */
+  targetSkills?: () => readonly SkillId[];
   onAttempt?: (attempt: AttemptResult) => void;
 }
 
@@ -111,6 +127,7 @@ export class ExerciseRunner {
   #now: () => number;
   #seed: () => number;
   #range: () => KeyRange;
+  #targetSkills: () => readonly SkillId[];
   #onAttempt: ((attempt: AttemptResult) => void) | null;
 
   #timer: ReturnType<typeof setTimeout> | null = null;
@@ -123,6 +140,12 @@ export class ExerciseRunner {
   #sequenceTimer: ReturnType<typeof setTimeout> | null = null;
   /** The `note-sequence` answer as it is being played, in played order. */
   #sequence: { midi: Midi; source: NoteSource }[] = [];
+  /**
+   * Whether the pause happened on a reveal. A drill abandoned during feedback
+   * must still reach `paused` (§4.3), and coming back to it should put the
+   * reveal back — not silently skip to the next question.
+   */
+  #pausedInFeedback = false;
   #recent: SkillId[] = [];
   #askedAt = 0;
   #feedbackAt = 0;
@@ -138,6 +161,7 @@ export class ExerciseRunner {
         low: settings.value.keyboardLow,
         high: settings.value.keyboardHigh,
       }));
+    this.#targetSkills = options.targetSkills ?? (() => []);
     this.#onAttempt = options.onAttempt ?? null;
   }
 
@@ -264,11 +288,17 @@ export class ExerciseRunner {
 
   pause(): void {
     if (this.phase === 'idle' || this.phase === 'paused') return;
+    this.#pausedInFeedback = this.phase === 'feedback';
     this.#clearTimer();
     this.#clearIdleTimer();
-    // 90 s of silence ends an answer in progress too: whatever half of a
-    // sequence was played is not something to come back to.
-    this.#resetSequence();
+    // 90 s of silence ends an answer *in progress*: whatever half of a
+    // sequence was played is not something to come back to. A graded answer is
+    // a different thing — `#finish` already emptied the sequence and left
+    // `answerNotes` as the ✓/✗ highlights of the reveal, so pausing on it must
+    // keep them: `resume()` returns to that reveal, and it has to be the
+    // screen the user walked away from.
+    if (!this.#pausedInFeedback) this.#resetSequence();
+    else this.#clearSequenceTimer();
     this.#playback.stop();
     this.playing = false;
     this.phase = 'paused';
@@ -277,11 +307,22 @@ export class ExerciseRunner {
 
   resume(): void {
     if (this.phase !== 'paused' || !this.question) return;
+    if (this.#pausedInFeedback) {
+      // Back onto the reveal the user walked away from: the answer is graded
+      // and logged already, so re-presenting the question would ask it twice.
+      this.#pausedInFeedback = false;
+      this.phase = 'feedback';
+      this.#feedbackAt = this.#now();
+      this.#armIdleTimer();
+      this.#replayReveal();
+      return;
+    }
     this.#present();
   }
 
   /** Leave the drill: stop the sound and drop every timer. */
   destroy(): void {
+    this.#pausedInFeedback = false;
     this.#clearTimer();
     this.#clearIdleTimer();
     this.#resetSequence();
@@ -362,14 +403,7 @@ export class ExerciseRunner {
   // ---- machine -----------------------------------------------------------
 
   #next(): void {
-    const seed = this.#seed();
-    const question = this.definition.generate({
-      settings: this.definition.defaultSettings,
-      rng: mulberry32(seed),
-      seed,
-      range: this.#range(),
-      history: { recentSkillIds: [...this.#recent] },
-    });
+    const question = this.#generate();
     this.#recent = [question.skillId, ...this.#recent].slice(0, HISTORY_LENGTH);
     this.question = question;
     this.outcome = null;
@@ -382,6 +416,39 @@ export class ExerciseRunner {
       .filter(Boolean)
       .join('. ');
     this.#present();
+  }
+
+  /**
+   * Ask for a question — and, on a targeted run, keep asking until one of the
+   * planner's skills comes up (`TARGET_SAMPLE_TRIES` seeds at most, so a
+   * target the exercise cannot currently generate degrades to a normal
+   * question instead of hanging the drill).
+   */
+  #generate(): Question {
+    const targets = this.#targetSkills();
+    let question = this.#generateOnce(targets[0]);
+    if (targets.length === 0) return question;
+    const wanted = new Set(targets);
+    for (
+      let i = 1;
+      !wanted.has(question.skillId) && i < TARGET_SAMPLE_TRIES;
+      i += 1
+    ) {
+      question = this.#generateOnce(targets[0]);
+    }
+    return question;
+  }
+
+  #generateOnce(targetSkillId: SkillId | undefined): Question {
+    const seed = this.#seed();
+    return this.definition.generate({
+      settings: this.definition.defaultSettings,
+      rng: mulberry32(seed),
+      seed,
+      range: this.#range(),
+      targetSkillId,
+      history: { recentSkillIds: [...this.#recent] },
+    });
   }
 
   /** Play the question and hold the answer back until it has finished. */
@@ -480,6 +547,11 @@ export class ExerciseRunner {
 
     this.phase = 'feedback';
     this.#feedbackAt = this.#now();
+    // A reveal waits for the user, so it is exactly where a drill gets
+    // abandoned — and until slice 9a nothing re-armed the idle timer here, so
+    // an abandoned reveal never reached `paused` and kept the audio context
+    // and the question on screen for good (pre-existing since slice 4).
+    this.#armIdleTimer();
 
     if (outcome === 'correct') {
       // The drill speeds up as you get sharper (§4.3).

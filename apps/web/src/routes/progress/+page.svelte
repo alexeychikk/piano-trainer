@@ -10,15 +10,18 @@
    * re-styled locally. The numbers all come from the pure
    * `$lib/practice/progress.ts`, so this file is markup.
    *
-   * Two things the spec draws that slice 5a has no data for, and does not
-   * fake: the `DUE NOW` counter (with the per-panel `DUE n` badge) and
-   * `Drill these` — both belong to the spaced-repetition planner, which is
-   * slice 9.
+   * Since slice 9a the schedule is real, so the three things the spec draws
+   * for it are here: the `DUE NOW` counter, the per-panel `DUE n` badge and
+   * `Drill these` (which opens the drill with `?due=1`, biasing it towards
+   * this panel's due and weak skills). The counts come from the pure
+   * `$lib/practice/planner.ts` — one authority, so a card, a band and the
+   * counter can never disagree.
    *
    * `Export JSON` (slice 5b) is the same one-click action as Settings → Data,
    * through the same `exportPracticeData()` — the screen only reports it.
    */
   import { base } from '$app/paths';
+  import Badge from '$lib/components/hud/Badge.svelte';
   import Button from '$lib/components/hud/Button.svelte';
   import HudPanel from '$lib/components/hud/HudPanel.svelte';
   import MasteryPips from '$lib/components/hud/MasteryPips.svelte';
@@ -28,8 +31,14 @@
   import IconPlay from '$lib/components/icons/IconPlay.svelte';
   import { banners } from '$lib/components/shell/banners.svelte';
   import { DEFAULT_EXERCISE_ID, EXERCISES } from '$lib/exercises/registry';
-  import { exportDone, PRACTICE_COPY } from '$lib/practice/copy';
+  import {
+    dueBadge,
+    dueNow,
+    exportDone,
+    PRACTICE_COPY,
+  } from '$lib/practice/copy';
   import { exportPracticeData } from '$lib/practice/download';
+  import { buildPlan } from '$lib/practice/planner';
   import {
     buildGroups,
     fallbackSkillLabel,
@@ -47,22 +56,27 @@
 
   const totals = $derived(summarise(practice.attempts, now));
 
+  const inputs = $derived(
+    EXERCISES.map((exercise) => ({
+      id: exercise.id,
+      title: exercise.title,
+      skillIds: exercise.skillsCovered(exercise.defaultSettings),
+      // The screen never decodes a skill id: the exercise names its own
+      // skills (`skillLabel`), or the id's last segment stands in.
+      label: (skillId: string) =>
+        exercise.skillLabel?.(skillId, exercise.defaultSettings) ??
+        fallbackSkillLabel(skillId),
+    })),
+  );
+
   const groups = $derived(
-    buildGroups(
-      EXERCISES.map((exercise) => ({
-        id: exercise.id,
-        title: exercise.title,
-        skillIds: exercise.skillsCovered(exercise.defaultSettings),
-        // The screen never decodes a skill id: the exercise names its own
-        // skills (`skillLabel`), or the id's last segment stands in.
-        label: (skillId: string) =>
-          exercise.skillLabel?.(skillId, exercise.defaultSettings) ??
-          fallbackSkillLabel(skillId),
-      })),
-      practice.byId,
-      practice.attempts,
-      now,
-    ),
+    buildGroups(inputs, practice.byId, practice.attempts, now),
+  );
+
+  /** The schedule, once: the counter, every badge and `Drill these` read it. */
+  const plan = $derived(buildPlan(inputs, practice.byId, now));
+  const dueFor = $derived(
+    (exerciseId: string) => plan.byExercise.get(exerciseId)?.dueCount ?? 0,
   );
 
   const hasData = $derived(
@@ -133,6 +147,14 @@
             <MicroLabel>Attempts</MicroLabel>
             <span class="value tabular">{totals.attempts}</span>
           </p>
+          <p class="counter">
+            <MicroLabel>Due now</MicroLabel>
+            <!-- §7: `12 due` keeps the word and takes `--warn`; nothing due is
+                 not a warning, so it stays in the ordinary readout ink. -->
+            <span class="value tabular" class:warn={plan.dueCount > 0}>
+              {dueNow(plan.dueCount)}
+            </span>
+          </p>
         </div>
 
         {#if totals.accuracy7d !== null}
@@ -167,10 +189,17 @@
         headerId={`group-${group.id}`}
       >
         {#snippet headerTrailing()}
-          <span class="headline tabular">
-            {group.mastery === null
-              ? 'new'
-              : `${Math.round(group.mastery * 100)}%`}
+          <span class="band">
+            <span class="headline tabular">
+              {group.mastery === null
+                ? 'new'
+                : `${Math.round(group.mastery * 100)}%`}
+            </span>
+            {#if dueFor(group.id) > 0}
+              <!-- §7: the band's `DUE n` is a warn `Badge` — the word is the
+                   signal, the amber only carries it. -->
+              <Badge tone="warn">{dueBadge(dueFor(group.id))}</Badge>
+            {/if}
           </span>
         {/snippet}
 
@@ -179,6 +208,10 @@
             <li class="cell">
               <span class="name">
                 {cell.label}
+                {#if cell.due}
+                  <!-- `due` is a word, not a colour (UX §8.2 / §2.3). -->
+                  <span class="due">due</span>
+                {/if}
                 {#if cell.weak}
                   <!-- Never colour alone: the `!` is the signal, in --warn
                        (sci-fi-screens.md §2.3 — --danger means *wrong*).
@@ -197,13 +230,25 @@
         </ul>
 
         <p class="group-action">
-          <Button
-            href={`${base}/practice/${group.id}/`}
-            glyph={playGlyph}
-            ariaLabel={`Practice now: ${group.title}`}
-          >
-            Practice now
-          </Button>
+          {#if dueFor(group.id) > 0}
+            <!-- §7 / UX §6.1: `Drill these` opens this exercise on its due and
+                 weak skills (`?due=1`), rather than wherever the seed lands. -->
+            <Button
+              variant="secondary"
+              href={`${base}/practice/${group.id}/?due=1`}
+              ariaLabel={`Drill these: ${group.title}`}
+            >
+              Drill these
+            </Button>
+          {:else}
+            <Button
+              href={`${base}/practice/${group.id}/`}
+              glyph={playGlyph}
+              ariaLabel={`Practice now: ${group.title}`}
+            >
+              Practice now
+            </Button>
+          {/if}
         </p>
       </HudPanel>
     </section>
@@ -276,6 +321,17 @@
     margin-top: var(--space-5);
   }
 
+  /* `12 due` in `--warn` (§7); the word `due` is already in the text. */
+  .warn {
+    color: var(--warn);
+  }
+
+  .band {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-3);
+  }
+
   /* The band's one trailing control (§7): the exercise's headline number. */
   .headline {
     font-family: var(--font-display);
@@ -307,6 +363,14 @@
     gap: var(--space-2);
     font-size: var(--fs-small);
     color: var(--text-2);
+  }
+
+  .due {
+    color: var(--warn);
+    font-family: var(--font-display);
+    font-size: var(--fs-micro);
+    letter-spacing: var(--track-label);
+    text-transform: uppercase;
   }
 
   .weak {

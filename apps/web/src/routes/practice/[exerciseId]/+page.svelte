@@ -11,6 +11,12 @@
 
   const exerciseId = $derived(page.params.exerciseId ?? '');
   const definition = $derived(getExercise(exerciseId));
+  /**
+   * `?due=1` — the schedule asked for this run (home's `Practice now`,
+   * `/progress`'s `Drill these`, slice 9a). Anything else is a plain drill;
+   * the flag only ever biases which skills come up.
+   */
+  const dueFirst = $derived(page.url.searchParams.get('due') === '1');
 </script>
 
 <svelte:head>
@@ -20,7 +26,7 @@
 {#if definition}
   <!-- A different exercise is a different drill: rebuild, never re-use. -->
   {#key definition.id}
-    <ExerciseRunner {definition} />
+    <ExerciseRunner {definition} {dueFirst} />
   {/key}
 {:else}
   <section class="unknown">

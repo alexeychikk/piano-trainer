@@ -2,20 +2,65 @@
   // Home / "Practice now" (UX spec §3, re-skinned by the sci-fi visual
   // language §8). The regions and the copy are the spec's; only the treatment
   // is new. With the first exercise registered (slice 4) the hero starts a
-  // drill, and since slice 5a the cards' mastery pips are real. The length
-  // control, the Today card, the due counts and the hero's "with data" copy
-  // all need the session planner (slice 9), so until then the hero keeps the
-  // copy deck's empty-state wording and the Today card is the "How this works"
+  // drill, since slice 5a the cards' mastery pips are real, and since slice 9a
+  // the **scheduler** picks where `Practice now` goes: the hero opens the
+  // exercise holding the most urgent skill, with `?due=1` so the drill favours
+  // it (`$lib/practice/planner.ts`).
+  //
+  // Still slice 9b's: the length control, the Today card, and `Space` starting
+  // a mixed session at `/session` — all three are statements about a session,
+  // which does not exist yet. So the Today card stays the "How this works"
   // well the spec prescribes for the empty state.
   import { base } from '$app/paths';
   import { DEFAULT_EXERCISE_ID, EXERCISES } from '$lib/exercises/registry';
   import { midiInput } from '$lib/midi/input.svelte';
+  import { dueNow, skillsDueToday } from '$lib/practice/copy';
+  import { buildPlan } from '$lib/practice/planner';
   import { practice } from '$lib/practice/store.svelte';
+  import Badge from '$lib/components/hud/Badge.svelte';
   import Button from '$lib/components/hud/Button.svelte';
   import HudPanel from '$lib/components/hud/HudPanel.svelte';
   import MasteryPips from '$lib/components/hud/MasteryPips.svelte';
   import IconKeyboard from '$lib/components/icons/IconKeyboard.svelte';
   import IconPlay from '$lib/components/icons/IconPlay.svelte';
+
+  /** One clock for the screen, read when it opens — as `/progress` does. */
+  const now = Date.now();
+
+  const plan = $derived(
+    buildPlan(
+      EXERCISES.map((exercise) => ({
+        id: exercise.id,
+        skillIds: exercise.skillsCovered(exercise.defaultSettings),
+      })),
+      practice.byId,
+      now,
+    ),
+  );
+
+  /**
+   * Where the hero goes. The planner's first pick, or the default exercise
+   * when there is nothing to schedule at all (an empty registry, or every
+   * skill solid and still in the future) — the hero is never a dead end.
+   * `?due=1` only makes sense when something is actually due.
+   */
+  const heroHref = $derived(
+    plan.dueCount > 0
+      ? `${base}/practice/${plan.pick?.exerciseId}/?due=1`
+      : `${base}/practice/${plan.pick?.exerciseId ?? DEFAULT_EXERCISE_ID}/`,
+  );
+  /**
+   * The copy deck's two hero labels (UX §3): `Start your first session` until
+   * there is a history, `Practice now` after — with the spec's own sub-label
+   * once the schedule has something to say.
+   */
+  const started = $derived(practice.attempts.length > 0);
+  const heroLabel = $derived(
+    started ? 'Practice now' : 'Start your first session',
+  );
+  const heroSub = $derived(
+    plan.dueCount > 0 ? skillsDueToday(plan.dueCount) : 'Ten minutes is enough',
+  );
 </script>
 
 <svelte:head>
@@ -34,11 +79,12 @@
       variant="primary"
       size="hero"
       block
-      href={`${base}/practice/${DEFAULT_EXERCISE_ID}/`}
-      sub="Ten minutes is enough"
+      href={heroHref}
+      sub={heroSub}
       glyph={playGlyph}
+      testId="hero"
     >
-      Start your first session
+      {heroLabel}
     </Button>
   </div>
 
@@ -74,6 +120,14 @@
                 )}
                 skill={exercise.title}
               />
+              <!-- UX §3: pips plus `NN%`, `N due` or `new`. The pips carry the
+                   first and the last; this is the middle one, and it says the
+                   word `due` rather than relying on the amber (§2.3). -->
+              {#if (plan.byExercise.get(exercise.id)?.dueCount ?? 0) > 0}
+                <Badge tone="warn">
+                  {dueNow(plan.byExercise.get(exercise.id)?.dueCount ?? 0)}
+                </Badge>
+              {/if}
               {#if exercise.requiresMidi && !midiInput.connected}
                 <span class="needs">
                   <IconKeyboard /> Needs a MIDI keyboard

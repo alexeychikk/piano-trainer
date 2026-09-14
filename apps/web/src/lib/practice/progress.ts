@@ -10,8 +10,11 @@
 import type { SkillState, StoredAttempt } from '$lib/storage/db';
 import { skillDetail } from './copy';
 import { exerciseMastery, isWeak } from './mastery';
+import { DAY_MS, isDue } from './scheduler';
 
-export const DAY_MS = 24 * 60 * 60 * 1000;
+// The day is the scheduler's (a schedule and a heat strip must agree on what a
+// day is); re-exported because this module's own callers and tests read it here.
+export { DAY_MS };
 /** The strip under the counters (UX §6.1: `last 28 days`). */
 export const STRIP_DAYS = 28;
 /** The headline accuracy window (UX §6.1: `84% accuracy (7d)`). */
@@ -138,10 +141,12 @@ export interface SkillCell {
   mastery: number | null;
   attempts: number;
   weak: boolean;
+  /** The schedule has come round: `due` (the word) in `--warn` (§2.3). */
+  due: boolean;
   /**
-   * `12 attempts · 67% · last seen 2 h ago` (`copy.ts`), or `''` for a skill
-   * with no attempts behind it — the pips already say `new` (UX §6.2), and an
-   * unpractised sentence is one the copy deck does not have.
+   * `12 attempts · 67% · last seen 2 h ago · due in 3 h` (`copy.ts`), or `''`
+   * for a skill with no attempts behind it — the pips already say `new`
+   * (UX §6.2), and an unpractised sentence is one the copy deck does not have.
    */
   detail: string;
 }
@@ -226,6 +231,7 @@ function buildCell(
       mastery: null,
       attempts: 0,
       weak: false,
+      due: false,
       detail: '',
     };
   }
@@ -238,11 +244,13 @@ function buildCell(
     mastery: state.mastery,
     attempts: tally.attempts,
     weak: isWeak(state),
+    due: isDue(state, now),
     detail: skillDetail({
       attempts: tally.attempts,
       accuracyPercent,
       lastSeenAt: state.lastSeenAt,
       now,
+      dueAt: state.dueAt,
     }),
   };
 }

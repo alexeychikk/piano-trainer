@@ -5,10 +5,13 @@
  * Pure, so the progress screen and — from slice 9 — the planner agree on what
  * "getting better" means without a browser in the loop.
  *
- * **Spaced repetition is not here.** ADR §6 puts `review()` in
- * `$lib/practice/scheduler.ts` and the delivery plan puts it in slice 9; this
- * module only keeps the SM-2 fields at their defaults so the record shape (and
- * therefore the export format) already has room for them.
+ * **Spaced repetition lives next door** (`scheduler.ts`), and since slice 9a
+ * `applyAttempt` folds it in: an attempt moves mastery *and* the schedule, in
+ * one place, at the attempt's own timestamp. That is what makes the schedule
+ * survive a reload — `deriveSkills` replays the log, so the `easiness` /
+ * `intervalDays` / `dueAt` it produces are the ones the last session wrote,
+ * and ADR 0002 §3's warning ("every reload wipes the schedule") is answered by
+ * construction instead of by trusting the cached record.
  */
 
 import {
@@ -16,6 +19,7 @@ import {
   type SkillState,
   type StoredAttempt,
 } from '$lib/storage/db';
+import { review } from './scheduler';
 
 /**
  * EWMA weight of the newest score. 0.3 means one lucky answer cannot mark a
@@ -53,6 +57,9 @@ export function applyAttempt(
   const score = Math.min(1, Math.max(0, attempt.score));
   return {
     ...base,
+    // The review happens **at the attempt**, not at load time: the schedule is
+    // then a pure function of the log, and replaying it changes nothing.
+    ...review(base, { correct: attempt.correct, at: attempt.ts }),
     exerciseId: attempt.exerciseId || base.exerciseId,
     reps: base.reps + 1,
     lapses: base.lapses + (attempt.correct ? 0 : 1),
