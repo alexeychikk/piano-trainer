@@ -135,7 +135,19 @@ test('sound waits for a gesture, then degrades to the synth (ADR §2)', async ({
     'Click or press a key to enable sound',
   );
 
-  await page.getByTestId('enable-sound').click();
+  // The gesture is a keyboard one on purpose. A click needs a hit test at
+  // coordinates, and this button sits under two strips whose height settles
+  // asynchronously (`NoMidiStrip` appears/disappears with `autoConnect()`), so
+  // the point Playwright picked could resolve to `<html>` — and the stray
+  // `pointerdown` was still enough for the capture-phase audio starter in
+  // `+layout.svelte` to start the context, which removes the button before the
+  // retry. Focus + Enter is the same user gesture through the same
+  // `ensureStarted()` path with no coordinates and nothing to settle (the
+  // metronome test reaches its toggle the same way).
+  const enableSound = page.getByTestId('enable-sound');
+  await enableSound.focus();
+  await expect(enableSound).toBeFocused();
+  await page.keyboard.press('Enter');
 
   // The blocked CDN takes the fallback path — a banner, never a dialog, and
   // the strip does not repeat it.
