@@ -27,9 +27,10 @@
   import PianoKeyboard from '$lib/components/piano/PianoKeyboard.svelte';
   import { BED_CHROME_H } from '$lib/components/piano/geometry';
   import { phaseLabel } from '$lib/exercises/phases';
-  import { ExerciseRunner } from '$lib/exercises/runner.svelte';
+  import { ExerciseRunner, expectedLength } from '$lib/exercises/runner.svelte';
   import { STREAK_CALLOUT } from '$lib/exercises/feedback';
   import type { AnyExercise } from '$lib/exercises/types';
+  import { midiToName, type Midi } from '$lib/theory';
   import { midiInput } from '$lib/midi/input.svelte';
   import { practice } from '$lib/practice/store.svelte';
   import { COMPUTER_KEY_HINT, isTypingTarget } from '$lib/midi/keymap';
@@ -100,6 +101,33 @@
     runner.answered === 0 ? 0 : runner.correctCount / runner.answered,
   );
 
+  /**
+   * The note slots of a `note-sequence` answer (UX §4.4): one `◻` per expected
+   * note, filling with names as they are played. Nothing exercise-specific —
+   * the count comes from `Question.expected`, the spelling from
+   * `Question.spellings` (the same map the keys are labelled from).
+   */
+  const sequenceMode = $derived(
+    runner.question?.answerMode === 'note-sequence',
+  );
+  const slots = $derived.by(() => {
+    const question = runner.question;
+    if (!question || !sequenceMode) return [];
+    const played = runner.answerNotes;
+    const count = Math.max(expectedLength(question.expected), played.length);
+    return Array.from({ length: count }, (_, index) => {
+      const midi: Midi | undefined = played[index];
+      return {
+        index,
+        label:
+          midi === undefined
+            ? '◻'
+            : (question.spellings?.get(midi) ?? midiToName(midi, 'flat')),
+        filled: midi !== undefined,
+      };
+    });
+  });
+
   function toggleFocus() {
     settings.patch({ focusMode: !settings.value.focusMode });
   }
@@ -143,6 +171,13 @@
     if (event.key === 'Enter') {
       event.preventDefault();
       runner.skip();
+      return;
+    }
+    if (event.key === 'Backspace') {
+      // §4.5: clear the answer in progress — `note-sequence` only, and the
+      // runner ignores it everywhere else.
+      event.preventDefault();
+      runner.backspace();
     }
   }
 
@@ -276,6 +311,18 @@
   <!-- Non-blocking, directly above the answer area (§4.6) — never a dialog. -->
   <NoMidiStrip />
 
+  <!-- The note slots of a sequence answer, directly above the keys (§4.4).
+       Not a new region: it is part of the answer area, and it only exists for
+       `note-sequence`. -->
+  {#if sequenceMode}
+    <p class="slots" data-testid="slots">
+      <MicroLabel>answer</MicroLabel>
+      {#each slots as slot (slot.index)}
+        <span class="slot" class:filled={slot.filled}>{slot.label}</span>
+      {/each}
+    </p>
+  {/if}
+
   <div class="answer" bind:clientHeight={answerHeight}>
     <PianoKeyboard
       range={keyboardRange}
@@ -293,6 +340,9 @@
     <p class="shortcuts">
       <Chip variant="key">Space</Chip> replay ·
       <Chip variant="key">Enter</Chip> skip &amp; reveal ·
+      {#if sequenceMode}
+        <Chip variant="key">⌫</Chip> clear last ·
+      {/if}
       <Chip variant="key">Esc</Chip> end
       {#if !midiInput.connected}
         · piano keys <Chip variant="key">{COMPUTER_KEY_HINT}</Chip>
@@ -572,6 +622,34 @@
     color: var(--text-2);
     font-size: var(--fs-body-lg);
     text-align: right;
+  }
+
+  /* The answer slots (§4.4): the sunken HUD readout treatment the prompt well
+     and Free Play's readout share, at chip scale — an empty slot is the `◻`
+     glyph in muted ink, a filled one the note name in cyan, so the state is
+     never carried by colour alone (§8.1). */
+  .slots {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+  }
+
+  .slot {
+    min-width: 72px; /* three note names wide, so filling never reflows */
+    padding: var(--space-1) var(--space-3);
+    background: var(--bg-well);
+    border: 1px solid var(--border);
+    color: var(--text-3);
+    font-family: var(--font-display);
+    font-size: var(--fs-body-lg);
+    letter-spacing: var(--track-hud);
+    text-align: center;
+  }
+
+  .slot.filled {
+    border-color: var(--accent);
+    color: var(--cyan);
   }
 
   /*

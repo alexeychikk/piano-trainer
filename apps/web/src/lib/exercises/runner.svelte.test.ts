@@ -6,6 +6,7 @@ import {
   FEEDBACK_STREAK_MS,
   IDLE_PAUSE_MS,
   REVEAL_DELAY_MS,
+  SEQUENCE_GAP_MS,
 } from './runner.svelte';
 import type { PlaybackApi } from './playback';
 import type {
@@ -61,6 +62,38 @@ const stub: ExerciseDefinition<{ midi: number }> = {
           score: 0,
           feedback: `You played ${played}`,
           revealed: { notes: [expected] },
+        };
+  },
+};
+
+/**
+ * A `note-sequence` stand-in (slice 6): the answer is two notes, and it is
+ * graded on the distance between them — the shape the interval exercise has,
+ * without the runner learning what an interval is.
+ */
+const sequenceStub: ExerciseDefinition<{ semitones: number }> = {
+  ...stub,
+  id: 'stub-sequence',
+  generate: (ctx) => ({
+    ...stub.generate(ctx),
+    payload: { semitones: 7 },
+    answerMode: 'note-sequence',
+    expected: { kind: 'notes', notes: [60, 67], label: 'perfect 5th' },
+  }),
+  grade: (question, answer) => {
+    const expected = (question as Question<{ semitones: number }>).payload
+      .semitones;
+    if (answer.kind !== 'notes' || answer.order.length < 2) {
+      return { correct: false, score: 0, revealed: { notes: [60, 67] } };
+    }
+    const played = answer.order[1] - answer.order[0];
+    return played === expected
+      ? { correct: true, score: 1 }
+      : {
+          correct: false,
+          score: 0,
+          feedback: `You played ${played}`,
+          revealed: { notes: [60, 67] },
         };
   },
 };
@@ -296,5 +329,100 @@ describe('ExerciseRunner · pausing', () => {
     h.runner.noteOn(60, 'midi');
     await vi.advanceTimersByTimeAsync(0);
     expect(h.runner.phase).toBe('presenting');
+  });
+});
+
+describe('ExerciseRunner · note-sequence answers', () => {
+  it('collects notes and grades at the expected length', async () => {
+    const h = await started(harness(sequenceStub));
+    h.runner.noteOn(62, 'midi');
+    // One note is not an answer yet: the drill is still waiting.
+    expect(h.runner.phase).toBe('awaiting');
+    expect(h.runner.answerNotes).toEqual([62]);
+
+    h.runner.noteOn(69, 'midi');
+    expect(h.runner.phase).toBe('feedback');
+    expect(h.runner.outcome).toBe('correct');
+    expect(h.attempts).toHaveLength(1);
+    expect(h.attempts[0].answerSource).toBe('midi');
+  });
+
+  it('closes a short answer after the silence window', async () => {
+    const h = await started(harness(sequenceStub));
+    h.runner.noteOn(62, 'onscreen');
+    h.tick(SEQUENCE_GAP_MS - 1);
+    expect(h.runner.phase).toBe('awaiting');
+
+    h.tick(1);
+    expect(h.runner.phase).toBe('feedback');
+    expect(h.runner.outcome).toBe('wrong');
+    // The miss is revealed, seen and heard, like any other (§4.3).
+    expect(h.runner.revealNotes).toEqual([60, 67]);
+  });
+
+  it('backspace takes back the last note and keeps the answer open', async () => {
+    const h = await started(harness(sequenceStub));
+    h.runner.noteOn(62, 'midi');
+    h.runner.noteOn(63, 'midi');
+    // Two notes already closed a two-note answer, so take one back *before*
+    // the second: a fumbled first key must be recoverable.
+    expect(h.runner.phase).toBe('feedback');
+
+    h.runner.advance();
+    h.tick(PLAYBACK_MS);
+    h.runner.noteOn(63, 'midi');
+    h.runner.backspace();
+    expect(h.runner.answerNotes).toEqual([]);
+    expect(h.runner.phase).toBe('awaiting');
+
+    // The window restarts from empty: nothing closes on its own any more.
+    h.tick(SEQUENCE_GAP_MS * 2);
+    expect(h.runner.phase).toBe('awaiting');
+
+    h.runner.noteOn(62, 'midi');
+    h.runner.noteOn(69, 'midi');
+    expect(h.runner.outcome).toBe('correct');
+  });
+
+  it('an answer in progress survives a replay', async () => {
+    const h = await started(harness(sequenceStub));
+    h.runner.noteOn(62, 'midi');
+    h.runner.replay();
+    h.tick(PLAYBACK_MS);
+    expect(h.runner.phase).toBe('awaiting');
+    expect(h.runner.answerNotes).toEqual([62]);
+
+    h.runner.noteOn(69, 'midi');
+    expect(h.runner.outcome).toBe('correct');
+  });
+
+  it('starts the next question with an empty answer', async () => {
+    const h = await started(harness(sequenceStub));
+    h.runner.noteOn(62, 'midi');
+    h.runner.noteOn(69, 'midi');
+    h.tick(FEEDBACK_CORRECT_MS);
+    h.tick(PLAYBACK_MS);
+    expect(h.runner.phase).toBe('awaiting');
+    expect(h.runner.answerNotes).toEqual([]);
+
+    // The first note of the new question is the first note of a new answer,
+    // not the second of the old one.
+    h.runner.noteOn(60, 'midi');
+    expect(h.runner.phase).toBe('awaiting');
+  });
+
+  it('drops a half-played answer when the drill pauses', async () => {
+    const h = await started(harness(sequenceStub));
+    h.runner.noteOn(62, 'midi');
+    // An explicit pause, because the silence window (1.2 s) always closes an
+    // answer long before the 90 s idle pause could reach it.
+    h.runner.pause();
+    expect(h.runner.phase).toBe('paused');
+
+    h.runner.space();
+    h.tick(PLAYBACK_MS);
+    h.runner.noteOn(60, 'midi');
+    h.runner.noteOn(67, 'midi');
+    expect(h.runner.outcome).toBe('correct');
   });
 });

@@ -160,6 +160,32 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
   deliberately **not** a shortcut: `F` is a note key and §4.6 keeps that mapping live — the `⤢`
   button is the keyboard path. The runner sizes itself to the space the shell leaves (`.app` is a
   full-height flex column in `+layout.svelte`) and clips: it must never scroll.
+- **Interval recognition + `note-sequence` (slice 6)** — `$lib/exercises/interval-recognition/`, the
+  second exercise and the first ear-training drill:
+  - **The graded quantity is the interval, not the pitches**: a question is asked from a random root,
+    but `grade()` compares `played[1] − played[0]` to the asked semitones, exactly and with
+    direction. So the answer may be played from **any** key (the prompt says so, and `Question.range`
+    is left off, so nothing dims), an octave displacement is a *different* interval (a 12th is not a
+    5th), and enharmonics compare equal for free because it is integer arithmetic. Absolute pitch is
+    what "Find the note" drills; this one drills relative pitch. Scoring is **binary** (ADR §10) —
+    half credit here would report a skill as half-learned to the mastery EWMA.
+  - Interval **vocabulary lives in `$lib/theory/intervals.ts`**, never in the exercise:
+    `intervalBetween`, `intervalName` (`Perfect 5th`, spelled out for feedback), `intervalShortName`
+    (`P5`, for dense grids) and `spokenInterval` (`a perfect 5th`, the copy deck's miss line). A
+    compound interval is named by its simple part plus the octaves (`Major 3rd + 1 octave`), not as a
+    10th — a beginner hears the octave, and notation spelling is not a concept this app has.
+  - `SkillId` is `interval-recognition:<semitones>:<asc|desc>` — the exercise-id prefix slice 4
+    established, not ADR §10's bare `interval:7:asc`. `skillLabel()` renders it `m3 ↑`.
+  - The **runner now implements `note-sequence`** (UX §4.4): notes append in played order, the answer
+    closes at the expected length (`expectedLength(Question.expected)`) or after `SEQUENCE_GAP_MS`
+    (1200 ms) of silence, `Backspace` takes the last note back and the answer **survives a replay** —
+    which is why the gap has its own timer, not the `#timer` a replay reschedules. The answer's
+    `answerSource` is its last note's source, since one attempt stores one source.
+  - The `◻ ◻` note slots above the keyboard are generic runner chrome: the count comes from
+    `Question.expected`, the spelling from `Question.spellings`. The runner still learns nothing about
+    intervals.
+  - `AnyExercise` erases settings as `Record<string, unknown>`, so **an exercise's settings type must
+    be a type alias, not an `interface`** (only an alias gets the implicit index signature).
 - **Settings** are `localStorage` via the `settings` store (`$lib/storage/settings.svelte.ts`) and
   are read only in `hydrate()`, called from the root layout after mount — module init must not touch
   storage or prerendered HTML and the first client render disagree. Slice 4 added `keyboardLow`/

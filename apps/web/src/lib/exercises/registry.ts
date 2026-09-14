@@ -5,10 +5,14 @@
  */
 
 import { findTheNote } from './find-the-note';
+import { intervalRecognition } from './interval-recognition';
 import type { AnyExercise, ExerciseId } from './types';
 
 /** In the order they are offered. */
-export const EXERCISES: readonly AnyExercise[] = [findTheNote];
+export const EXERCISES: readonly AnyExercise[] = [
+  findTheNote,
+  intervalRecognition,
+];
 
 export function getExercise(id: ExerciseId): AnyExercise | null {
   return EXERCISES.find((exercise) => exercise.id === id) ?? null;

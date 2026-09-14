@@ -292,6 +292,51 @@ test('the find-the-note drill is playable with the computer keys alone', async (
   expect(consoleErrors).toEqual([]);
 });
 
+test('the interval drill takes a two-note answer from the computer keys', async ({
+  page,
+}) => {
+  const consoleErrors = watchConsole(page);
+
+  await page.goto('/practice/interval-recognition/');
+  const prompt = page.getByTestId('prompt');
+  const replay = page.getByTestId('replay');
+  await expect(prompt).toHaveText('Ready?');
+
+  await page.keyboard.press('Space');
+  await expect(prompt).toHaveText('Which interval did you hear?');
+  await expect(replay).toBeEnabled();
+
+  // The answer is a sequence, so the slots say how many notes it wants
+  // (UX §4.4) — two empty ones before a key is touched.
+  const slots = page.getByTestId('slots');
+  await expect(slots.locator('.slot')).toHaveCount(2);
+  await expect(slots.locator('.slot.filled')).toHaveCount(0);
+
+  // `A` is C4 and `S` is D4: one note is not an answer yet, two are.
+  await page.keyboard.press('a');
+  await expect(slots.locator('.slot.filled')).toHaveCount(1);
+  await expect(page.getByTestId('answered')).toContainText('0/0');
+
+  // Backspace takes the fumble back, and the answer is still open.
+  await page.keyboard.press('Backspace');
+  await expect(slots.locator('.slot.filled')).toHaveCount(0);
+
+  await page.keyboard.press('a');
+  await page.keyboard.press('s');
+  // Right or wrong, two notes are a graded attempt.
+  await expect(page.getByTestId('answered')).toContainText('/1');
+  // A miss never blocks: no dialog anywhere in the drill.
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+
+  // The runner never scrolls, note slots and all (§4.1).
+  const scrolls = await page.evaluate(
+    () => document.documentElement.scrollHeight > window.innerHeight + 1,
+  );
+  expect(scrolls).toBe(false);
+
+  expect(consoleErrors).toEqual([]);
+});
+
 test('the range wizard learns the keyboard from two presses', async ({
   page,
 }) => {
