@@ -143,11 +143,12 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
   `Question.playback`, `Question.expected` and the `Grade` it gets back, and that is all it knows.
   `generate()`/`grade()` are pure, take the seeded `rng` (`rng.ts`, `mulberry32`) and derive
   `Question.id` from the seed, so a question is reproducible and both are tested without a browser.
-  Four documented extensions to the ADR's types (all display concerns, all generic): `Question.range`
+  Five documented extensions to the ADR's types (all display concerns, all generic): `Question.range`
   (keys the question is answered on — everything else dims), `Question.spellings` (feeds the
   keyboard's `labelStyle: 'context'`), `GenerateContext.range` (the user's instrument range, so
-  `generate()` never reads storage) and a `label` on `ExpectedAnswer` (the reveal is named in text as
-  well as shown, a11y §8.6).
+  `generate()` never reads storage), a `label` on `ExpectedAnswer` (the reveal is named in text as
+  well as shown, a11y §8.6) and `ExerciseDefinition.skillLabel` (slice 5a — how an exercise names its
+  own skills for `/progress`).
 - **The runner** is `$lib/exercises/runner.svelte.ts` (state machine, score, streak) plus
   `$lib/components/exercise/ExerciseRunner.svelte` (the §4 frame). **Every drill-rhythm constant
   lives in the runner module** — `FEEDBACK_CORRECT_MS`, `FEEDBACK_STREAK_MS`, `REVEAL_DELAY_MS`,
@@ -165,6 +166,54 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
   `keyboardHigh` (one instrument range, taught by the range wizard in `$lib/midi/range.ts` — a pure
   reducer — and used by every note exercise), `countIn` and `focusMode`. A stored range that is
   inverted or under an octave is not a piano: it falls back to the default.
+- **Practice data (slice 5a)** — see [`docs/decisions/0002-practice-persistence-and-mastery.md`](docs/decisions/0002-practice-persistence-and-mastery.md):
+  attempts and per-skill mastery live in **IndexedDB** (`$lib/storage/db.ts`, `idb`, stores
+  `attempts`/`skills`/`meta`), never in `localStorage`. `PRACTICE_SCHEMA_VERSION` is both the
+  payload version and the database version; a missing, blocked or **newer** database resolves to
+  `null` and the session runs in memory — `openPracticeStorage()` never throws, and every record is
+  validated on read (`parseAttempt`/`parseSkill`) because storage is user-editable and, from 5b,
+  user-imported.
+  - `$lib/practice/store.svelte.ts` (singleton `practice`) is the only writer: `record()` updates
+    state **synchronously** and queues the write behind it, so persistence never sits in the
+    runner's callback while audio is being scheduled. `hydrate()` is the one-shot mount path
+    (wired in `+layout.svelte` beside `settings.hydrate()`) and **merges by `attemptId`**, so an
+    answer given while the read was in flight survives; `reload()` **replaces**, which is what
+    slice 5b's import needs after it swaps the log out. A failed write sets `degraded` and reports
+    the copy deck's line once through `onError` → a banner.
+  - **The store memoises the *promise* of `openPracticeStorage()`, never a "have I opened yet" flag**
+    — every caller awaits the same open. A flag hands the second caller a still-`null` storage, which
+    the write path cannot tell from *no* storage: it would degrade the session and drop the attempt,
+    in exactly the window `hydrate()` merges for. So `degraded` means storage is genuinely
+    unavailable, and a queued write just waits for the open (`openDB` can wait indefinitely while
+    another tab holds an older connection open).
+  - **An attempt is keyed by the attempt, not the question**: `attemptId` = `${ts}:${questionId}`,
+    stamped by `record()` (`attemptKey()` in `db.ts`), never by a caller. A question id repeats — a
+    seed collision, or a 5b import from another device — and keying on it would silently overwrite a
+    row in an append-only log. The runner emits a `NewAttempt` (no key); an imported record without
+    one is keyed on read, not dropped.
+  - **The attempt log is the source of truth**: `skills` is a cache of `deriveSkills()` over the
+    log, so a lost or half-written skill record heals on the next load.
+  - **Mastery is an EWMA, α = 0.3, over the grade's `score`** (`$lib/practice/mastery.ts`); weak =
+    `mastery < 0.3` **and** ≥ 3 attempts (`!`, in `--warn`). Unseen is `null` (`new`), never 0.
+  - **Nothing schedules anything before slice 9**: `easiness`/`intervalDays`/`dueAt` are written at
+    their defaults and read by nobody, so `/progress` ships without `DUE NOW`, the `DUE n` badge and
+    `Drill these` rather than faking a due date. Everything else on the screen is real data.
+  - Layering: `practice` may import `storage` and `exercises` types and **nothing imports it back**
+    — the runner takes an `onAttempt` callback (`ExerciseRunner.svelte` passes `practice.record`) and
+    stays testable without a database. **All practice wording is in `$lib/practice/copy.ts`** —
+    including the templates (`timeAgo`, `skillDetail`), so `progress.ts` computes numbers and never
+    spells a sentence. An unpractised skill has **no** detail line: the pips already say `new`, and
+    the copy deck has no sentence for it.
+  - `/progress` numbers all come from the pure `$lib/practice/progress.ts` (totals, 28-day strip,
+    7-day accuracy, per-skill cells and detail lines); the screen is markup over HUD primitives.
+    Its detail line is rendered inline for practised skills instead of on hover/focus — the space is
+    reserved either way and hover-only information is unreachable by keyboard and touch.
+  - A fifth generic extension to ADR §5: `ExerciseDefinition.skillLabel(skillId, settings)` names an
+    exercise's own skills for the grid (fallback: the id's last segment). The screen never decodes an
+    id.
+  - Tests: `idb` needs the whole IDB global family, so a spec that touches storage imports
+    `fake-indexeddb/auto` and installs a fresh `IDBFactory` per test; nothing else in the suite has
+    IndexedDB, which is exactly how a degraded browser behaves.
 - **The `AudioContext` starts on a capture-phase listener** in `+layout.svelte`. A piano key's own
   `pointerdown` runs at the target first, so a bubble-phase start was always one press too late and
   the first click was silent.

@@ -2,13 +2,15 @@
   // Home / "Practice now" (UX spec §3, re-skinned by the sci-fi visual
   // language §8). The regions and the copy are the spec's; only the treatment
   // is new. With the first exercise registered (slice 4) the hero starts a
-  // drill; the length control, the Today card and the due counts arrive with
-  // persistence (slice 5) and sessions (slice 9), so until then the hero uses
-  // the copy deck's empty-state wording and the Today card is the "How this
-  // works" well the spec prescribes for the empty state.
+  // drill, and since slice 5a the cards' mastery pips are real. The length
+  // control, the Today card, the due counts and the hero's "with data" copy
+  // all need the session planner (slice 9), so until then the hero keeps the
+  // copy deck's empty-state wording and the Today card is the "How this works"
+  // well the spec prescribes for the empty state.
   import { base } from '$app/paths';
   import { DEFAULT_EXERCISE_ID, EXERCISES } from '$lib/exercises/registry';
   import { midiInput } from '$lib/midi/input.svelte';
+  import { practice } from '$lib/practice/store.svelte';
   import Button from '$lib/components/hud/Button.svelte';
   import HudPanel from '$lib/components/hud/HudPanel.svelte';
   import MasteryPips from '$lib/components/hud/MasteryPips.svelte';
@@ -64,9 +66,14 @@
             <span class="title">{exercise.title}</span>
             <span class="desc">{exercise.description}</span>
             <span class="foot">
-              <!-- No attempts are stored yet (slice 5), so every skill is
-                   honestly `new`: seven empty pips and the word. -->
-              <MasteryPips mastery={null} />
+              <!-- Real mastery from the practice log (slice 5a); an exercise
+                   nothing has been practised in is honestly `new`. -->
+              <MasteryPips
+                mastery={practice.masteryFor(
+                  exercise.skillsCovered(exercise.defaultSettings),
+                )}
+                skill={exercise.title}
+              />
               {#if exercise.requiresMidi && !midiInput.connected}
                 <span class="needs">
                   <IconKeyboard /> Needs a MIDI keyboard

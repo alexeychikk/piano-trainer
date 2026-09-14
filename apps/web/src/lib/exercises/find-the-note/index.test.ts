@@ -4,6 +4,7 @@ import type { GenerateContext, Question } from '../types';
 import {
   findTheNote,
   missDetail,
+  pitchClassName,
   skillIdFor,
   type FindTheNotePayload,
   type FindTheNoteSettings,
@@ -149,5 +150,25 @@ describe('missDetail', () => {
     expect(missDetail(60, 84)).toBe(
       'You played C6 — the right note, 2 octaves too high',
     );
+  });
+});
+
+describe('pitchClassName', () => {
+  it('names the pitch class behind a skill id, without an octave', () => {
+    expect(pitchClassName(skillIdFor(60))).toBe('C');
+    expect(pitchClassName(skillIdFor(63))).toBe('Eb');
+    expect(pitchClassName(skillIdFor(35))).toBe('B');
+  });
+
+  it('labels every skill it claims to cover', () => {
+    for (const skillId of findTheNote.skillsCovered({})) {
+      const label = findTheNote.skillLabel?.(skillId, {}) ?? skillId;
+      expect(label).not.toContain(':');
+      expect(label.length).toBeLessThanOrEqual(2);
+    }
+  });
+
+  it('leaves an id it does not recognise alone', () => {
+    expect(pitchClassName('interval:P5:asc')).toBe('interval:P5:asc');
   });
 });

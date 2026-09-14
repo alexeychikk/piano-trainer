@@ -31,6 +31,7 @@
   import { STREAK_CALLOUT } from '$lib/exercises/feedback';
   import type { AnyExercise } from '$lib/exercises/types';
   import { midiInput } from '$lib/midi/input.svelte';
+  import { practice } from '$lib/practice/store.svelte';
   import { COMPUTER_KEY_HINT, isTypingTarget } from '$lib/midi/keymap';
   import { settings } from '$lib/storage/settings.svelte';
   import { runnerHighlights } from './highlights';
@@ -40,7 +41,12 @@
   // The route remounts this component for a different exercise (`{#key}`), so
   // capturing the definition once is exactly right.
   // svelte-ignore state_referenced_locally
-  const runner = new ExerciseRunner(definition);
+  // Every graded answer is logged (slice 5a). `record()` returns immediately
+  // and queues the write, so persistence never sits inside the state machine's
+  // callback — and the runner keeps knowing nothing about storage.
+  const runner = new ExerciseRunner(definition, {
+    onAttempt: (attempt) => practice.record(attempt),
+  });
 
   /** Keyboard height, so a short viewport shrinks the keys (UX §4.1). */
   const KEYBOARD_MAX_H = 280;
