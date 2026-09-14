@@ -79,7 +79,6 @@
     display: inline-block;
     width: 1.25em;
     text-align: center;
-    color: currentcolor;
   }
 
   /*
