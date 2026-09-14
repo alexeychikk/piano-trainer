@@ -40,6 +40,7 @@
     IDLE,
     type ConfirmEvent,
     type ConfirmState,
+    type ConfirmTarget,
   } from '$lib/practice/reset';
   import { practice } from '$lib/practice/store.svelte';
   import { parsePracticeFile, type PracticeFile } from '$lib/practice/transfer';
@@ -48,6 +49,9 @@
 
   /** One clock for the screen, like `/progress` — no timer behind the user. */
   const now = Date.now();
+
+  /** The `empty-import` warning's id, so the field can be described by it. */
+  const EMPTY_IMPORT_NUDGE_ID = 'data-empty-import-nudge';
 
   let picker = $state<HTMLInputElement | null>(null);
   let busy = $state(false);
@@ -149,22 +153,43 @@
   }
 
   /** Open the confirmation and put the caret where the question is asked. */
-  async function ask(target: 'reset' | 'empty-import') {
+  async function ask(target: ConfirmTarget) {
     dispatch({ type: 'ask', target });
     await tick();
     field?.focus();
   }
 
   /**
-   * Close it without touching anything, and hand focus back to the control
-   * that opened it — the field it was on is about to leave the DOM, and a
-   * focus that falls to `<body>` loses the keyboard user's place (UX §8).
+   * Which control opened the question — `Reset all practice data` for the
+   * button, `Import JSON…` for a wiping file. Focus goes back to *that* one:
+   * parking a file-picker user on a danger button they never invoked, several
+   * controls from where they were, is worse than losing focus outright.
    */
+  const OPENED_BY: Record<ConfirmTarget, string> = {
+    reset: 'reset-data',
+    'empty-import': 'import-json',
+  };
+
+  /**
+   * Hand focus back to the control that opened the question — the field it was
+   * on is about to leave the DOM, and a focus that falls to `<body>` loses the
+   * keyboard user's place (UX §8). The target has to be read *before* the
+   * closing dispatch: by the time this runs the state is `IDLE`.
+   */
+  async function restoreFocus(target: ConfirmTarget) {
+    await tick();
+    root
+      ?.querySelector<HTMLElement>(`[data-testid="${OPENED_BY[target]}"]`)
+      ?.focus();
+  }
+
+  /** Close it without touching anything. */
   async function cancel() {
+    if (confirm.phase !== 'confirming') return;
+    const { target } = confirm;
     dispatch({ type: 'cancel' });
     pendingImport = null;
-    await tick();
-    root?.querySelector<HTMLElement>('[data-testid="reset-data"]')?.focus();
+    await restoreFocus(target);
   }
 
   async function runConfirm() {
@@ -190,8 +215,7 @@
       pendingImport = null;
       busy = false;
       dispatch({ type: 'settled' });
-      await tick();
-      root?.querySelector<HTMLElement>('[data-testid="reset-data"]')?.focus();
+      await restoreFocus(armed.target);
     }
   }
 
@@ -286,11 +310,15 @@
   {:else}
     <div class="confirm">
       {#if confirm.target === 'empty-import'}
-        <!-- Only the file case needs a sentence: what the picked file would
-             do is not otherwise on screen. `aria-live` announces it; the caret
-             is already in the field, so nothing is stolen. The `!` carries the
+        <!-- Only the file case needs a sentence: what the picked file would do
+             is not otherwise on screen. It is the field's `aria-describedby`,
+             not a live region: a region created and populated in the same frame
+             is announced unreliably, and `field.focus()` a moment later would
+             read only the label — a screen-reader user could type RESET without
+             ever hearing *why* they were asked. Described by it, focusing the
+             field reads the label and then the reason. The `!` carries the
              state with --warn — nothing here is *wrong* yet (part 2 §11). -->
-        <p class="question" role="status" aria-live="polite">
+        <p class="question" id={EMPTY_IMPORT_NUDGE_ID}>
           <span aria-hidden="true">!</span>
           {PRACTICE_COPY.importEmptyNudge}
         </p>
@@ -307,6 +335,9 @@
             spellcheck="false"
             value={confirm.phase === 'confirming' ? confirm.typed : ''}
             disabled={confirm.phase === 'working'}
+            aria-describedby={confirm.target === 'empty-import'
+              ? EMPTY_IMPORT_NUDGE_ID
+              : undefined}
             data-testid="reset-word"
             oninput={(event) =>
               dispatch({ type: 'type', value: event.currentTarget.value })}
