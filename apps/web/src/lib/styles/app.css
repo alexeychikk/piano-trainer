@@ -1,6 +1,7 @@
 /**
  * Global base styles. Tokens only — no raw hex or magic px here
- * (see CLAUDE.md and docs/design/core-practice-ux.md §7).
+ * (see CLAUDE.md, docs/design/sci-fi-visual-language.md for the values and
+ * docs/design/core-practice-ux.md for behaviour and layout).
  */
 
 *,
@@ -14,14 +15,48 @@ body {
   height: 100%;
 }
 
+/*
+ * The HUD ground (spec §3.2): a vignette, a 2 %-opacity scanline and a 48 px
+ * grid, all painted once and never animated. They live on <body> only —
+ * panels are opaque, so texture never crosses text (spec §9.2).
+ */
 body {
   margin: 0;
-  background: var(--bg-0);
+  background-color: var(--bg-0);
+  background-image:
+    var(--texture-vignette),
+    repeating-linear-gradient(
+      0deg,
+      var(--texture-scanline) 0 1px,
+      transparent 1px var(--texture-scanline-size)
+    ),
+    linear-gradient(var(--texture-grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--texture-grid-line) 1px, transparent 1px);
+  background-size:
+    100% 100%,
+    100% var(--texture-scanline-size),
+    var(--texture-grid-size) var(--texture-grid-size),
+    var(--texture-grid-size) var(--texture-grid-size);
+  background-attachment: fixed;
   color: var(--text-1);
   font-family: var(--font-sans);
   font-size: var(--fs-body);
   line-height: var(--lh-base);
   -webkit-font-smoothing: antialiased;
+}
+
+/* Some readers see the scanline as flicker; it is decoration, so it goes. */
+@media (prefers-reduced-motion: reduce) {
+  body {
+    background-image:
+      var(--texture-vignette),
+      linear-gradient(var(--texture-grid-line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--texture-grid-line) 1px, transparent 1px);
+    background-size:
+      100% 100%,
+      var(--texture-grid-size) var(--texture-grid-size),
+      var(--texture-grid-size) var(--texture-grid-size);
+  }
 }
 
 h1,
@@ -31,16 +66,22 @@ p {
   margin: 0;
 }
 
+/* Headings are the display face; uppercase stops at 20 px (spec §4.2). */
 h1 {
+  font-family: var(--font-display);
   font-size: var(--fs-h1);
   line-height: var(--lh-snug);
   font-weight: var(--fw-bold);
+  text-transform: uppercase;
+  letter-spacing: var(--track-heading);
 }
 
 h2 {
+  font-family: var(--font-display);
   font-size: var(--fs-h2);
   line-height: var(--lh-snug);
   font-weight: var(--fw-semibold);
+  letter-spacing: var(--track-none);
 }
 
 a {

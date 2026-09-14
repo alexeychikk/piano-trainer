@@ -31,6 +31,11 @@
     flex-direction: column;
   }
 
+  /*
+   * A banner is information, not furniture: the new skin adds the 4 px state
+   * edge bar and the raised face, but **no glow** (sci-fi language §5.10).
+   * The 4 px bar is one of the literal values the spec fixes (CLAUDE.md).
+   */
   .banner {
     display: flex;
     align-items: center;
@@ -39,7 +44,29 @@
     background: var(--bg-2);
     border-bottom: 1px solid var(--border);
     border-left: 4px solid var(--text-3);
-    font-size: var(--fs-small);
+    font-size: var(--fs-body);
+    color: var(--text-1);
+  }
+
+  .glyph {
+    font-size: var(--fs-body-lg);
+    color: var(--text-2);
+  }
+
+  .banner.info .glyph {
+    color: var(--accent);
+  }
+
+  .banner.success .glyph {
+    color: var(--success);
+  }
+
+  .banner.warn .glyph {
+    color: var(--warn);
+  }
+
+  .banner.danger .glyph {
+    color: var(--danger);
   }
 
   .banner.info {
@@ -62,12 +89,17 @@
     flex: 1;
   }
 
+  /* A ghost button (§5.1): the dismiss is tertiary and never shouts. */
   button {
     min-height: var(--hit-min);
     padding: 0 var(--space-3);
     background: none;
     border: none;
     color: var(--text-2);
+    font-family: var(--font-display);
+    font-size: var(--fs-small);
+    letter-spacing: var(--track-hud);
+    text-transform: uppercase;
     cursor: pointer;
   }
 
