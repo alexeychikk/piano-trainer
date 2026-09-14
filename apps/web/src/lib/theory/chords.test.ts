@@ -1,5 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { detectChords, toChordSymbol } from './chords';
+import {
+  chordIntervals,
+  chordNotes,
+  chordQualityName,
+  chordQualityShortName,
+  detectChords,
+  intervalsAboveBass,
+  isBuildableQuality,
+  qualityOfIntervals,
+  spellsQuality,
+  spellsQualityInAnyInversion,
+  spokenChordQuality,
+  toChordSymbol,
+} from './chords';
 
 describe('detectChords', () => {
   it('needs at least two notes', () => {
@@ -41,5 +54,65 @@ describe('detectChords', () => {
   it('keeps the display name when the quality is outside our vocabulary', () => {
     const exotic = toChordSymbol('Em#5');
     expect(exotic).toBeNull();
+  });
+});
+
+describe('chord-quality vocabulary', () => {
+  it('builds a quality from its root, in root position', () => {
+    expect(chordNotes(60, 'maj7')).toEqual([60, 64, 67, 71]);
+    expect(chordNotes(62, 'min7b5')).toEqual([62, 65, 68, 72]);
+  });
+
+  it('has no interval set for an altered dominant', () => {
+    expect(chordIntervals('dom7alt')).toBeNull();
+    expect(isBuildableQuality('dom7alt')).toBe(false);
+    expect(isBuildableQuality('dim7')).toBe(true);
+    expect(chordNotes(60, 'dom7alt')).toBeNull();
+  });
+
+  it('names a quality three ways, and never as an interval', () => {
+    expect(chordQualityName('dom7')).toBe('Dominant 7th chord');
+    expect(chordQualityShortName('dom7')).toBe('7');
+    expect(spokenChordQuality('dom7')).toBe('a dominant 7th chord');
+    expect(spokenChordQuality('aug')).toBe('an augmented triad');
+  });
+
+  it('reads the structure above the lowest note, ignoring octaves', () => {
+    // C3 E4 G4 B5 is still a major 7th chord in root position.
+    expect(intervalsAboveBass([48, 64, 67, 83])).toEqual([0, 4, 7, 11]);
+    // A doubled root changes nothing.
+    expect(intervalsAboveBass([60, 64, 67, 72])).toEqual([0, 4, 7]);
+    expect(intervalsAboveBass([])).toEqual([]);
+  });
+
+  it('names the quality a structure spells, or nothing', () => {
+    expect(qualityOfIntervals([0, 3, 6, 10])).toBe('min7b5');
+    expect(qualityOfIntervals([0, 4, 7, 10, 14])).toBe('dom9');
+    expect(qualityOfIntervals([0, 1, 2])).toBeNull();
+  });
+
+  it('matches a quality from any root, octave and voicing', () => {
+    expect(spellsQuality([60, 64, 67, 71], 'maj7')).toBe(true);
+    // Any key: the same shape from Eb.
+    expect(spellsQuality([63, 67, 70, 74], 'maj7')).toBe(true);
+    // Any spacing, and enharmonics compare equal for free (it is arithmetic).
+    expect(spellsQuality([48, 64, 79, 83], 'maj7')).toBe(true);
+    // A missing note is not the chord.
+    expect(spellsQuality([60, 64, 67], 'maj7')).toBe(false);
+  });
+
+  it('reads the lowest note as the root, so an inversion is not a match', () => {
+    // E G B C — a Cmaj7 over E.
+    expect(spellsQuality([64, 67, 71, 72], 'maj7')).toBe(false);
+    expect(spellsQualityInAnyInversion([64, 67, 71, 72], 'maj7')).toBe(true);
+    expect(spellsQualityInAnyInversion([60, 64, 67, 70], 'maj7')).toBe(false);
+    // A diminished 7th is symmetric: every inversion is root position too.
+    expect(spellsQuality([63, 66, 69, 72], 'dim7')).toBe(true);
+  });
+
+  it('is silent about a quality it cannot build', () => {
+    expect(spellsQuality([60, 64, 67], 'dom7alt')).toBe(false);
+    expect(spellsQualityInAnyInversion([60, 64, 67], 'dom7alt')).toBe(false);
+    expect(spellsQuality([], 'maj7')).toBe(false);
   });
 });

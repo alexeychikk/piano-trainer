@@ -337,6 +337,42 @@ test('the interval drill takes a two-note answer from the computer keys', async 
   expect(consoleErrors).toEqual([]);
 });
 
+test('the chord drill takes a four-note answer from the computer keys', async ({
+  page,
+}) => {
+  const consoleErrors = watchConsole(page);
+
+  await page.goto('/practice/chord-quality/');
+  const prompt = page.getByTestId('prompt');
+  const replay = page.getByTestId('replay');
+  await expect(prompt).toHaveText('Ready?');
+
+  await page.keyboard.press('Space');
+  await expect(prompt).toHaveText('Which chord did you hear?');
+  // The chord is 1600 ms long and `presenting` is not an answering phase, so
+  // wait for the drill to be listening — the replay control says when.
+  await expect(replay).toBeEnabled();
+
+  // A chord answer is a `note-sequence` of four notes (slice 7), so there are
+  // four slots — the count comes from the question, not from the runner.
+  const slots = page.getByTestId('slots');
+  await expect(slots.locator('.slot')).toHaveCount(4);
+
+  // `A S D F` are C4 D4 E4 F4: not a chord in the set, but four notes are a
+  // graded attempt, and the drill never blocks on a miss.
+  for (const key of ['a', 's', 'd', 'f']) await page.keyboard.press(key);
+  await expect(page.getByTestId('answered')).toContainText('/1');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+
+  // The runner never scrolls, four note slots and all (§4.1).
+  const scrolls = await page.evaluate(
+    () => document.documentElement.scrollHeight > window.innerHeight + 1,
+  );
+  expect(scrolls).toBe(false);
+
+  expect(consoleErrors).toEqual([]);
+});
+
 test('the range wizard learns the keyboard from two presses', async ({
   page,
 }) => {
