@@ -85,6 +85,16 @@ export interface Question<P = unknown> {
   answerMode: AnswerMode;
   choices?: Choice[];
   expected: ExpectedAnswer;
+  /**
+   * What the *answer* sounds like, when that is not what the question sounded
+   * like — a sixth display extension to ADR §5, and as generic as the other
+   * five. A drill that is **read** rather than heard (slice 8: a chord symbol
+   * you play) still owes the user the sound of the right answer after a miss,
+   * but its question's playback is a reference, not the answer. The runner
+   * plays this in the reveal, and `playback` everywhere else; without it the
+   * reveal replays the question, as it always has.
+   */
+  revealPlayback?: PlaybackPlan;
   /** Keys this question is answered on; outside them the keyboard dims. */
   range?: KeyRange;
   /** Spelling of the notes in play, for `labelStyle: 'context'`. */

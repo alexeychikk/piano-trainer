@@ -9,6 +9,7 @@ import {
   notesInRange,
   octaveOf,
   pcOf,
+  pitchClassName,
   spokenNoteName,
 } from './notes';
 
@@ -33,6 +34,16 @@ describe('display spelling', () => {
     expect(midiToName(61)).toBe('C#4');
     expect(midiToName(61, 'flat')).toBe('Db4');
     expect(midiToName(60)).toBe('C4');
+  });
+
+  it('spells a pitch class with no octave, for a chord symbol', () => {
+    expect(pitchClassName(0)).toBe('C');
+    expect(pitchClassName(1)).toBe('C#');
+    expect(pitchClassName(1, 'flat')).toBe('Db');
+    expect(pitchClassName(10, 'flat')).toBe('Bb');
+    // Out-of-range and negative pitch classes still fold into one octave.
+    expect(pitchClassName(12, 'flat')).toBe('C');
+    expect(pitchClassName(-1, 'flat')).toBe('B');
   });
 
   it('round-trips through tonal', () => {

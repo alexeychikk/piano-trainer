@@ -55,6 +55,20 @@ export function midiToName(
   return style === 'sharp' ? Note.fromMidiSharps(value) : Note.fromMidi(value);
 }
 
+/**
+ * Display spelling of a pitch class, with no octave — `Eb`, `F#`. What the
+ * root of a chord symbol is printed as; display only, like every spelling.
+ */
+export function pitchClassName(
+  pc: PitchClass,
+  style: 'sharp' | 'flat' = 'sharp',
+): NoteName {
+  return midiToName(MIDDLE_C + (((pc % 12) + 12) % 12), style).replace(
+    /-?\d+$/,
+    '',
+  );
+}
+
 /** Parse a spelling back to MIDI. `null` when it is not a note name. */
 export function nameToMidi(name: NoteName): Midi | null {
   return Note.midi(name);

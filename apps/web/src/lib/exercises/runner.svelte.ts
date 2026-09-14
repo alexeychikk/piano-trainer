@@ -31,6 +31,7 @@ import type {
   AttemptResult,
   ExpectedAnswer,
   KeyRange,
+  PlaybackPlan,
   Question,
   SkillId,
 } from './types';
@@ -389,7 +390,7 @@ export class ExerciseRunner {
     if (!question) return;
     this.#clearIdleTimer();
     this.phase = 'presenting';
-    const durationMs = this.#play();
+    const durationMs = this.#play(question.playback);
     this.#setTimer(() => {
       this.playing = false;
       this.phase = 'awaiting';
@@ -405,13 +406,11 @@ export class ExerciseRunner {
     }, durationMs);
   }
 
-  /** Schedule the question's audio. Returns how long it lasts, in ms. */
-  #play(): number {
-    const question = this.question;
-    if (!question) return 0;
+  /** Schedule a plan on the audio clock. Returns how long it lasts, in ms. */
+  #play(plan: PlaybackPlan): number {
     this.playing = true;
     this.#playback.stop();
-    return this.#playback.play(question.playback, {
+    return this.#playback.play(plan, {
       countIn: settings.value.countIn,
       bpm: metronome.bpm,
       beatsPerBar: metronome.beatsPerBar,
@@ -422,9 +421,15 @@ export class ExerciseRunner {
    * Play the answer during feedback. Nothing advances the machine here, so
    * this is also what clears `playing` again — otherwise the replay control
    * would stay disabled for the rest of the question.
+   *
+   * The reveal is `revealPlayback` when the question has one (a question that
+   * is read rather than heard: its playback is a reference, and only the
+   * answer is worth hearing afterwards), otherwise the question itself.
    */
   #replayReveal(): void {
-    const durationMs = this.#play();
+    const question = this.question;
+    if (!question) return;
+    const durationMs = this.#play(question.revealPlayback ?? question.playback);
     this.#setTimer(() => {
       this.playing = false;
     }, durationMs);

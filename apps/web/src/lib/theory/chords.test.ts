@@ -4,6 +4,7 @@ import {
   chordNotes,
   chordQualityName,
   chordQualityShortName,
+  chordSymbolText,
   detectChords,
   intervalsAboveBass,
   isBuildableQuality,
@@ -114,5 +115,18 @@ describe('chord-quality vocabulary', () => {
     expect(spellsQuality([60, 64, 67], 'dom7alt')).toBe(false);
     expect(spellsQualityInAnyInversion([60, 64, 67], 'dom7alt')).toBe(false);
     expect(spellsQuality([], 'maj7')).toBe(false);
+  });
+});
+
+describe('chordSymbolText', () => {
+  it('prints the symbol a chart would print', () => {
+    expect(chordSymbolText(0, 'maj7')).toBe('Cmaj7');
+    expect(chordSymbolText(1, 'dom7')).toBe('Db7');
+    expect(chordSymbolText(10, 'min7')).toBe('Bbm7');
+    expect(chordSymbolText(6, 'min7b5')).toBe('Gbm7b5');
+  });
+
+  it('spells sharp when asked to', () => {
+    expect(chordSymbolText(6, 'dom7', 'sharp')).toBe('F#7');
   });
 });

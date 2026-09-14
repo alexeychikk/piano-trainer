@@ -218,6 +218,39 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
     chord-symbol suffix (`maj7`, `7`, `m7`, `m7b5`, `dim7`). The starter set is those five
     four-note sevenths — all the same size, so the drill is about colour and not about counting
     notes; triads and 6ths join when the runner can render `settingsFields`.
+- **Play the voicing (slice 8)** — `$lib/exercises/play-the-voicing/`, the fourth exercise and the
+  **first playing drill**: a chord symbol appears, the root sounds as a reference, the user plays
+  the shell.
+  - **The voicing set is the shell**: root + 3rd + 7th, one hand. Vocabulary lives in
+    `$lib/theory/voicings.ts` (the `intervals.ts`/`chords.ts` rule): `shellIntervals`/`hasShell`/
+    `shellNotes`/`shellSpan`/`shellPitchClasses` (build), `qualityOfShellIntervals`/`spellsShell`/
+    `spellsShellInAnyInversion` (read), plus `SHELL_QUALITIES` — the qualities whose shell is
+    **theirs alone**. `chordSymbolText(rootPc, quality)` (`chords.ts`, with `pitchClassName` in
+    `notes.ts`) is the fourth name register: `Cmaj7`, what a chart prints.
+  - **The starter set is `maj7 · 7 · m7`** — slice 7's five minus the two that have no shell of
+    their own: `m7b5` shells to `[0,3,10]`, which *is* `m7`'s (the b5 is exactly the note a shell
+    drops), and `dim7`'s "7th" is a diminished 7th, so `C-Eb-A` spells `Ebm6` just as well. A
+    quality is asked only if `hasShell()`; `skillsCovered()` filters the same way.
+  - **The graded quantity is the voicing in the asked key** — the first drill where the key
+    matters, because `Dbmaj7` and `Cmaj7` are one colour and two different shapes. `grade()` is
+    `spellsShell()`: the **pitch classes played must be exactly the shell's three** and the
+    **lowest note played must be the asked root**. Register, octave, spacing and order are free, so
+    the A form (`1-7-3`) and the B form (`1-3-7`) pass by construction; the triad, the whole chord,
+    a doubling (it always costs a chord tone — the answer is three notes long) and a rootless or
+    inverted shell are misses; enharmonics are equal for free. Binary scoring (ADR §10). **Hands
+    are not a concept** — a `NoteEvent` carries a source, never a hand — so this drill is
+    one-handed and the deferred **two-hand voicing colours roll on to the rootless-voicings
+    ticket**.
+  - `SkillId` is `play-the-voicing:<quality>:<rootPc>` — **one skill per chord, not per colour**:
+    what is weak in a playing drill is a key, and a per-quality average would hide exactly the keys
+    the drill exists to expose (36 cells on `/progress`, labelled `Cmaj7`).
+  - **A sixth generic extension to ADR §5: `Question.revealPlayback`.** A question that is *read*
+    plays a reference (here the root alone, so `Replay` is worth pressing and the answer is not
+    given away) and owes the reveal a different sound (the shell). The runner plays `playback` in
+    `#present()` and `revealPlayback ?? playback` in `#replayReveal()`; without one nothing changes.
+  - Answer mode is **`note-sequence`** again (slice 7's reasoning: one mouse pointer cannot hold a
+    chord, and every drill must be playable with no MIDI device), so the runner needed no change
+    beyond the reveal plan.
 - **Settings** are `localStorage` via the `settings` store (`$lib/storage/settings.svelte.ts`) and
   are read only in `hydrate()`, called from the root layout after mount — module init must not touch
   storage or prerendered HTML and the first client render disagree. Slice 4 added `keyboardLow`/

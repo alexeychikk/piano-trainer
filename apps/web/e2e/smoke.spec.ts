@@ -373,6 +373,46 @@ test('the chord drill takes a four-note answer from the computer keys', async ({
   expect(consoleErrors).toEqual([]);
 });
 
+test('the voicing drill reads a chord symbol and takes a three-note answer', async ({
+  page,
+}) => {
+  const consoleErrors = watchConsole(page);
+
+  await page.goto('/practice/play-the-voicing/');
+  const prompt = page.getByTestId('prompt');
+  const replay = page.getByTestId('replay');
+  await expect(prompt).toHaveText('Ready?');
+
+  await page.keyboard.press('Space');
+  // The prompt *is* the chord symbol (slice 8): this drill is read, not heard.
+  await expect(prompt).toHaveText(/^[A-G][b#]?(maj7|m7|7)$/);
+  await expect(page.getByTestId('prompt-sub')).toHaveText(
+    'Play the shell: root, 3rd and 7th',
+  );
+  // The reference root is 900 ms long and `presenting` is not an answering
+  // phase, so wait for the drill to be listening — the replay control says so.
+  await expect(replay).toBeEnabled();
+
+  // A shell is three notes, so the answer has three slots — the count comes
+  // from the question, never from the runner.
+  const slots = page.getByTestId('slots');
+  await expect(slots.locator('.slot')).toHaveCount(3);
+
+  // `A S D` are C4 D4 E4: almost certainly not the shell asked for, but three
+  // notes are a graded attempt, and a miss never blocks the drill.
+  for (const key of ['a', 's', 'd']) await page.keyboard.press(key);
+  await expect(page.getByTestId('answered')).toContainText('/1');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+
+  // The runner never scrolls, note slots and all (§4.1).
+  const scrolls = await page.evaluate(
+    () => document.documentElement.scrollHeight > window.innerHeight + 1,
+  );
+  expect(scrolls).toBe(false);
+
+  expect(consoleErrors).toEqual([]);
+});
+
 test('the range wizard learns the keyboard from two presses', async ({
   page,
 }) => {

@@ -451,3 +451,50 @@ describe('ExerciseRunner · note-sequence answers', () => {
     expect(h.runner.outcome).toBe('correct');
   });
 });
+
+/**
+ * A question that is **read**, not heard (slice 8): its playback is a
+ * reference pitch and the answer has a sound of its own, which the reveal
+ * plays. The runner still learns nothing about the exercise — it only asks
+ * whether the question brought a `revealPlayback` with it.
+ */
+const readStub: ExerciseDefinition<{ midi: number }> = {
+  ...stub,
+  id: 'stub-read',
+  generate: (ctx) => ({
+    ...stub.generate(ctx),
+    playback: {
+      events: [{ atMs: 0, notes: [ctx.seed], durationMs: PLAYBACK_MS }],
+    },
+    revealPlayback: {
+      events: [
+        {
+          atMs: 0,
+          notes: [ctx.seed, ctx.seed + 4, ctx.seed + 10],
+          durationMs: PLAYBACK_MS,
+        },
+      ],
+    },
+  }),
+};
+
+describe('ExerciseRunner · a question that is read, not heard', () => {
+  it('plays the question at ask time and on a replay', async () => {
+    const h = await started(harness(readStub));
+    expect(h.plays[0].notes).toEqual([[h.answer]]);
+    h.runner.replay();
+    expect(h.plays[1].notes).toEqual([[h.answer]]);
+  });
+
+  it('plays the answer, not the question, when the miss is revealed', async () => {
+    const h = await started(harness(readStub));
+    const expected = h.answer;
+    h.runner.noteOn(expected + 1, 'onscreen');
+    h.tick(REVEAL_DELAY_MS);
+    expect(h.plays[1].notes).toEqual([[expected, expected + 4, expected + 10]]);
+
+    // And again on demand, while the feedback is up.
+    h.runner.replay();
+    expect(h.plays[2].notes).toEqual([[expected, expected + 4, expected + 10]]);
+  });
+});
