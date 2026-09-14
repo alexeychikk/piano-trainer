@@ -33,6 +33,23 @@ export const BLACK_KEY_W_RATIO = 0.6;
 export const BLACK_KEY_H_RATIO = 0.62;
 export const DEFAULT_MAX_HEIGHT = 280;
 
+/**
+ * What the keyboard bed adds around the keys (sci-fi-screens.md §4.1, §4.3):
+ * `--space-2` above and `--space-1` below the keys, plus the 6 px apron and
+ * the `--space-2` between it and the keys. Pixels, because this is layout
+ * maths and the parent has to budget for it — same reason as the constants
+ * above.
+ */
+export const BED_CHROME_H = 8 + 6 + 8 + 4;
+
+/** Below this the bed is a compressed runner keyboard and drops the apron. */
+export const APRON_MIN_BED_H = 120;
+
+/** The apron is decoration, never meaning: it goes first (§4.1). */
+export function showsApron(whiteHeight: number): boolean {
+  return whiteHeight + BED_CHROME_H >= APRON_MIN_BED_H;
+}
+
 /** Nudge off the white-key boundary, in units of `W` (UX spec §5.2). */
 const BLACK_KEY_NUDGE: Readonly<Record<number, number>> = {
   1: -0.12, // C#

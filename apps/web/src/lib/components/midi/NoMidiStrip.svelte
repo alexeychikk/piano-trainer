@@ -7,6 +7,9 @@
   import { goto } from '$app/navigation';
   import { base } from '$app/paths';
   import { onMount } from 'svelte';
+  import Button from '$lib/components/hud/Button.svelte';
+  import GlyphBadge from '$lib/components/hud/GlyphBadge.svelte';
+  import IconKeyboard from '$lib/components/icons/IconKeyboard.svelte';
   import { midiInput } from '$lib/midi/input.svelte';
 
   const DISMISS_KEY = 'piano-trainer:midi-strip-dismissed';
@@ -53,21 +56,22 @@
 </script>
 
 {#if midiInput.explanation && !dismissed}
-  <div class="strip">
-    <span class="glyph" aria-hidden="true">⌨</span>
+  <!-- Information, not furniture: a 4 px `--warn` edge bar, a glyph badge and
+       the copy verbatim — no glow, never a dialog (sci-fi-screens.md §5.6). -->
+  <div class="strip hud-cut">
+    <GlyphBadge tone="warn"><IconKeyboard /></GlyphBadge>
     <p class="message">{midiInput.explanation}</p>
     {#if canRequest}
-      <button type="button" class="action" onclick={connect}
-        >Connect MIDI</button
-      >
+      <Button onclick={connect}>Connect MIDI</Button>
     {:else}
-      <a class="action" href={`${base}/settings#midi`}>MIDI settings</a>
+      <Button href={`${base}/settings#midi`}>MIDI settings</Button>
     {/if}
-    <button type="button" class="quiet" onclick={dismiss}>Got it</button>
+    <Button variant="ghost" onclick={dismiss}>Got it</Button>
   </div>
 {/if}
 
 <style>
+  /* The 4 px edge bar is a spec-fixed literal (part 1 §5.10, `CLAUDE.md`). */
   .strip {
     display: flex;
     align-items: center;
@@ -76,44 +80,11 @@
     padding: var(--space-2) var(--space-4);
     background: var(--bg-2);
     border-left: 4px solid var(--warn);
-    border-radius: var(--radius-sm);
   }
 
   .message {
     flex: 1;
-    color: var(--text-2);
-    font-size: var(--fs-small);
-  }
-
-  .action,
-  .quiet {
-    min-height: var(--hit-min);
-    padding: 0 var(--space-4);
-    border-radius: var(--radius-sm);
-    background: none;
-    font-size: var(--fs-small);
-    cursor: pointer;
-    white-space: nowrap;
-  }
-
-  .action {
-    display: inline-flex;
-    align-items: center;
-    border: 1px solid var(--accent);
-    color: var(--accent);
-  }
-
-  .action:hover {
-    text-decoration: none;
-    background: var(--bg-1);
-  }
-
-  .quiet {
-    border: 1px solid transparent;
-    color: var(--text-3);
-  }
-
-  .quiet:hover {
     color: var(--text-1);
+    font-size: var(--fs-body);
   }
 </style>

@@ -73,6 +73,45 @@ describe('PianoKeyboard', () => {
   });
 });
 
+describe('PianoKeyboard, the bed (sci-fi-screens.md §4)', () => {
+  it('chamfers the bed once and never a key', () => {
+    const { container } = render(PianoKeyboard, { props: { layout: 61 } });
+    // One clip-path for the whole component: a chamfer per key would be 61 of
+    // them, and keys glow with `box-shadow` precisely so they stay cheap.
+    expect(container.querySelectorAll('.bed.hud-cut')).toHaveLength(1);
+    expect(container.querySelectorAll('.key.hud-cut')).toHaveLength(0);
+  });
+
+  it('ticks the apron once per C, and never labels it', () => {
+    const { container } = render(PianoKeyboard, { props: { layout: 61 } });
+    const apron = container.querySelector('.apron');
+    // C2…C7 on a 61-key keyboard.
+    expect(apron?.querySelectorAll('.tick')).toHaveLength(6);
+    expect(apron?.textContent?.trim()).toBe('');
+    expect(apron?.getAttribute('aria-hidden')).toBe('true');
+  });
+
+  it('drops the apron when the bed is compressed (decoration, not meaning)', () => {
+    const { container } = render(PianoKeyboard, {
+      props: { layout: 61, maxHeightPx: 60 },
+    });
+    expect(container.querySelector('.apron')).toBeNull();
+  });
+
+  it('keeps the state glyph and the label apart, so each can be sized', () => {
+    const { container } = render(PianoKeyboard, {
+      props: {
+        layout: 61,
+        highlights: new Map<number, KeyHighlight>([[60, 'correct']]),
+      },
+    });
+    const key = container.querySelector('[aria-label="C 4"]');
+    // 16 px glyph over a 12 px label (§2.6) — two elements, two rules.
+    expect(key?.querySelector('.glyph')?.textContent).toBe('✓');
+    expect(key?.querySelector('.label')?.textContent).toBe('C4');
+  });
+});
+
 describe('PianoKeyboard input', () => {
   function mount(props: Record<string, unknown> = {}) {
     const played: string[] = [];

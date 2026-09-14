@@ -3,4 +3,11 @@
  * A tone is only ever an accelerator: every component that takes one also
  * shows a glyph or spells the state out in words (§2.2).
  */
-export type Tone = 'neutral' | 'accent' | 'success' | 'warn' | 'danger';
+export type Tone =
+  | 'neutral'
+  | 'accent'
+  | 'success'
+  | 'warn'
+  /** Reveals: the target note, a skipped answer (sci-fi-screens.md §5.5). */
+  | 'hint'
+  | 'danger';
