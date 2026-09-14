@@ -301,6 +301,15 @@
           <p class="feedback-detail">{runner.feedback.detail}</p>
         </div>
       </div>
+    {:else if sequenceMode}
+      <!-- The note slots of a sequence answer (§4.4), in the slot that is
+           reserved and empty for exactly as long as an answer is open. -->
+      <p class="slots" data-testid="slots">
+        <MicroLabel>answer</MicroLabel>
+        {#each slots as slot (slot.index)}
+          <span class="slot" class:filled={slot.filled}>{slot.label}</span>
+        {/each}
+      </p>
     {/if}
   </div>
 
@@ -310,18 +319,6 @@
 
   <!-- Non-blocking, directly above the answer area (§4.6) — never a dialog. -->
   <NoMidiStrip />
-
-  <!-- The note slots of a sequence answer, directly above the keys (§4.4).
-       Not a new region: it is part of the answer area, and it only exists for
-       `note-sequence`. -->
-  {#if sequenceMode}
-    <p class="slots" data-testid="slots">
-      <MicroLabel>answer</MicroLabel>
-      {#each slots as slot (slot.index)}
-        <span class="slot" class:filled={slot.filled}>{slot.label}</span>
-      {/each}
-    </p>
-  {/if}
 
   <div class="answer" bind:clientHeight={answerHeight}>
     <PianoKeyboard
@@ -627,7 +624,15 @@
   /* The answer slots (§4.4): the sunken HUD readout treatment the prompt well
      and Free Play's readout share, at chip scale — an empty slot is the `◻`
      glyph in muted ink, a filled one the note name in cyan, so the state is
-     never carried by colour alone (§8.1). */
+     never carried by colour alone (§8.1).
+
+     They live *inside* the reserved feedback slot rather than in a row of
+     their own above the keys (a deviation from §4.4's sketch): that slot is
+     88 px, always reserved and empty for exactly as long as an answer is open,
+     so the slots cost no height at all — and the runner, which must never
+     scroll (§4.1), still fits a keyboard at a 720 px viewport with the no-MIDI
+     strip showing. Nothing is ever hidden by this: the moment feedback exists,
+     the answer is graded and the keys carry it in colour and glyph. */
   .slots {
     display: flex;
     align-items: center;

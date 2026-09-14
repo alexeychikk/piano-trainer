@@ -181,9 +181,12 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
     (1200 ms) of silence, `Backspace` takes the last note back and the answer **survives a replay** —
     which is why the gap has its own timer, not the `#timer` a replay reschedules. The answer's
     `answerSource` is its last note's source, since one attempt stores one source.
-  - The `◻ ◻` note slots above the keyboard are generic runner chrome: the count comes from
-    `Question.expected`, the spelling from `Question.spellings`. The runner still learns nothing about
-    intervals.
+  - The `◻ ◻` note slots are generic runner chrome: the count comes from `Question.expected`, the
+    spelling from `Question.spellings`, so the runner still learns nothing about intervals. They are
+    drawn **inside the reserved 88 px feedback slot**, not in a row of their own above the keys
+    (§4.4's sketch): that slot is empty for exactly as long as an answer is open, so they cost no
+    height — and the runner still fits a keyboard at a 720 px viewport with the no-MIDI strip
+    showing. A row of its own pushed it into a scroll, which §4.1 forbids.
   - `AnyExercise` erases settings as `Record<string, unknown>`, so **an exercise's settings type must
     be a type alias, not an `interface`** (only an alias gets the implicit index signature).
 - **Settings** are `localStorage` via the `settings` store (`$lib/storage/settings.svelte.ts`) and
