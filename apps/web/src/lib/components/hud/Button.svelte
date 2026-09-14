@@ -22,6 +22,11 @@
     /** Second line under the label — the hero's sub-label. */
     sub?: string;
     ariaLabel?: string;
+    /**
+     * `data-testid` on the real control. A screen's e2e must be able to assert
+     * that *the button* is enabled, which a wrapper `<div>` can never carry.
+     */
+    testId?: string;
     onclick?: (event: MouseEvent) => void;
     children: Snippet;
   }
@@ -36,6 +41,7 @@
     glyph,
     sub,
     ariaLabel,
+    testId,
     onclick,
     children,
   }: Props = $props();
@@ -81,6 +87,7 @@
     href={disabled ? undefined : href}
     aria-disabled={disabled ? 'true' : undefined}
     aria-label={ariaLabel}
+    data-testid={testId}
     onclick={onLinkClick}
     class="btn {variant} {size} {glow}"
     class:block
@@ -93,6 +100,7 @@
     {type}
     {disabled}
     aria-label={ariaLabel}
+    data-testid={testId}
     {onclick}
     class="btn {variant} {size} {glow}"
     class:block

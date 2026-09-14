@@ -1,19 +1,34 @@
 <script lang="ts">
   /**
-   * The exercise runner frame (UX spec §4): status strip, prompt, replay,
+   * The exercise runner frame (UX spec §4): status rail, prompt, replay,
    * the fixed feedback slot, the answer area and the shortcut bar — one
    * layout for every exercise, always.
    *
    * It renders whatever the `ExerciseDefinition` supplies and never mentions a
    * particular exercise: everything on screen comes from `Question.prompt`,
    * `Question.expected` and the runner's state machine.
+   *
+   * Visual treatment: `docs/design/sci-fi-screens.md` §5 — every panel, button
+   * and bar here is a `$lib/components/hud/` primitive; none of them is
+   * re-styled locally.
    */
   import { goto } from '$app/navigation';
   import { base } from '$app/paths';
   import { onMount } from 'svelte';
+  import Button from '$lib/components/hud/Button.svelte';
+  import Chip from '$lib/components/hud/Chip.svelte';
+  import GlyphBadge from '$lib/components/hud/GlyphBadge.svelte';
+  import HudPanel from '$lib/components/hud/HudPanel.svelte';
+  import MicroLabel from '$lib/components/hud/MicroLabel.svelte';
+  import ProgressBar from '$lib/components/hud/ProgressBar.svelte';
+  import IconExpand from '$lib/components/icons/IconExpand.svelte';
+  import IconSettings from '$lib/components/icons/IconSettings.svelte';
   import NoMidiStrip from '$lib/components/midi/NoMidiStrip.svelte';
   import PianoKeyboard from '$lib/components/piano/PianoKeyboard.svelte';
+  import { BED_CHROME_H } from '$lib/components/piano/geometry';
+  import { phaseLabel } from '$lib/exercises/phases';
   import { ExerciseRunner } from '$lib/exercises/runner.svelte';
+  import { STREAK_CALLOUT } from '$lib/exercises/feedback';
   import type { AnyExercise } from '$lib/exercises/types';
   import { midiInput } from '$lib/midi/input.svelte';
   import { COMPUTER_KEY_HINT, isTypingTarget } from '$lib/midi/keymap';
@@ -31,8 +46,12 @@
   const KEYBOARD_MAX_H = 280;
   const KEYBOARD_MIN_H = 96;
   let answerHeight = $state(KEYBOARD_MAX_H);
+  /** The bed is part of the component's height now (sci-fi-screens.md §4.3). */
   const keyboardHeight = $derived(
-    Math.max(KEYBOARD_MIN_H, Math.min(KEYBOARD_MAX_H, answerHeight)),
+    Math.max(
+      KEYBOARD_MIN_H,
+      Math.min(KEYBOARD_MAX_H, answerHeight - BED_CHROME_H),
+    ),
   );
 
   const focusMode = $derived(settings.value.focusMode);
@@ -66,6 +85,13 @@
   );
   const replayLabel = $derived(
     runner.phase === 'idle' ? 'Start' : runner.playing ? 'Playing…' : 'Replay',
+  );
+  /** `Start` is the one "go" affordance of the drill (§5.4). */
+  const replayVariant = $derived(runner.phase === 'idle' ? 'go' : 'secondary');
+  const phase = $derived(phaseLabel(runner.phase));
+  /** The rail's bar: how much of what has been answered was right (UX §4.1 ②). */
+  const answeredFraction = $derived(
+    runner.answered === 0 ? 0 : runner.correctCount / runner.answered,
   );
 
   function toggleFocus() {
@@ -130,76 +156,110 @@
 </script>
 
 <section class="runner" class:focus={focusMode} data-testid="runner">
-  <div class="strip">
+  <!-- ② The status rail (§5.2): full-bleed chrome, like the top bar, and the
+       one element that survives focus mode. Never chamfered (deviation 20). -->
+  <div class="rail">
     <h1 class="exercise">{definition.title}</h1>
-    <p class="stats">
-      <span class="stat tabular" data-testid="answered">
-        <span class="stat-label">answered</span>
-        {runner.correctCount}/{runner.answered}
+    <div class="progress" data-testid="answered">
+      <ProgressBar
+        value={answeredFraction}
+        label="Answered"
+        readout="{runner.correctCount}/{runner.answered}"
+      />
+    </div>
+    <p class="readouts">
+      <span class="readout" data-testid="streak">
+        <MicroLabel>streak</MicroLabel>
+        <span
+          class="value tabular"
+          class:callout={runner.streak >= STREAK_CALLOUT}>{runner.streak}</span
+        >
       </span>
-      <span class="stat tabular" data-testid="streak">
-        <span aria-hidden="true">🔥</span>
-        <span class="visually-hidden">streak</span>
-        {runner.streak}
-      </span>
-      <span class="stat tabular" data-testid="accuracy">
-        {runner.accuracy === null ? '—' : `${runner.accuracy}%`}
-        <span class="visually-hidden">accuracy</span>
+      <span class="readout" data-testid="accuracy">
+        <MicroLabel>accuracy</MicroLabel>
+        <span
+          class="value tabular"
+          class:live={runner.accuracy !== null}
+          class:muted={runner.accuracy === null}
+        >
+          {runner.accuracy === null ? '—' : `${runner.accuracy}%`}
+        </span>
       </span>
     </p>
     <a
       class="icon"
       href={`${base}/settings#practice`}
-      title="Exercise settings"
+      aria-label="Exercise settings"
     >
-      <span aria-hidden="true">⚙</span>
-      <span class="visually-hidden">Exercise settings</span>
+      <span class="edge hud-cut hud-cut-sm">
+        <span class="face hud-cut hud-cut-sm"><IconSettings /></span>
+      </span>
     </a>
     <button
       type="button"
       class="icon"
       aria-pressed={focusMode}
+      aria-label="Focus mode"
       onclick={toggleFocus}
       data-testid="focus-toggle"
     >
-      <span aria-hidden="true">⤢</span>
-      <span class="visually-hidden">Focus mode</span>
+      <span class="edge hud-cut hud-cut-sm">
+        <span class="face hud-cut hud-cut-sm"><IconExpand /></span>
+      </span>
     </button>
   </div>
 
-  <div class="prompt">
-    <p class="prompt-title" data-testid="prompt">{promptTitle}</p>
-    {#if promptSubtitle}
-      <p class="prompt-sub" data-testid="prompt-sub">{promptSubtitle}</p>
-    {/if}
+  <!-- ③ The prompt, in the sunken HUD readout well (§5.3). -->
+  <div class="prompt-row">
+    <div class="prompt-well">
+      <HudPanel well chamfer="lg" padding="lg">
+        <div class="prompt">
+          <span class="phase">
+            <MicroLabel hot={phase.hot}>{phase.label}</MicroLabel>
+          </span>
+          <p class="prompt-title" data-testid="prompt">{promptTitle}</p>
+          {#if promptSubtitle}
+            <p class="prompt-sub" data-testid="prompt-sub">{promptSubtitle}</p>
+          {/if}
+        </div>
+      </HudPanel>
+    </div>
   </div>
 
   <div class="replay-row">
-    <button
-      type="button"
-      class="replay"
-      disabled={runner.playing}
-      onclick={(event) => {
-        // §4.5: a clicked button must not keep focus, or Space would hit it.
-        event.currentTarget.blur();
-        if (runner.phase === 'idle') void runner.start();
-        else runner.replay();
-      }}
-      data-testid="replay"
-    >
-      <span aria-hidden="true">▶</span>
-      {replayLabel}
-      <kbd>Space</kbd>
-    </button>
+    <div class="replay">
+      <Button
+        variant={replayVariant}
+        size="drill"
+        disabled={runner.playing}
+        testId="replay"
+        block
+        onclick={(event: MouseEvent) => {
+          // §4.5: a clicked button must not keep focus, or Space would hit it.
+          (event.currentTarget as HTMLElement).blur();
+          if (runner.phase === 'idle') void runner.start();
+          else runner.replay();
+        }}
+      >
+        {#snippet glyph()}▶{/snippet}
+        {replayLabel}
+        <span class="keycap"><Chip variant="key">Space</Chip></span>
+      </Button>
+    </div>
   </div>
 
+  <!-- ⑤ 88 px, always reserved, but never a box when empty (§5.5). -->
   <div class="feedback" data-testid="feedback">
     {#if runner.feedback}
-      <p class="feedback-line {runner.feedback.tone}">
-        <span aria-hidden="true">{runner.feedback.glyph}</span>
-        {runner.feedback.headline}
-      </p>
-      <p class="feedback-detail">{runner.feedback.detail}</p>
+      <div class="strip-glow hud-glow hud-glow-{runner.feedback.tone}">
+        <div class="strip {runner.feedback.tone} hud-cut">
+          <GlyphBadge tone={runner.feedback.tone}>
+            {runner.feedback.glyph}
+          </GlyphBadge>
+          <p class="feedback-line">{runner.feedback.headline}</p>
+          <p class="feedback-detail">{runner.feedback.detail}</p>
+        </div>
+      </div>
     {/if}
   </div>
 
@@ -225,10 +285,11 @@
 
   {#if !focusMode}
     <p class="shortcuts">
-      <kbd>Space</kbd> replay · <kbd>Enter</kbd> skip &amp; reveal ·
-      <kbd>Esc</kbd> end
+      <Chip variant="key">Space</Chip> replay ·
+      <Chip variant="key">Enter</Chip> skip &amp; reveal ·
+      <Chip variant="key">Esc</Chip> end
       {#if !midiInput.connected}
-        · piano keys <kbd>{COMPUTER_KEY_HINT}</kbd>
+        · piano keys <Chip variant="key">{COMPUTER_KEY_HINT}</Chip>
       {/if}
     </p>
   {/if}
@@ -239,6 +300,10 @@
    * The runner never scrolls (UX §4.1): it fills what the shell leaves and
    * clips, and the keyboard shrinks (see `keyboardHeight`) rather than pushing
    * anything off screen.
+   *
+   * The literals below (the strip's 4 px edge bar, the feedback strip's
+   * 720 px measure, the 240 px replay button) are spec-fixed values from
+   * UX §4.1 and sci-fi-screens.md §5.4–§5.5 — the exemption in `CLAUDE.md`.
    */
   .runner {
     display: flex;
@@ -249,78 +314,182 @@
     overflow: hidden;
     /* Cancel the shell's page padding: this screen owns the whole area. */
     margin: calc(-1 * var(--space-7)) calc(-1 * var(--space-6));
-    padding: var(--space-4) var(--space-6) var(--space-3);
+    padding: 0 var(--space-6) var(--space-3);
   }
 
-  .strip {
+  /* Full-bleed band, not a panel: `--grad-panel`, a luminous bottom edge and a
+     downward glow — the same chrome as the top bar, so the two read as one
+     stack (§5.2). */
+  .rail {
     display: flex;
     align-items: center;
     gap: var(--space-5);
     min-height: var(--statusbar-h);
-    border-bottom: 1px solid var(--border);
+    margin: 0 calc(-1 * var(--space-6));
+    padding: 0 var(--space-6);
+    background: var(--grad-panel);
+    background-color: var(--bg-1);
+    border-bottom: 1px solid var(--panel-border);
+    box-shadow: var(--glow-panel);
   }
 
-  /* An `h1` that is only 20 px: uppercase stops there (spec §4.2), so the
-     strip's exercise title keeps the sentence case of the copy deck. */
+  /* An `h1` that is only 20 px: uppercase stops there (part 1 §4.2), so the
+     rail's exercise title keeps the sentence case of the copy deck. */
   .exercise {
     font-size: var(--fs-h2);
     font-weight: var(--fw-semibold);
     text-transform: none;
     letter-spacing: var(--track-none);
+    white-space: nowrap;
   }
 
-  .stats {
+  .progress {
+    width: 200px; /* ~200 px question progress (§5.2) */
+  }
+
+  .readouts {
     display: flex;
     align-items: center;
     gap: var(--space-5);
     margin-left: auto;
-    color: var(--text-2);
   }
 
-  .stat-label {
+  /* Label over value, the §4.4 HUD readout at rail scale: no well, no glow. */
+  .readout {
+    display: flex;
+    flex-direction: column;
+    line-height: var(--lh-snug);
+  }
+
+  .value {
+    font-family: var(--font-display);
+    font-size: var(--fs-body-lg);
+    color: var(--text-1);
+  }
+
+  /* At the callout streak the drill speeds up *and* says so in the feedback
+     line, so the colour is never the only sign (§5.2). Weak/attention is
+     `--warn`, never `--danger` — that means *wrong* in the answer path (§2.3). */
+  .callout {
+    color: var(--warn);
+  }
+
+  /* A live numeric readout is cyan (§5.2, part 1 §2.1); the em dash of "no
+     answers yet" is muted, because there is nothing live to report. */
+  .live {
+    color: var(--cyan);
+  }
+
+  .muted {
     color: var(--text-3);
-    font-size: var(--fs-small);
   }
 
+  /* 44 px icon buttons (§5.2): chamfered, with the meaningful edge on hover
+     and focus. `⚙` is a link to the per-exercise settings, never a dialog. */
   .icon {
     display: inline-flex;
-    align-items: center;
-    justify-content: center;
     width: var(--hit-min);
     height: var(--hit-min);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    background: var(--bg-1);
-    color: var(--text-2);
+    padding: 0;
+    border: none;
+    background: none;
+    color: inherit;
     cursor: pointer;
   }
 
-  .icon:hover {
-    border-color: var(--accent);
-    color: var(--accent);
+  .icon .edge {
+    display: flex;
+    flex: 1;
+    background: var(--border);
+  }
+
+  .icon .face {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    justify-content: center;
+    margin: 1px;
+    background: var(--bg-2);
+    color: var(--text-2);
+    font-size: var(--fs-body-lg);
+  }
+
+  .icon:hover .edge,
+  .icon:focus-visible .edge {
+    background: var(--panel-border-hot);
+  }
+
+  .icon:hover .face {
+    color: var(--text-1);
     text-decoration: none;
   }
 
+  .icon[aria-pressed='true'] .face {
+    background: var(--grad-primary);
+    color: var(--on-accent);
+  }
+
+  /* Chamfered focus: the edge layer is the ring (part 1 §3.4). */
+  .icon:focus-visible {
+    outline: none;
+    box-shadow: none;
+  }
+
+  .icon:focus-visible .edge {
+    background: var(--focus);
+  }
+
+  .icon:focus-visible .face {
+    margin: 3px;
+  }
+
+  .prompt-row {
+    display: flex;
+    justify-content: center;
+  }
+
+  /* The reference's `CURRENT NOTE` readout *is* our prompt (§5.3): the well
+     variant of the one panel primitive, no glow — the type carries it
+     (deviation 21). */
+  .prompt-well {
+    flex: 1;
+    max-width: var(--content-max);
+  }
+
   .prompt {
+    position: relative;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     gap: var(--space-2);
-    min-height: 140px;
+    /* UX §4.1 ③: the prompt region is at least 140 px, minus the well's own
+       `--space-5` padding above and below. */
+    min-height: calc(140px - 2 * var(--space-5));
     text-align: center;
   }
 
+  .phase {
+    position: absolute;
+    top: 0;
+    left: 0;
+  }
+
   .prompt-title {
+    font-family: var(--font-display);
     font-size: var(--fs-prompt);
     line-height: var(--lh-tight);
     font-weight: var(--fw-bold);
+    letter-spacing: var(--track-heading);
+    text-transform: uppercase;
+    text-shadow: var(--glow-text);
   }
 
   .focus .prompt-title {
     font-size: var(--fs-display);
   }
 
+  /* Body copy: sentence case, sans, never display (part 1 deviations 5–6). */
   .prompt-sub {
     color: var(--text-2);
     font-size: var(--fs-h1);
@@ -332,56 +501,71 @@
   }
 
   .replay {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: var(--space-3);
-    width: 240px;
-    height: var(--hit-drill);
-    border: 1px solid var(--accent);
-    border-radius: var(--radius-md);
-    background: var(--bg-2);
-    color: var(--text-1);
-    cursor: pointer;
+    width: 240px; /* the 240 × 64 primary control of the screen (§5.4) */
   }
 
-  .replay:disabled {
-    opacity: 0.4;
-    cursor: default;
+  .keycap {
+    margin-left: var(--space-1);
   }
 
   /* Fixed and always reserved: the layout must never shift (§4.1 ⑤). */
   .feedback {
     display: flex;
-    flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: var(--space-1);
     height: var(--feedback-h);
-    text-align: center;
   }
 
-  .feedback-line {
-    font-size: var(--fs-feedback);
-    line-height: var(--lh-tight);
-    font-weight: var(--fw-bold);
+  /* The state strip inside the reserved slot (§5.5): a 4 px edge bar in the
+     state colour, the glyph badge, the headline, the detail. The glow is on
+     the unclipped parent — a chamfered element cannot wear its own
+     (`hud.css`). */
+  .strip-glow {
+    width: 100%;
+    max-width: 720px;
     animation: rise var(--dur-fast) var(--ease);
   }
 
-  .feedback-line.success {
-    color: var(--success);
+  .strip {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    background: var(--bg-2);
+    border-left: 4px solid var(--tone-color);
+
+    --tone-color: var(--text-3);
   }
 
-  .feedback-line.danger {
-    color: var(--danger);
+  .strip.success {
+    --tone-color: var(--success);
   }
 
-  .feedback-line.hint {
-    color: var(--hint);
+  .strip.danger {
+    --tone-color: var(--danger);
   }
 
+  .strip.hint {
+    --tone-color: var(--hint);
+  }
+
+  .feedback-line {
+    font-family: var(--font-display);
+    font-size: var(--fs-feedback);
+    line-height: var(--lh-tight);
+    font-weight: var(--fw-bold);
+    letter-spacing: var(--track-heading);
+    text-transform: uppercase;
+    color: var(--tone-color);
+  }
+
+  /* Sentence case, sans: it carries `Space to continue` verbatim (§5.5). */
   .feedback-detail {
+    margin-left: auto;
+    padding-left: var(--space-4);
     color: var(--text-2);
+    font-size: var(--fs-body-lg);
+    text-align: right;
   }
 
   /*
@@ -396,22 +580,16 @@
     align-items: flex-end;
   }
 
+  /* ⑦ The manual (§5.7): never abbreviated, never a tooltip. */
   .shortcuts {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
     min-height: var(--shortcutbar-h);
     padding-top: var(--space-2);
-    text-align: center;
     color: var(--text-3);
     font-size: var(--fs-small);
-  }
-
-  kbd {
-    padding: 0 var(--space-1);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    background: var(--bg-1);
-    color: var(--text-2);
-    font-family: var(--font-mono);
-    font-size: var(--fs-micro);
   }
 
   /* 4 px rise on entry (§4.2) — a literal the spec fixes, see CLAUDE.md. */
@@ -427,7 +605,7 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .feedback-line {
+    .strip-glow {
       animation: none;
     }
   }

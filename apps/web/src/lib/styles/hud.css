@@ -2,8 +2,10 @@
  * The two recipes the HUD language repeats everywhere (sci-fi visual language
  * §3.1): the 45° chamfer and the static outer glow. They live here rather than
  * in every component because `clip-path` and `filter` have to be split across
- * two elements in exactly the same way each time, and because one place can
- * switch both off for the light fallback theme.
+ * two elements in exactly the same way each time.
+ *
+ * Dark-only: the dormant `[data-theme='light']` branch went with the token
+ * block on 2026-09-14 (sci-fi-screens.md §2.5).
  *
  * Markup shape, used by `$lib/components/hud/*`:
  *
@@ -55,6 +57,10 @@
   --hud-glow-cyan: color-mix(in srgb, var(--cyan) 34%, transparent);
   --hud-glow-accent: color-mix(in srgb, var(--accent) 45%, transparent);
   --hud-glow-success: color-mix(in srgb, var(--success) 40%, transparent);
+  /* The answer path's other two states — the feedback strip wears one of the
+     three (sci-fi-screens.md §5.5). */
+  --hud-glow-danger: color-mix(in srgb, var(--danger) 40%, transparent);
+  --hud-glow-hint: color-mix(in srgb, var(--hint) 40%, transparent);
 }
 
 .hud-glow {
@@ -73,7 +79,10 @@
   --hud-glow-color: var(--hud-glow-success);
 }
 
-/* The light theme keeps the token contract but drops the language (§ dev. 15). */
-[data-theme='light'] .hud-glow {
-  filter: none;
+.hud-glow-danger {
+  --hud-glow-color: var(--hud-glow-danger);
+}
+
+.hud-glow-hint {
+  --hud-glow-color: var(--hud-glow-hint);
 }

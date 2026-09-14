@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  APRON_MIN_BED_H,
+  BED_CHROME_H,
   BLACK_KEY_W_RATIO,
   LAYOUT_RANGES,
   WHITE_KEY_MAX_W,
@@ -8,6 +10,7 @@ import {
   keyboardMetrics,
   layoutKeys,
   resolveRange,
+  showsApron,
   whiteKeyCount,
   whiteKeyWidth,
 } from './geometry';
@@ -111,5 +114,19 @@ describe('metrics', () => {
 
   it('caps the height at maxHeightPx', () => {
     expect(keyboardMetrics(4000, LAYOUT_RANGES[61], 120).whiteHeight).toBe(120);
+  });
+});
+
+describe('the bed apron', () => {
+  it('is dropped once the bed is compressed (sci-fi-screens.md §4.1)', () => {
+    const tallest = APRON_MIN_BED_H - BED_CHROME_H;
+    expect(showsApron(tallest)).toBe(true);
+    expect(showsApron(tallest - 1)).toBe(false);
+  });
+
+  it('stays on a runner keyboard at its usual height', () => {
+    expect(
+      showsApron(keyboardMetrics(1440, LAYOUT_RANGES[61]).whiteHeight),
+    ).toBe(true);
   });
 });

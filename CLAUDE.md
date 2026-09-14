@@ -231,12 +231,37 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
     opaque so it never crosses text, and the scanline is dropped under `prefers-reduced-motion`.
   - Mastery is **always** `MasteryPips` + the percentage, quantised by the pure
     `hud/mastery.ts` (7 pips, `round(mastery * 7)`, `null` = never practised = the word `new`).
-  - **Developer pass 2** (runner, `PianoKeyboard`, Free Play, Progress, Settings, `/session`) is
-    ticketed separately and is specified by `docs/design/sci-fi-screens.md`; until it lands those
-    screens wear the new tokens with their old treatment. It starts by **re-copying
-    `docs/design/tokens.css`** — part 2 added `--grad-key-white`/`--grad-key-black` (composed from the
-    existing key colours) and deleted the dormant `[data-theme='light']` block, so the light branches
-    in `hud.css`/`app.css` go with it. Dark-only is now a decision, not a default.
+  - **Dark-only is a decision, not a default** (redesign pass 2a): `tokens.css` was re-copied from
+    the spec — it added `--grad-key-white`/`--grad-key-black` and dropped the dormant
+    `[data-theme='light']` block, and the `hud.css` light branch went with it. `app.html` keeps
+    `data-theme="dark"` as a marker of intent. A light theme is its own ticket with its own contrast
+    pass; never re-add a light override.
+  - **Developer pass 2b** (Free Play, Settings and the four §6.3 gaps) is still open and is specified
+    by `docs/design/sci-fi-screens.md` §6, §8; until it lands those screens wear the new tokens with
+    their old treatment. `/progress` and `/session` land with slices 5 and 9, in this language.
+- **The runner and the keyboard in the part-2 language (redesign pass 2a)**:
+  - `PianoKeyboard` draws a **bed**: `--key-bed` face, 1 px `--border` edge, one `--chamfer-lg` clip
+    for the whole component, and a 6 px apron with a `--grad-rule` hairline and a `--cyan` tick per C
+    (dropped on a compressed bed — `showsApron()` in `geometry.ts`). **Keys are never chamfered and
+    a lit key glows with `box-shadow`, never `filter: drop-shadow`**, so a ten-note chord costs no
+    composited layer and stays out of the ≤ 12 filter budget. The two shadow slots compose:
+    `--key-press` (press / ghost inset) then `--key-glow` (state glow), with the focus keyline
+    appended last — no state restates another's shadow.
+  - **A piano key's focus ring is its own rule** (never the global one): `outline: 3px solid
+    var(--focus); outline-offset: -5px` plus `inset 0 0 0 2px var(--bg-0)`, drawn inside the face.
+  - Key glyphs are 16 px (`--fs-body`), labels 12 px (`--fs-micro`, 10 px below `W` = 32 px — the one
+    place the label floor bends, UX §5.3).
+  - The bed's chrome is part of the component's height: a parent that budgets the keyboard subtracts
+    `BED_CHROME_H` from the space it passes as `maxHeightPx` (the runner does).
+  - The runner's phase micro-label (`READY` · `LISTEN` · `ANSWER` · `RESULT` · `PAUSED`) comes from
+    the pure `$lib/exercises/phases.ts` — labels live in a tested module, never in a component, the
+    same rule as `feedback.ts` and `midi/status.ts`. **No emoji anywhere**: the streak is a HUD
+    readout, and `✓ ✗ ◆ ◇ ⤳ ▶ ■ ⤢ !` are copy and stay.
+  - `ProgressBar` paints `--grad-data` on a **full-track layer** and reveals it with `clip-path`
+    (`--ramp-scale` is gone): the colour at any x is fixed by position *during* the transition too.
+  - Primitive extensions this pass made, instead of forking a primitive: `Tone` gained `hint`
+    (the reveal state), `hud.css` gained `.hud-glow-danger`/`.hud-glow-hint`, and `Button` gained
+    `testId` so e2e can assert on the real control rather than a wrapper.
 - Prettier: single quotes, width 80, trailing commas, LF, 2 spaces. Commits follow **Conventional
   Commits** (`feat:`, `fix:`, `docs:`, `chore:`) — enforced by commitlint.
 - Tests: pure logic (theory, grading, scheduler, MIDI parsing) always gets a Vitest test; glue and

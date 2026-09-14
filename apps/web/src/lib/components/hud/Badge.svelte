@@ -55,6 +55,10 @@
     --tone-color: var(--warn);
   }
 
+  .hint {
+    --tone-color: var(--hint);
+  }
+
   .danger {
     --tone-color: var(--danger);
   }
