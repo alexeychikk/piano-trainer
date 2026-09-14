@@ -25,11 +25,24 @@
     lead: string;
     /** The rest of the line, e.g. `Minor 6th`. */
     detail?: string;
+    /**
+     * One readout between the text and the meta — the session summary's
+     * mastery pips (sci-fi-screens.md §9 draws them in the row). An extension
+     * rather than a fork, the same move `Button`'s `testId` was.
+     */
+    trailing?: Snippet;
     /** Right-aligned, relative, tabular — e.g. `2 min ago`. */
     meta?: string;
   }
 
-  const { tone = 'neutral', glyph, lead, detail, meta }: Props = $props();
+  const {
+    tone = 'neutral',
+    glyph,
+    lead,
+    detail,
+    trailing,
+    meta,
+  }: Props = $props();
 </script>
 
 <div class="row {tone}">
@@ -40,6 +53,7 @@
     <span class="lead">{lead}</span>
     {#if detail}<span class="detail">· {detail}</span>{/if}
   </span>
+  {#if trailing}<span class="trailing">{@render trailing()}</span>{/if}
   {#if meta}<span class="meta tabular">{meta}</span>{/if}
 </div>
 
@@ -101,6 +115,12 @@
 
   .detail {
     color: var(--text-2);
+  }
+
+  .trailing {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
   }
 
   .meta {

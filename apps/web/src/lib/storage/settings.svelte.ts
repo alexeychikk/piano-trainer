@@ -45,6 +45,13 @@ export interface AppSettings {
   keyboardHigh: number;
   /** Count in one bar of clicks before each question, or not at all. */
   countIn: CountIn;
+  /**
+   * How long a mixed session lasts, in minutes — home's segmented control
+   * (UX spec §3: 5 / 10 / 20, default 10). The allowed values are restated
+   * here as plain numbers so this base layer keeps importing nothing;
+   * `$lib/practice/session.ts` owns them for everyone else.
+   */
+  sessionLengthMin: number;
   /** Runner focus mode — chrome hidden (UX spec §4.7 persists it). */
   focusMode: boolean;
   /**
@@ -70,6 +77,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   keyboardLow: 36,
   keyboardHigh: 96,
   countIn: 'off',
+  sessionLengthMin: 10,
   focusMode: false,
   lastExportAt: null,
 };
@@ -86,6 +94,9 @@ const BEATS_RANGE: readonly [number, number] = [1, 12];
 const MIDI_RANGE: readonly [number, number] = [0, 127];
 
 const COUNT_INS: readonly CountIn[] = ['off', '1-bar'];
+
+/** UX spec §3's segmented control; mirrored by `$lib/practice/session.ts`. */
+const SESSION_LENGTHS: readonly number[] = [5, 10, 20];
 
 function boundedNumber(
   value: unknown,
@@ -144,6 +155,11 @@ export function parseSettingsValue(parsed: unknown): AppSettings {
     countIn: COUNT_INS.includes(record.countIn as CountIn)
       ? (record.countIn as CountIn)
       : DEFAULT_SETTINGS.countIn,
+    sessionLengthMin: SESSION_LENGTHS.includes(
+      record.sessionLengthMin as number,
+    )
+      ? (record.sessionLengthMin as number)
+      : DEFAULT_SETTINGS.sessionLengthMin,
     focusMode:
       typeof record.focusMode === 'boolean'
         ? record.focusMode

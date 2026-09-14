@@ -585,3 +585,94 @@ describe('ExerciseRunner · a targeted run (slice 9a)', () => {
     expect(h.plays).toHaveLength(1);
   });
 });
+
+describe('ExerciseRunner · a mixed session (slice 9b)', () => {
+  /** Two stand-in exercises, and a `pickExercise` that alternates them. */
+  const other: ExerciseDefinition<{ midi: number }> = {
+    ...stub,
+    id: 'stub-two',
+    title: 'Stub two',
+  };
+
+  function mixed(options: { questions?: number } = {}) {
+    let asked = 0;
+    let seed = 60;
+    const picked: string[] = [];
+    const ended: number[] = [];
+    const attempts: AttemptResult[] = [];
+    const runner = new ExerciseRunner(stub, {
+      playback: {
+        play: () => 0,
+        stop: () => {},
+        ensureStarted: () => Promise.resolve(),
+      },
+      now: () => 0,
+      seed: () => (seed += 1),
+      range: () => ({ low: 21, high: 108 }),
+      pickExercise: () => {
+        const definition = asked % 2 === 0 ? stub : other;
+        asked += 1;
+        picked.push(definition.id);
+        return definition as AnyExercise;
+      },
+      shouldContinue: () => asked < (options.questions ?? 99),
+      onEnd: () => ended.push(asked),
+      onAttempt: (attempt) => attempts.push(attempt),
+    });
+    return { runner, picked, ended, attempts };
+  }
+
+  /** Start and let the (zero-length) playback finish. */
+  async function open(runner: ExerciseRunner) {
+    await runner.start();
+    vi.advanceTimersByTime(0);
+  }
+
+  it('asks a different exercise per question, and grades with that one', async () => {
+    const { runner, picked, attempts } = mixed();
+    await open(runner);
+    expect(runner.definition.id).toBe('stub');
+    // Answer it: the attempt is logged against the exercise that asked.
+    runner.noteOn(0, 'onscreen');
+    runner.advance();
+    expect(runner.definition.id).toBe('stub-two');
+    expect(picked).toEqual(['stub', 'stub-two']);
+    expect(attempts[0]?.exerciseId).toBe('stub');
+  });
+
+  it('ends between questions — never mid-answer — and says so once', async () => {
+    const { runner, ended } = mixed({ questions: 1 });
+    await open(runner);
+    expect(runner.phase).toBe('awaiting');
+    // The time ran out while this question was on screen: it is still
+    // answerable, and only the *next* question is refused.
+    runner.noteOn(0, 'onscreen');
+    expect(runner.phase).toBe('feedback');
+    runner.advance();
+    expect(runner.phase).toBe('summary');
+    expect(ended).toHaveLength(1);
+    // A run that has ended stays ended: no timer, no shortcut re-opens it.
+    runner.space();
+    runner.noteOn(60, 'onscreen');
+    expect(runner.phase).toBe('summary');
+  });
+
+  it('ends now on `Esc`, whatever it was doing', async () => {
+    const { runner, ended } = mixed();
+    await open(runner);
+    runner.end();
+    expect(runner.phase).toBe('summary');
+    runner.end();
+    expect(ended).toHaveLength(1);
+  });
+
+  it('keeps one definition for a plain drill', async () => {
+    const h = harness();
+    await h.runner.start();
+    expect(h.runner.definition.id).toBe('stub');
+    h.runner.noteOn(h.answer, 'onscreen');
+    h.tick(FEEDBACK_CORRECT_MS);
+    expect(h.runner.definition.id).toBe('stub');
+    expect(h.runner.phase).toBe('presenting');
+  });
+});

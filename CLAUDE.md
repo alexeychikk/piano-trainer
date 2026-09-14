@@ -352,6 +352,46 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
     idle timer, and `resume()` returns to the *reveal* (replaying the answer) instead of re-asking a
     question that is already graded and logged.
 
+- **The mixed session (slice 9b)** — `/session` is the ordinary runner with three things supplied
+  from outside; **no exercise is special-cased anywhere**:
+  - **Three new runner options, all generic**: `pickExercise()` (which exercise the next question
+    comes from — `definition` is now `$state`, so the rail's title follows the *question*, not the
+    route), `shouldContinue()` (checked in `#next()` **between questions only**, so a session that
+    runs out of time never cuts an answer or a reveal in half) and `onEnd()`. `RunnerPhase` gained
+    `summary` (UX §4.2 always listed it) and `runner.end()` is what `Esc` calls in a session; a
+    plain `/practice/<id>` passes none of them and behaves exactly as before.
+  - **Pure composition in `$lib/practice/session.ts`**, reactive half in `session.svelte.ts`
+    (`SessionRun`, one per session, never a singleton) — the same split as `runner.svelte.ts` /
+    `playback.ts`. `buildSessionQueue(plan)` is a **round-robin over the exercises**, plan order
+    inside each one, so the session opens on `plan.pick` and every exercise is in it. Dealing
+    globally by urgency ("the most urgent skill that is not the last exercise asked") *looks*
+    right and is wrong: with 12/7/5/36 skills it alternates between the two lowest-ranked
+    exercises and never reaches the other two. The queue is the **whole** plan and `SessionCursor`
+    **cycles** it, because a session is timed, not counted.
+  - **A session is a length, not a question count**: 5 / 10 / 20 min (`sessionLengthMin` in
+    `settings`, default 10, home's segmented control), the rail's `ProgressBar` is `label="Time"`
+    counting **down**, and the clock starts at the **first question** (`pickExercise()`), not at
+    mount — a screen nobody has started has spent no time. `mm:ss` is `clockTime()` in `copy.ts`;
+    the summary's `10:04` is deliberately a little *over* the length.
+  - Targeting reuses slice 9a's bias unchanged: `sessionTargets()` = the item's own skill first,
+    then the rest its exercise owes, handed to the runner's rejection sampling. A bias, not a
+    filter.
+  - **The summary is a full screen that replaces the runner**
+    (`$lib/components/session/SessionSummary.svelte`), never a modal: `Ring` + three readouts,
+    `SKILLS TOUCHED` `ListRow`s (max 6, |delta| descending, ▲/▼ **and** a signed number — never
+    colour alone), the weakest line in a well, `Space` = practice again, `Esc` = done. Numbers
+    from the pure `summariseSession()`; wording from `copy.ts` (`sessionComplete`,
+    `sessionWeakest`, `masteryDelta`). Mastery deltas are read **from the practice store** either
+    side of `record()` — the store is the one authority on mastery — and an unpractised skill's
+    first session is a rise from zero, not "no change". A session nobody answered navigates home
+    instead of showing three zeros.
+  - `ListRow` gained an optional `trailing` snippet (the row's mastery pips) — an extension, like
+    `Button`'s `testId`/`ariaPressed`, never a fork.
+  - **Home is the session's front door** (UX §3): the hero opens `/session`, `Space` **or any MIDI
+    note-on** anywhere on `/` starts it (the computer keys are note-ons too, by design), the length
+    control sits under the hero, and the `TODAY` card (attempts · accuracy · day streak + the
+    7-day `Meter`) replaces the "How this works" well once there is a history.
+
 - **Export / import (slice 5b)** — the payload is
   `{ schemaVersion, exportedAt, settings, skills, attempts }`, epoch ms throughout, file
   `piano-trainer-YYYY-MM-DD.json`. Split in two, the same way the runner splits state from audio:

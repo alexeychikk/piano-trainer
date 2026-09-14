@@ -22,5 +22,9 @@ export function getExercise(id: ExerciseId): AnyExercise | null {
   return EXERCISES.find((exercise) => exercise.id === id) ?? null;
 }
 
-/** Where "Practice now" goes until the session planner exists (slice 9). */
+/**
+ * The fallback drill: `/progress`'s empty state, and anything that needs *an*
+ * exercise with no plan to pick one. Since slice 9b home's hero opens the
+ * mixed session (`/session`) instead.
+ */
 export const DEFAULT_EXERCISE_ID: ExerciseId = findTheNote.id;

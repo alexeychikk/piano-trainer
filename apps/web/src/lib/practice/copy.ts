@@ -112,6 +112,49 @@ function count(n: number, noun: string): string {
   return `${n} ${noun}${n === 1 ? '' : 's'}`;
 }
 
+/**
+ * The session's wording (slice 9b). `Session complete · {mm:ss}` is the copy
+ * deck's (UX §9) verbatim; the other two assemble the spec's own templates
+ * (UX §4.8 / sci-fi-screens.md §9's sketch) the way `skillDetail` does — no
+ * new sentence, and no wording in a component.
+ */
+
+/** `10:04` — a session clock, never a duration in words. */
+export function clockTime(ms: number): string {
+  const total = Math.max(0, Math.round(ms / 1000));
+  const minutes = Math.floor(total / 60);
+  const seconds = total % 60;
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
+}
+
+/** `Session complete · 10:04` — copy deck (UX §9), verbatim. */
+export function sessionComplete(elapsedMs: number): string {
+  return `Session complete · ${clockTime(elapsedMs)}`;
+}
+
+/**
+ * `Weakest: minor 6th up (4 of 9)` — the summary's well (UX §4.8). Sentence
+ * case, the skill spelled the way its exercise spells it.
+ */
+export function sessionWeakest(
+  label: string,
+  correct: number,
+  attempts: number,
+): string {
+  return `Weakest: ${label} (${correct} of ${attempts})`;
+}
+
+/**
+ * `+6%` / `−2%` / `±0%` — a mastery delta. The sign is the signal and the
+ * triangle beside it repeats it, so neither is ever carried by colour alone
+ * (UX §4.8). The minus is U+2212, as the spec's sketch prints it.
+ */
+export function masteryDelta(deltaPercent: number): string {
+  if (deltaPercent > 0) return `+${deltaPercent}%`;
+  if (deltaPercent < 0) return `−${Math.abs(deltaPercent)}%`;
+  return '±0%';
+}
+
 /** `2 h ago` — the granularity of the detail line (UX §6.2), not a clock. */
 export function timeAgo(ts: number, now: number): string {
   const delta = Math.max(0, now - ts);

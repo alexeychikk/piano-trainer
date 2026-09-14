@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  clockTime,
   dataStats,
   dueBadge,
   dueNow,
   exportDone,
+  masteryDelta,
+  sessionComplete,
+  sessionWeakest,
   skillsDueToday,
   timeUntil,
   importDone,
@@ -109,5 +113,27 @@ describe('the schedule readouts', () => {
     // A schedule that has come round is asking *now*, not "in 0 min".
     expect(timeUntil(NOW, NOW)).toBe('now');
     expect(timeUntil(NOW - 5 * HOUR, NOW)).toBe('now');
+  });
+});
+
+describe('the session summary', () => {
+  it('prints the copy deck’s title with an mm:ss clock', () => {
+    expect(sessionComplete(604_000)).toBe('Session complete · 10:04');
+    expect(clockTime(0)).toBe('0:00');
+    expect(clockTime(59_600)).toBe('1:00');
+    // A countdown never shows a negative clock.
+    expect(clockTime(-5000)).toBe('0:00');
+  });
+
+  it('names the weakest skill with its score', () => {
+    expect(sessionWeakest('minor 6th up', 4, 9)).toBe(
+      'Weakest: minor 6th up (4 of 9)',
+    );
+  });
+
+  it('signs a mastery delta, so the sign carries it and not the colour', () => {
+    expect(masteryDelta(6)).toBe('+6%');
+    expect(masteryDelta(-2)).toBe('−2%');
+    expect(masteryDelta(0)).toBe('±0%');
   });
 });
