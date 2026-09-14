@@ -157,7 +157,12 @@ export interface ExerciseDefinition<P = unknown, S = Record<string, never>> {
 export type AnyExercise = ExerciseDefinition;
 
 export interface AttemptResult {
-  id: string;
+  /**
+   * The question that was asked. Not unique — storage keys an attempt by
+   * `${ts}:${questionId}` (`$lib/storage/db`), because the same question can
+   * be asked twice.
+   */
+  questionId: string;
   ts: number;
   exerciseId: ExerciseId;
   skillId: SkillId;

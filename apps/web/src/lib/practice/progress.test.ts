@@ -12,7 +12,6 @@ import {
   STRIP_DAYS,
   summarise,
   tallyBySkill,
-  timeAgo,
 } from './progress';
 
 /** Midday, so a ±hours test never crosses a local midnight by accident. */
@@ -20,7 +19,8 @@ const NOW = new Date('2026-09-14T12:00:00').getTime();
 
 function attempt(overrides: Partial<StoredAttempt> = {}): StoredAttempt {
   return {
-    id: `q${Math.random()}`,
+    attemptId: `a${Math.random()}`,
+    questionId: `q${Math.random()}`,
     ts: NOW,
     exerciseId: 'find-the-note',
     skillId: 'find-the-note:pc:0',
@@ -131,15 +131,6 @@ describe('tallyBySkill', () => {
   });
 });
 
-describe('timeAgo', () => {
-  it('is coarse on purpose — a detail line, not a clock', () => {
-    expect(timeAgo(NOW, NOW)).toBe('just now');
-    expect(timeAgo(NOW - 5 * 60_000, NOW)).toBe('5 min ago');
-    expect(timeAgo(NOW - 2 * 60 * 60_000, NOW)).toBe('2 h ago');
-    expect(timeAgo(NOW - 3 * DAY_MS, NOW)).toBe('3 d ago');
-  });
-});
-
 describe('fallbackSkillLabel', () => {
   it('never shows a raw id', () => {
     expect(fallbackSkillLabel('interval:P5:asc')).toBe('asc');
@@ -166,7 +157,8 @@ describe('buildGroups', () => {
       mastery: null,
       attempts: 0,
       weak: false,
-      detail: 'Not practised yet',
+      // No invented sentence: the pips say `new`, so there is no detail line.
+      detail: '',
     });
   });
 
@@ -190,7 +182,7 @@ describe('buildGroups', () => {
 
   it('marks a weak skill, so the `!` has something to render', () => {
     const attempts = [0, 1, 2].map((i) =>
-      attempt({ id: `m${i}`, correct: false, score: 0 }),
+      attempt({ attemptId: `m${i}`, correct: false, score: 0 }),
     );
     const [group] = buildGroups(
       exercises,
@@ -199,7 +191,6 @@ describe('buildGroups', () => {
       NOW,
     );
     expect(group.cells[0].weak).toBe(true);
-    expect(group.weakCount).toBe(1);
   });
 
   it('keeps a stored skill the exercise no longer lists', () => {

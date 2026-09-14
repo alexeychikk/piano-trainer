@@ -16,6 +16,12 @@ derived value on every read. A half-failed write, a partial import (slice 5b) or
 database therefore heals on the next load instead of leaving a skill claiming a mastery its history
 does not support.
 
+**An attempt is keyed by the attempt, not by the question** — `attemptId` is `ts:questionId`,
+stamped by the store, never chosen by a caller. A question id repeats — a 32-bit seed collides, and
+slice 5b can import a log written on another device — and keying the store on it would silently
+overwrite a row, leaving the stored count disagreeing with the log an append-only design promises.
+A record that arrives without a key (an import) is keyed on read rather than dropped.
+
 Everything read back is validated field by field (`parseAttempt`, `parseSkill`); a record that is
 not the right shape is dropped. Storage that is missing, blocked or **written by a newer build**
 resolves to `null` and the session runs in memory, with the copy deck's one-liner in a banner —
@@ -44,13 +50,19 @@ and `Drill these` (`docs/design/sci-fi-screens.md` §7): all three are statement
 and inventing a due date here would mean inventing the spaced-repetition rule that ADR §6 assigns to
 `$lib/practice/scheduler.ts` in slice 9. Everything else on the screen is real data.
 
+**Slice 9 inherits one consequence of §1**: because `deriveSkills` rebuilds a skill by folding the
+log through `initialSkill`, it resets `easiness`/`intervalDays`/`dueAt` to their defaults on every
+load. That is harmless while nobody reads them, but the moment the scheduler owns them, slice 9 must
+fold `review()` into `deriveSkills` (or make the derived value defer to the stored schedule) —
+otherwise every reload wipes the schedule.
+
 ## 4. Layering: `practice` sits above `storage` and `exercises`
 
 `$lib/practice/` may import `$lib/storage` and `$lib/exercises` types; **nothing imports it back** —
 the runner stays ignorant of persistence and receives an `onAttempt` callback, which is also what
 keeps its state machine testable without a database. `$lib/storage/db.ts` stays a base layer: it
 spells its record types out in primitives rather than importing `AttemptResult`, which is
-structurally assignable to `StoredAttempt`.
+structurally a `NewAttempt` (a `StoredAttempt` before the store stamps its key).
 
 ## 5. `ExerciseDefinition.skillLabel`
 

@@ -379,7 +379,7 @@ export class ExerciseRunner {
     source: NoteSource,
   ): void {
     this.#onAttempt?.({
-      id: question.id,
+      questionId: question.id,
       ts: Date.now(),
       exerciseId: this.definition.id,
       skillId: question.skillId,

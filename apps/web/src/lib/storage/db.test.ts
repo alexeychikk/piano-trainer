@@ -17,7 +17,8 @@ import {
 
 function attempt(overrides: Partial<StoredAttempt> = {}): StoredAttempt {
   return {
-    id: 'find-the-note:1:60',
+    attemptId: '1700000000000:find-the-note:1:60',
+    questionId: 'find-the-note:1:60',
     ts: 1_700_000_000_000,
     exerciseId: 'find-the-note',
     skillId: 'find-the-note:pc:0',
@@ -55,9 +56,15 @@ describe('parseAttempt', () => {
     expect(parseAttempt(null)).toBeNull();
     expect(parseAttempt('nope')).toBeNull();
     expect(parseAttempt({})).toBeNull();
-    expect(parseAttempt({ ...attempt(), id: 42 })).toBeNull();
+    expect(parseAttempt({ ...attempt(), questionId: 42 })).toBeNull();
     expect(parseAttempt({ ...attempt(), ts: 'yesterday' })).toBeNull();
     expect(parseAttempt({ ...attempt(), skillId: undefined })).toBeNull();
+  });
+
+  it('keys an unkeyed record rather than dropping it (a 5b import)', () => {
+    const unkeyed: Record<string, unknown> = { ...attempt() };
+    delete unkeyed.attemptId;
+    expect(parseAttempt(unkeyed)?.attemptId).toBe(attempt().attemptId);
   });
 
   it('repairs fields that are merely wrong, rather than throwing', () => {
@@ -149,21 +156,23 @@ describe('openPracticeStorage', () => {
     // database looks.
     const raw = await openDB(PRACTICE_DB_NAME, PRACTICE_SCHEMA_VERSION, {
       upgrade(db) {
-        const attempts = db.createObjectStore('attempts', { keyPath: 'id' });
+        const attempts = db.createObjectStore('attempts', {
+          keyPath: 'attemptId',
+        });
         attempts.createIndex('by-ts', 'ts');
         attempts.createIndex('by-skill', 'skillId');
         db.createObjectStore('skills', { keyPath: 'skillId' });
         db.createObjectStore('meta', { keyPath: 'key' });
       },
     });
-    await raw.put('attempts', attempt({ id: 'good' }));
-    await raw.put('attempts', { id: 'junk', ts: 'whenever' });
+    await raw.put('attempts', attempt({ attemptId: 'good' }));
+    await raw.put('attempts', { attemptId: 'junk', ts: 'whenever' });
     await raw.put('skills', { skillId: 'orphan' });
     raw.close();
 
     const storage = await openPracticeStorage();
     const snapshot = await storage!.read();
-    expect(snapshot.attempts.map((a) => a.id)).toEqual(['good']);
+    expect(snapshot.attempts.map((a) => a.attemptId)).toEqual(['good']);
     expect(snapshot.skills).toEqual([]);
   });
 

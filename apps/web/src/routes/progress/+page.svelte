@@ -115,7 +115,13 @@
       </div>
 
       <div class="strip">
-        <Meter values={totals.strip} srLabel={stripLabel} />
+        <!-- §7: the 28-day strip is the `Meter`, `markIndex` = today, and
+             `dailyCounts()` puts today last. -->
+        <Meter
+          values={totals.strip}
+          markIndex={totals.strip.length - 1}
+          srLabel={stripLabel}
+        />
         <MicroLabel>Last {STRIP_DAYS} days</MicroLabel>
       </div>
     </HudPanel>
@@ -143,8 +149,11 @@
                 {cell.label}
                 {#if cell.weak}
                   <!-- Never colour alone: the `!` is the signal, in --warn
-                       (sci-fi-screens.md §2.3 — --danger means *wrong*). -->
-                  <span class="weak" aria-label="needs work">!</span>
+                       (sci-fi-screens.md §2.3 — --danger means *wrong*).
+                       `role="img"` because `aria-label` on a bare <span> is
+                       prohibited ARIA and may be dropped — the same pairing
+                       `MasteryPips`, `Meter` and `Ring` use. -->
+                  <span class="weak" role="img" aria-label="needs work">!</span>
                 {/if}
               </span>
               <MasteryPips mastery={cell.mastery} skill={cell.label} />

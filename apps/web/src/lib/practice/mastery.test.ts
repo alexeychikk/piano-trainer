@@ -14,7 +14,8 @@ const DAY = 24 * 60 * 60 * 1000;
 
 function attempt(overrides: Partial<StoredAttempt> = {}): StoredAttempt {
   return {
-    id: 'q1',
+    attemptId: '1700000000000:q1',
+    questionId: 'q1',
     ts: 1_700_000_000_000,
     exerciseId: 'find-the-note',
     skillId: 'find-the-note:pc:0',
@@ -71,9 +72,9 @@ describe('applyAttempt', () => {
 describe('deriveSkills', () => {
   it('rebuilds every skill from the log, oldest attempt first', () => {
     const skills = deriveSkills([
-      attempt({ id: 'b', ts: 2_000, score: 0, correct: false }),
-      attempt({ id: 'a', ts: 1_000 }),
-      attempt({ id: 'c', ts: 3_000, skillId: 'find-the-note:pc:5' }),
+      attempt({ questionId: 'b', ts: 2_000, score: 0, correct: false }),
+      attempt({ questionId: 'a', ts: 1_000 }),
+      attempt({ questionId: 'c', ts: 3_000, skillId: 'find-the-note:pc:5' }),
     ]);
     expect(skills.get('find-the-note:pc:0')?.reps).toBe(2);
     // Correct then wrong: 0.3 → 0.21, not the other way round.

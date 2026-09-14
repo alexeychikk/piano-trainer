@@ -8,6 +8,7 @@
  */
 
 import type { SkillState, StoredAttempt } from '$lib/storage/db';
+import { skillDetail } from './copy';
 import { exerciseMastery, isWeak } from './mastery';
 
 export const DAY_MS = 24 * 60 * 60 * 1000;
@@ -115,7 +116,7 @@ interface SkillTally {
   correct: number;
 }
 
-/** Attempts and hits per skill — the numbers in the hover detail line. */
+/** Attempts and hits per skill — the numbers in the detail line. */
 export function tallyBySkill(
   attempts: readonly StoredAttempt[],
 ): Map<string, SkillTally> {
@@ -129,18 +130,6 @@ export function tallyBySkill(
   return tallies;
 }
 
-/** `2 h ago` — the granularity of the detail line, not a clock. */
-export function timeAgo(ts: number, now: number): string {
-  const delta = Math.max(0, now - ts);
-  const minutes = Math.floor(delta / 60_000);
-  if (minutes < 1) return 'just now';
-  if (minutes < 60) return `${minutes} min ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours} h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days} d ago`;
-}
-
 export interface SkillCell {
   skillId: string;
   /** Abbreviated name — dense grids may abbreviate (copy deck §9). */
@@ -149,7 +138,11 @@ export interface SkillCell {
   mastery: number | null;
   attempts: number;
   weak: boolean;
-  /** `12 attempts · 67% · last seen 2 h ago`, or the unpractised line. */
+  /**
+   * `12 attempts · 67% · last seen 2 h ago` (`copy.ts`), or `''` for a skill
+   * with no attempts behind it — the pips already say `new` (UX §6.2), and an
+   * unpractised sentence is one the copy deck does not have.
+   */
   detail: string;
 }
 
@@ -159,7 +152,6 @@ export interface ExerciseGroup {
   /** Mean mastery across the exercise's skills, `null` when none practised. */
   mastery: number | null;
   attempts: number;
-  weakCount: number;
   cells: SkillCell[];
 }
 
@@ -213,7 +205,6 @@ export function buildGroups(
       title: exercise.title,
       mastery: exerciseMastery(skillIds, skills),
       attempts: cells.reduce((total, cell) => total + cell.attempts, 0),
-      weakCount: cells.filter((cell) => cell.weak).length,
       cells,
     };
   });
@@ -235,19 +226,23 @@ function buildCell(
       mastery: null,
       attempts: 0,
       weak: false,
-      detail: 'Not practised yet',
+      detail: '',
     };
   }
-  const accuracy = tally.attempts
+  const accuracyPercent = tally.attempts
     ? Math.round((tally.correct / tally.attempts) * 100)
     : 0;
-  const plural = tally.attempts === 1 ? 'attempt' : 'attempts';
   return {
     skillId,
     label,
     mastery: state.mastery,
     attempts: tally.attempts,
     weak: isWeak(state),
-    detail: `${tally.attempts} ${plural} · ${accuracy}% · last seen ${timeAgo(state.lastSeenAt, now)}`,
+    detail: skillDetail({
+      attempts: tally.attempts,
+      accuracyPercent,
+      lastSeenAt: state.lastSeenAt,
+      now,
+    }),
   };
 }

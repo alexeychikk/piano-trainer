@@ -32,9 +32,17 @@ export const PRACTICE_SCHEMA_VERSION = 1;
 
 export const PRACTICE_DB_NAME = 'piano-trainer';
 
-/** One graded answer. Append-only; `id` is the question's id. */
+/**
+ * One graded answer. Append-only — which is why the key is the *attempt*, not
+ * the question: a question id repeats (a seed collision, or a slice-5b import
+ * from a second device), and keying on it would silently overwrite a row and
+ * leave the stored count disagreeing with the log.
+ */
 export interface StoredAttempt {
-  id: string;
+  /** Unique per attempt, `${ts}:${questionId}` — the store's key. */
+  attemptId: string;
+  /** The question that was asked. Two attempts may share one. */
+  questionId: string;
   /** Epoch ms. */
   ts: number;
   exerciseId: string;
@@ -64,6 +72,16 @@ export interface SkillState {
   /** 0..1, EWMA of recent scores — what the progress screen shows. */
   mastery: number;
   lastSeenAt: number;
+}
+
+/** An attempt before it has been keyed — what the runner emits. */
+export type NewAttempt = Omit<StoredAttempt, 'attemptId'>;
+
+/** The store's key for an attempt. Derived, never chosen by a caller. */
+export function attemptKey(
+  attempt: Pick<StoredAttempt, 'ts' | 'questionId'>,
+): string {
+  return `${attempt.ts}:${attempt.questionId}`;
 }
 
 export interface PracticeSnapshot {
@@ -120,13 +138,19 @@ function clamp01(value: number): number {
 /** A stored attempt, or `null` when the record is not one. */
 export function parseAttempt(raw: unknown): StoredAttempt | null {
   if (!isRecord(raw)) return null;
-  if (typeof raw.id !== 'string' || raw.id === '') return null;
+  if (typeof raw.questionId !== 'string' || raw.questionId === '') return null;
   if (typeof raw.exerciseId !== 'string' || typeof raw.skillId !== 'string') {
     return null;
   }
   if (typeof raw.ts !== 'number' || !Number.isFinite(raw.ts)) return null;
   return {
-    id: raw.id,
+    // A record that arrives without a key (an import, slice 5b) gets the one
+    // it would have been written with, rather than being dropped.
+    attemptId:
+      typeof raw.attemptId === 'string' && raw.attemptId !== ''
+        ? raw.attemptId
+        : attemptKey({ ts: raw.ts, questionId: raw.questionId }),
+    questionId: raw.questionId,
     ts: raw.ts,
     exerciseId: raw.exerciseId,
     skillId: raw.skillId,
@@ -180,7 +204,7 @@ export async function openPracticeStorage(): Promise<PracticeStorage | null> {
         upgrade(database) {
           if (!database.objectStoreNames.contains('attempts')) {
             const attempts = database.createObjectStore('attempts', {
-              keyPath: 'id',
+              keyPath: 'attemptId',
             });
             attempts.createIndex('by-ts', 'ts');
             attempts.createIndex('by-skill', 'skillId');

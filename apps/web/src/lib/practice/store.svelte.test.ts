@@ -3,13 +3,13 @@
 import 'fake-indexeddb/auto';
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { StoredAttempt } from '$lib/storage/db';
+import { attemptKey, type NewAttempt } from '$lib/storage/db';
 import { PRACTICE_COPY } from './copy';
 import { PracticeStore } from './store.svelte';
 
-function attempt(overrides: Partial<StoredAttempt> = {}): StoredAttempt {
+function attempt(overrides: Partial<NewAttempt> = {}): NewAttempt {
   return {
-    id: 'find-the-note:7:60',
+    questionId: 'find-the-note:7:60',
     ts: 1_700_000_000_000,
     exerciseId: 'find-the-note',
     skillId: 'find-the-note:pc:0',
@@ -54,7 +54,7 @@ describe('PracticeStore', () => {
     const first = new PracticeStore();
     first.record(attempt());
     first.record(
-      attempt({ id: 'find-the-note:8:62', correct: false, score: 0 }),
+      attempt({ questionId: 'find-the-note:8:62', correct: false, score: 0 }),
     );
     await settle();
 
@@ -64,6 +64,43 @@ describe('PracticeStore', () => {
     expect(second.attempts).toHaveLength(2);
     expect(second.byId.get('find-the-note:pc:0')?.reps).toBe(2);
     expect(second.masteryFor(['find-the-note:pc:0'])).toBeCloseTo(0.21);
+  });
+
+  it('keeps both attempts when the same question comes round twice', async () => {
+    // The log is append-only: a repeated question id (a seed collision, or a
+    // slice-5b import from a second device) must not overwrite a row.
+    const first = new PracticeStore();
+    first.record(attempt({ ts: 1_700_000_000_000 }));
+    first.record(attempt({ ts: 1_700_000_030_000, correct: false, score: 0 }));
+    await settle();
+
+    const second = new PracticeStore();
+    await second.hydrate();
+    expect(second.attempts).toHaveLength(2);
+    expect(second.attempts.map((item) => item.attemptId)).toEqual([
+      attemptKey({ ts: 1_700_000_000_000, questionId: 'find-the-note:7:60' }),
+      attemptKey({ ts: 1_700_000_030_000, questionId: 'find-the-note:7:60' }),
+    ]);
+    expect(second.byId.get('find-the-note:pc:0')?.reps).toBe(2);
+  });
+
+  it('keeps an attempt recorded while hydration was still in flight', async () => {
+    const first = new PracticeStore();
+    first.record(attempt());
+    await settle();
+
+    const second = new PracticeStore();
+    const reading = second.hydrate();
+    // Answered before the read came back: it belongs to the session, and its
+    // own write is already queued behind it.
+    second.record(attempt({ ts: 1_700_000_060_000, questionId: 'live' }));
+    await reading;
+    await settle();
+
+    expect(second.attempts.map((item) => item.questionId)).toEqual([
+      'find-the-note:7:60',
+      'live',
+    ]);
   });
 
   it('rebuilds a missing skill record from the attempt log', async () => {
@@ -146,7 +183,7 @@ describe('PracticeStore', () => {
     store.onError = onError;
 
     store.record(attempt());
-    store.record(attempt({ id: 'second' }));
+    store.record(attempt({ questionId: 'second' }));
     await settle();
 
     expect(store.attempts).toHaveLength(2);

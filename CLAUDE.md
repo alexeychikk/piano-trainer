@@ -176,9 +176,15 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
   - `$lib/practice/store.svelte.ts` (singleton `practice`) is the only writer: `record()` updates
     state **synchronously** and queues the write behind it, so persistence never sits in the
     runner's callback while audio is being scheduled. `hydrate()` is the one-shot mount path
-    (wired in `+layout.svelte` beside `settings.hydrate()`); `reload()` re-reads, which is what
-    slice 5b's import calls. A failed write sets `degraded` and reports the copy deck's line once
-    through `onError` → a banner.
+    (wired in `+layout.svelte` beside `settings.hydrate()`) and **merges by `attemptId`**, so an
+    answer given while the read was in flight survives; `reload()` **replaces**, which is what
+    slice 5b's import needs after it swaps the log out. A failed write sets `degraded` and reports
+    the copy deck's line once through `onError` → a banner.
+  - **An attempt is keyed by the attempt, not the question**: `attemptId` = `${ts}:${questionId}`,
+    stamped by `record()` (`attemptKey()` in `db.ts`), never by a caller. A question id repeats — a
+    seed collision, or a 5b import from another device — and keying on it would silently overwrite a
+    row in an append-only log. The runner emits a `NewAttempt` (no key); an imported record without
+    one is keyed on read, not dropped.
   - **The attempt log is the source of truth**: `skills` is a cache of `deriveSkills()` over the
     log, so a lost or half-written skill record heals on the next load.
   - **Mastery is an EWMA, α = 0.3, over the grade's `score`** (`$lib/practice/mastery.ts`); weak =
@@ -188,7 +194,10 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
     `Drill these` rather than faking a due date. Everything else on the screen is real data.
   - Layering: `practice` may import `storage` and `exercises` types and **nothing imports it back**
     — the runner takes an `onAttempt` callback (`ExerciseRunner.svelte` passes `practice.record`) and
-    stays testable without a database. All practice wording is in `$lib/practice/copy.ts`.
+    stays testable without a database. **All practice wording is in `$lib/practice/copy.ts`** —
+    including the templates (`timeAgo`, `skillDetail`), so `progress.ts` computes numbers and never
+    spells a sentence. An unpractised skill has **no** detail line: the pips already say `new`, and
+    the copy deck has no sentence for it.
   - `/progress` numbers all come from the pure `$lib/practice/progress.ts` (totals, 28-day strip,
     7-day accuracy, per-skill cells and detail lines); the screen is markup over HUD primitives.
     Its detail line is rendered inline for practised skills instead of on hover/focus — the space is
