@@ -51,6 +51,11 @@ export const IDLE_PAUSE_MS = 90_000;
  * fumbled answer — would skip past the reveal before it has been heard.
  */
 export const ADVANCE_LOCKOUT_MS = 500;
+/**
+ * `note-sequence` (ADR §3, UX §4.3): the answer closes after this much silence
+ * — or as soon as it is the expected length, which is the usual way it ends.
+ */
+export const SEQUENCE_GAP_MS = 1200;
 
 /** How many recent skills an exercise may see, to avoid immediate repeats. */
 const HISTORY_LENGTH = 8;
@@ -109,6 +114,14 @@ export class ExerciseRunner {
 
   #timer: ReturnType<typeof setTimeout> | null = null;
   #idleTimer: ReturnType<typeof setTimeout> | null = null;
+  /**
+   * Its own timer, not `#timer`: a replay during `awaiting` schedules on
+   * `#timer`, and an answer in progress must survive hearing the question
+   * again.
+   */
+  #sequenceTimer: ReturnType<typeof setTimeout> | null = null;
+  /** The `note-sequence` answer as it is being played, in played order. */
+  #sequence: { midi: Midi; source: NoteSource }[] = [];
   #recent: SkillId[] = [];
   #askedAt = 0;
   #feedbackAt = 0;
@@ -204,8 +217,13 @@ export class ExerciseRunner {
     const question = this.question;
     if (!question) return;
     this.#armIdleTimer();
-    // Slice 4 ships `single-note`; the other modes arrive with the exercises
-    // that need them (UX spec §4.4), and until then a note is not an answer.
+    if (question.answerMode === 'note-sequence') {
+      this.#appendToSequence(question, midi, source);
+      return;
+    }
+    // Slice 4 ships `single-note`, slice 6 `note-sequence`; the chord and
+    // choice modes arrive with the exercises that need them (UX §4.4), and
+    // until then a note is not an answer.
     if (question.answerMode !== 'single-note') return;
 
     const grade = this.definition.grade(question, {
@@ -224,6 +242,19 @@ export class ExerciseRunner {
     );
   }
 
+  /**
+   * `Backspace` — take back the last note of a `note-sequence` answer
+   * (UX §4.4, §4.5). Nothing is graded yet, so this is the only way to undo a
+   * fumbled key, and it restarts the silence window rather than closing it.
+   */
+  backspace(): void {
+    if (this.phase !== 'awaiting' || this.#sequence.length === 0) return;
+    this.#sequence.pop();
+    this.answerNotes = this.#sequence.map((note) => note.midi);
+    this.#clearSequenceTimer();
+    if (this.#sequence.length > 0) this.#armSequenceTimer();
+  }
+
   /** Continue after feedback. */
   advance(): void {
     if (this.phase !== 'feedback') return;
@@ -234,6 +265,9 @@ export class ExerciseRunner {
     if (this.phase === 'idle' || this.phase === 'paused') return;
     this.#clearTimer();
     this.#clearIdleTimer();
+    // 90 s of silence ends an answer in progress too: whatever half of a
+    // sequence was played is not something to come back to.
+    this.#resetSequence();
     this.#playback.stop();
     this.playing = false;
     this.phase = 'paused';
@@ -249,8 +283,79 @@ export class ExerciseRunner {
   destroy(): void {
     this.#clearTimer();
     this.#clearIdleTimer();
+    this.#resetSequence();
     this.#playback.stop();
     this.playing = false;
+  }
+
+  // ---- note-sequence answers (UX §4.4) -----------------------------------
+
+  /**
+   * Append a note to the answer in progress and decide whether it closes it:
+   * at the expected length immediately (the usual way a two-note interval or a
+   * short dictation ends), otherwise after `SEQUENCE_GAP_MS` of silence, so a
+   * short answer is never stuck waiting for a note that is not coming.
+   */
+  #appendToSequence(question: Question, midi: Midi, source: NoteSource): void {
+    this.#sequence.push({ midi, source });
+    this.answerNotes = this.#sequence.map((note) => note.midi);
+    const expected = expectedLength(question.expected);
+    if (expected > 0 && this.#sequence.length >= expected) {
+      this.#closeSequence();
+      return;
+    }
+    this.#armSequenceTimer();
+  }
+
+  /** Grade whatever has been played. Called at length or after the silence. */
+  #closeSequence(): void {
+    const question = this.question;
+    if (!question || this.phase !== 'awaiting') return;
+    this.#clearSequenceTimer();
+    const order = this.#sequence.map((note) => note.midi);
+    // The answer's source is the source of its last note: mixing a MIDI piano
+    // and the computer keys mid-answer is legal (nothing downstream may ask
+    // where a note came from), and the log stores one source.
+    const source =
+      this.#sequence[this.#sequence.length - 1]?.source ?? 'onscreen';
+    const grade = this.definition.grade(question, {
+      kind: 'notes',
+      notes: [...order],
+      order,
+      source,
+    });
+    this.#finish(
+      grade.correct ? 'correct' : 'wrong',
+      grade,
+      order,
+      source,
+      grade.feedback,
+      grade.revealed?.notes,
+    );
+  }
+
+  #armSequenceTimer(): void {
+    this.#clearSequenceTimer();
+    this.#sequenceTimer = setTimeout(() => {
+      this.#sequenceTimer = null;
+      this.#closeSequence();
+    }, SEQUENCE_GAP_MS);
+  }
+
+  #clearSequenceTimer(): void {
+    if (this.#sequenceTimer === null) return;
+    clearTimeout(this.#sequenceTimer);
+    this.#sequenceTimer = null;
+  }
+
+  #resetSequence(): void {
+    this.#clearSequenceTimer();
+    this.#sequence = [];
+    // The slots render from `answerNotes`, so dropping the sequence has to drop
+    // what is drawn with it: a paused question that came back showing a note it
+    // no longer counts would only self-correct on the next note-on. The two
+    // callers that keep an answer (`#finish`, `#next`) assign straight after.
+    this.answerNotes = [];
   }
 
   // ---- machine -----------------------------------------------------------
@@ -268,6 +373,7 @@ export class ExerciseRunner {
     this.question = question;
     this.outcome = null;
     this.feedback = null;
+    this.#resetSequence();
     this.answerNotes = [];
     this.revealNotes = [];
     this.replays = 0;
@@ -289,6 +395,13 @@ export class ExerciseRunner {
       this.phase = 'awaiting';
       this.#askedAt = this.#now();
       this.#armIdleTimer();
+      // A replay during `awaiting` keeps the half-played answer, so it must
+      // keep the answer's silence window too: `#closeSequence()` refuses to
+      // grade while `presenting`, so a gap that elapsed during the replay was
+      // swallowed and nothing re-armed it — the answer stayed open with no way
+      // of closing itself. Restart it from the end of the playback, which is
+      // when the silence the user is being timed on actually begins.
+      if (this.#sequence.length > 0) this.#armSequenceTimer();
     }, durationMs);
   }
 
@@ -329,6 +442,9 @@ export class ExerciseRunner {
     if (!question) return;
     this.#clearTimer();
     this.#clearIdleTimer();
+    // A graded answer is closed: a late note belongs to the feedback phase
+    // (where it advances the drill), never to the sequence just played.
+    this.#resetSequence();
 
     this.answerNotes = notes;
     this.outcome = outcome;
@@ -429,4 +545,13 @@ export class ExerciseRunner {
 
 function expectedNotes(expected: ExpectedAnswer): Midi[] {
   return expected.kind === 'notes' ? [...expected.notes] : [];
+}
+
+/**
+ * How many notes a `note-sequence` answer is expected to have — the length of
+ * the expected notes, and `0` when the exercise does not answer in notes at
+ * all (then only the silence window can close it).
+ */
+export function expectedLength(expected: ExpectedAnswer): number {
+  return expected.kind === 'notes' ? expected.notes.length : 0;
 }

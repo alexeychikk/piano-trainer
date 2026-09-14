@@ -153,8 +153,15 @@ export interface ExerciseDefinition<P = unknown, S = Record<string, never>> {
  * What the registry holds. Methods (not properties) on purpose: TypeScript
  * checks method parameters bivariantly, so a concretely typed exercise is
  * assignable to the erased type the registry and the runner work with.
+ *
+ * The erased settings type is `Record<string, unknown>`, not the default
+ * `Record<string, never>`: `defaultSettings` is a *property*, so it is checked
+ * normally, and slice 4's no-settings exercise was the only one that fitted
+ * "every value is `never`". An exercise's settings must therefore be declared
+ * as a **type alias**, not an `interface` — only an alias gets the implicit
+ * index signature that makes it assignable here.
  */
-export type AnyExercise = ExerciseDefinition;
+export type AnyExercise = ExerciseDefinition<unknown, Record<string, unknown>>;
 
 export interface AttemptResult {
   /**
