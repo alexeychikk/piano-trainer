@@ -28,6 +28,32 @@ function isSpaFallbackNotice(text: string, url: string): boolean {
   return text.includes('status of 404') && url.includes('/practice/');
 }
 
+/**
+ * "The app is listening" — the wait every key press on a *prerendered* screen
+ * needs before it is pressed.
+ *
+ * `/practice/<id>` and `/session` are client-rendered (the runner is not in
+ * the HTML at all), so their first `Ready?` prompt is already proof that the
+ * client has taken over. `/play`, `/settings` and `/progress` are prerendered:
+ * their markup — buttons, piano keys, fields and all — is on screen before a
+ * line of JavaScript has run, so a `press`/`click` in that window reaches a
+ * DOM with no handlers on it and is simply lost. That is the flake this
+ * removes, and the only honest fix is to wait for the client, never to sleep.
+ *
+ * `#svelte-announcer` is SvelteKit's own route announcer: it exists in the
+ * client bundle only and is rendered from the *root* component's `onMount`. A
+ * parent's `onMount` runs after its children's, so once it is attached,
+ * `+layout.svelte`'s `onMount` has already run — `computerKeyboard.attach(
+ * window)`, the capture-phase audio starter, `settings.hydrate()` and
+ * `practice.hydrate()` — and the screen's own handlers were attached earlier
+ * still, during hydration of that subtree. It is a DOM state the app itself
+ * puts there, asserted with Playwright's ordinary auto-retry: no
+ * `waitForTimeout`, no bumped timeout, no retry.
+ */
+async function appIsListening(page: Page): Promise<void> {
+  await expect(page.locator('#svelte-announcer')).toBeAttached();
+}
+
 function watchConsole(page: Page): string[] {
   const errors: string[] = [];
   page.on('console', (message) => {
@@ -98,7 +124,10 @@ test('free play shows what is held, from the computer keys and the mouse', async
   const consoleErrors = watchConsole(page);
 
   await page.goto('/play/');
+  // The heading is prerendered, so it proves nothing about the keyboard: the
+  // computer keys only play once the root layout has attached them.
   await expect(page.getByRole('heading', { name: 'Free play' })).toBeVisible();
+  await appIsListening(page);
 
   // A / D / G on the computer keyboard = C4 E4 G4 — a C major triad.
   await page.keyboard.down('a');
@@ -140,6 +169,9 @@ test('sound waits for a gesture, then degrades to the synth (ADR §2)', async ({
   const consoleErrors = watchConsole(page);
 
   await page.goto('/play/');
+  // The gesture below only starts the `AudioContext` once the capture-phase
+  // starter in `+layout.svelte` is wired, so wait for the client first.
+  await appIsListening(page);
   // Nothing has been touched yet: no context, and the state says so.
   await expect(page.getByLabel(/^Sound: not started/)).toBeVisible();
   await expect(page.getByTestId('sound-strip')).toContainText(
@@ -189,6 +221,9 @@ test('the metronome toggles from the keyboard and keeps running across routes', 
   const consoleErrors = watchConsole(page);
 
   await page.goto('/play/');
+  // Every control below is pressed with the keyboard (focus + Enter) or typed
+  // into, and the panel is prerendered, so wait for the client to take over.
+  await appIsListening(page);
   // The panel's header band *is* the region's heading: the re-skin restyles
   // the outline, it does not delete it. Uppercasing is `text-transform`, which
   // Chromium folds into the accessible name, hence the case-insensitive match.
@@ -336,7 +371,16 @@ test('the interval drill takes a two-note answer from the computer keys', async 
   // A miss never blocks: no dialog anywhere in the drill.
   await expect(page.getByRole('dialog')).toHaveCount(0);
 
-  // The runner never scrolls, note slots and all (§4.1).
+  // The runner never scrolls, note slots and all (§4.1) — and this is the
+  // tallest the frame ever gets: a *sequence* drill with no MIDI device wears
+  // the widest shortcut bar there is, `⌫ clear last` on top of the whole
+  // computer mapping and the `Z` / `X` shift. Assert that bar is the one on
+  // screen, so the measurement below is of the worst case and not of a
+  // narrower one that happened to fit.
+  const shortcuts = page.getByTestId('shortcuts');
+  await expect(shortcuts).toContainText('clear last');
+  await expect(shortcuts).toContainText('A W S E D F T G Y H U J K');
+  await expect(shortcuts).toContainText('octave');
   const scrolls = await page.evaluate(
     () => document.documentElement.scrollHeight > window.innerHeight + 1,
   );
@@ -427,6 +471,10 @@ test('the range wizard learns the keyboard from two presses', async ({
   const consoleErrors = watchConsole(page);
 
   await page.goto('/settings/');
+  // `C2 to C7` is the prerendered default *and* the hydrated one, so it says
+  // nothing about the client being there — but the wizard button and the
+  // computer keys below need it to be.
+  await appIsListening(page);
   await expect(page.getByTestId('range-value')).toHaveText('C2 to C7');
 
   await page.getByTestId('range-start').click();
@@ -442,8 +490,12 @@ test('the range wizard learns the keyboard from two presses', async ({
   await page.keyboard.press('k');
   await expect(page.getByTestId('range-value')).toHaveText('C3 to C4');
 
-  // It is settings, so it survives a reload.
+  // It is settings, so it survives a reload — but the reloaded page is the
+  // prerendered one until `settings.hydrate()` has run, and its markup says
+  // `C2 to C7`. Wait for the client, then assert, so the assertion is about
+  // storage and not about which HTML happened to be on screen.
   await page.reload();
+  await appIsListening(page);
   await expect(page.getByTestId('range-value')).toHaveText('C3 to C4');
 
   expect(consoleErrors).toEqual([]);
@@ -455,7 +507,10 @@ test('an answered question survives a reload and shows on /progress', async ({
   const consoleErrors = watchConsole(page);
 
   await page.goto('/progress/');
+  await appIsListening(page);
   // Nothing practised yet: the copy deck's empty state, never an empty chart.
+  // It is rendered behind `practice.hydrated`, so this line is also the
+  // screen's own "the log has been read" signal.
   await expect(page.getByText('No attempts yet.')).toBeVisible();
 
   await page.goto('/practice/find-the-note/');
@@ -480,7 +535,12 @@ test('an answered question survives a reload and shows on /progress', async ({
 
   // The point of the slice: a full reload, and it is still there — which only
   // IndexedDB can do, the in-memory store having gone with the page.
+  // The reloaded document is the prerendered one, which carries neither panel
+  // (both sit behind `practice.hydrated`), so wait for the client before
+  // reading the screen — otherwise the `toHaveCount(0)` below could be
+  // satisfied by HTML that has not been told about the log yet.
   await page.reload();
+  await appIsListening(page);
   await expect(page.getByRole('heading', { name: /^today$/i })).toBeVisible();
   await expect(page.getByText('No attempts yet.')).toHaveCount(0);
   await expect(
@@ -498,6 +558,11 @@ test('the mixed session runs from the hero to the summary (slice 9b)', async ({
   page,
 }) => {
   const consoleErrors = watchConsole(page);
+
+  // Spelled out rather than left to the config default: the session frame's
+  // constraint is "must not scroll at 1280×720 with the no-MIDI strip
+  // showing", and the assertion below is only that assertion at that size.
+  await page.setViewportSize({ width: 1280, height: 720 });
 
   await page.goto('/');
   // The hero is a link, so this navigation needs no hydration wait; every
@@ -520,6 +585,19 @@ test('the mixed session runs from the hero to the summary (slice 9b)', async ({
   // `A` is C4 — right or wrong, it is an answer, and the session logs it.
   await page.keyboard.press('a');
   await expect(page.getByTestId('feedback')).not.toBeEmpty();
+
+  // The session frame is the runner's frame, so §4.1 binds it too and it gets
+  // the guard the four `/practice/<id>` specs have: no scroll at 1280×720
+  // **with the no-MIDI strip showing**, which is the state that costs the most
+  // height. `Got it` *is* the strip — the strip's sentence depends on what the
+  // browser says about Web MIDI, its dismiss button does not.
+  // Case-insensitive: the label is uppercased with `text-transform`, which
+  // Chromium folds into the accessible name (the same rule as `SETTINGS_LINK`).
+  await expect(page.getByRole('button', { name: /^got it$/i })).toBeVisible();
+  const scrolls = await page.evaluate(
+    () => document.documentElement.scrollHeight > window.innerHeight + 1,
+  );
+  expect(scrolls).toBe(false);
 
   // `Esc` ends the session and the summary replaces the runner (UX §4.5).
   await page.keyboard.press('Escape');

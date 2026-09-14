@@ -623,6 +623,24 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
   carries a rule (a11y, highlight states), which is why `vite.config.ts` resolves the `browser`
   condition under Vitest and `vitest-setup.ts` stubs `ResizeObserver`. Playwright covers a thin smoke path per exercise. Unit tests sit next to
   the module (`nav.ts` → `nav.test.ts`); e2e specs live in `apps/web/e2e/`.
+- **An e2e spec waits on a signal the app gives, never on a sleep** — no `waitForTimeout`, no bumped
+  timeout, no `test.slow()`, no retry bump. Which signal depends on the screen: `/practice/<id>` and
+  `/session` are client-rendered, so the `Ready?` prompt (and the `replay` control re-enabling, once
+  a question is playing) already proves the client is there; `/progress` renders both its panels
+  behind `practice.hydrated`. **`/play`, `/settings` and `/progress` are prerendered**, so their
+  buttons, fields and piano keys are on screen with no handlers on them and a press in that window is
+  lost — those specs call `appIsListening(page)` (`smoke.spec.ts`), which waits for SvelteKit's
+  `#svelte-announcer`: it is client-only and rendered from the *root* component's `onMount`, which
+  runs **after** `+layout.svelte`'s (a parent mounts after its children), i.e. after
+  `computerKeyboard.attach(window)`, the capture-phase audio starter and `settings`/`practice`
+  hydration. The same wait is what makes a *negative* assertion on a prerendered screen mean
+  anything.
+- **The runner's no-scroll guard (§4.1) is measured in the tallest state**: 1280×720 (the config's
+  default viewport, spelled out where it is the point) with the **no-MIDI strip showing** — `Got it`
+  is the stable handle on that strip, since its sentence depends on what the browser says about Web
+  MIDI — and, in a `note-sequence` drill, with the widest shortcut bar (`⌫ clear last` on top of the
+  whole computer mapping and `Z` / `X`). `/session` carries the same guard as the four drills: it is
+  the same frame.
 - `apps/web/src/lib/styles/tokens.css` is a byte-for-byte copy of `docs/design/tokens.css` — change
   the spec first, then re-copy. Both files, and everything under `docs/`, are Prettier-ignored so
   they do not drift.
