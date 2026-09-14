@@ -347,6 +347,10 @@ describe('ExerciseRunner · pausing', () => {
     expect(h.runner.phase).toBe('feedback');
     expect(h.plays.length).toBe(playsBefore + 1);
     expect(h.attempts).toHaveLength(1);
+    // And it is the *same* reveal: the wrong key the user played still carries
+    // its ✗ highlight, so they come back to the screen they walked away from.
+    expect(h.runner.answerNotes).toEqual([62]);
+    expect(h.runner.revealNotes).toEqual([60]);
 
     // And it can be abandoned twice.
     h.tick(IDLE_PAUSE_MS);

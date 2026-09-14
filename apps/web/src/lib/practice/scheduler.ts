@@ -24,7 +24,7 @@
  * pitch class in the wrong octave — is a failure of recall, not half of one.
  */
 
-import type { SkillState } from '$lib/storage/db';
+import { DEFAULT_EASINESS, type SkillState } from '$lib/storage/db';
 
 export const DAY_MS = 24 * 60 * 60 * 1000;
 const MINUTES_PER_DAY = 24 * 60;
@@ -52,7 +52,10 @@ export type SkillSchedule = Pick<
 >;
 
 export function clampEasiness(easiness: number): number {
-  if (!Number.isFinite(easiness)) return MAX_EASINESS;
+  // A corrupt or hand-edited easiness repairs to the **neutral** value, not to
+  // the most generous one: `MAX_EASINESS` would push that skill's intervals as
+  // far out as the ladder allows on the strength of a `NaN`.
+  if (!Number.isFinite(easiness)) return DEFAULT_EASINESS;
   return Math.min(MAX_EASINESS, Math.max(MIN_EASINESS, easiness));
 }
 

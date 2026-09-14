@@ -71,6 +71,15 @@ whose `skillId` is in the planner's list, passing the head of the list as `targe
 day an exercise honours it directly. If no draw lands, the drill runs a normal question instead of
 hanging.
 
+**The list is `targetSkillsFor()`'s overdue/weak items, never the `new` ones** (unless the exercise
+owes nothing at all, where the plan's own order is still a better start than the seed). A bias is
+only as strong as what it excludes: with 1 overdue and 31 unseen of `play-the-voicing`'s 36 skills,
+a list of all 32 accepts the first draw ~89 % of the time, and `?due=1` becomes indistinguishable
+from an ordinary drill. Both entry points only offer the targeted run when `dueCount > 0`, so the
+narrower list is never empty in practice.
+
 This keeps the runner ignorant of every exercise (it compares ids and nothing else) and is honest
-about what it delivers: strongly biased, not guaranteed. Making it exact is an exercise-side change
-and belongs with whichever slice first needs `settingsFields`.
+about what it delivers: strongly biased, not guaranteed. The honest number: one target skill among
+36, sampled 16 times, lands ~36 % of the time — a question from the due skill roughly every third
+draw instead of roughly every thirtieth. Making it exact is an exercise-side change and belongs with
+whichever slice first needs `settingsFields`.

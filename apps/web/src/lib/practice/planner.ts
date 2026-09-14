@@ -173,8 +173,14 @@ function compareItems(a: PlanItem, b: PlanItem): number {
  * The skills a `Drill these` / `Practice now` run should favour, for one
  * exercise: its plan items in plan order. Empty means "anything goes".
  *
- * `new` skills are targets too: an exercise you have never touched should
- * still start somewhere deliberate rather than wherever the seed lands.
+ * **`new` skills are targets only when nothing is owed.** A target set is a
+ * *bias* the runner applies by rejection sampling, so its strength is the
+ * fraction of the exercise's skills it excludes: on `play-the-voicing` (36
+ * skills) a set of "1 overdue + 31 unseen" accepts the first draw ~89 % of the
+ * time, which makes `?due=1` indistinguishable from an ordinary drill — the
+ * exact opposite of what the affordance promises. Targeting the overdue/weak
+ * items alone keeps the bias real; unseen skills still get their turn through
+ * `plan.pick` (which is *where* the run starts) and through an untargeted run.
  */
 export function targetSkillsFor(
   plan: PracticePlan,
@@ -182,5 +188,6 @@ export function targetSkillsFor(
 ): string[] {
   const own = plan.byExercise.get(exerciseId);
   if (!own) return [];
-  return own.items.map((item) => item.skillId);
+  const owed = own.items.filter((item) => item.reason !== 'new');
+  return (owed.length > 0 ? owed : own.items).map((item) => item.skillId);
 }

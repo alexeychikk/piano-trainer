@@ -113,12 +113,14 @@ describe('review — the clock is injected', () => {
     expect(state.easiness).toBe(MAX_EASINESS);
   });
 
-  it('repairs a hand-edited easiness before using it', () => {
+  it('repairs a hand-edited easiness to the neutral value before using it', () => {
+    // Not to `MAX_EASINESS`: a `NaN` is no evidence at all, and repairing it
+    // upwards would push that skill's intervals as far out as the ladder goes.
     const next = review(schedule(Number.NaN, 1, 0), {
       correct: true,
       at: T0,
     });
-    expect(next.easiness).toBe(MAX_EASINESS);
+    expect(next.easiness).toBeCloseTo(DEFAULT_EASINESS + EASINESS_BONUS, 10);
     expect(Number.isFinite(next.dueAt)).toBe(true);
   });
 });

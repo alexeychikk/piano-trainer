@@ -291,9 +291,14 @@ export class ExerciseRunner {
     this.#pausedInFeedback = this.phase === 'feedback';
     this.#clearTimer();
     this.#clearIdleTimer();
-    // 90 s of silence ends an answer in progress too: whatever half of a
-    // sequence was played is not something to come back to.
-    this.#resetSequence();
+    // 90 s of silence ends an answer *in progress*: whatever half of a
+    // sequence was played is not something to come back to. A graded answer is
+    // a different thing — `#finish` already emptied the sequence and left
+    // `answerNotes` as the ✓/✗ highlights of the reveal, so pausing on it must
+    // keep them: `resume()` returns to that reveal, and it has to be the
+    // screen the user walked away from.
+    if (!this.#pausedInFeedback) this.#resetSequence();
+    else this.#clearSequenceTimer();
     this.#playback.stop();
     this.playing = false;
     this.phase = 'paused';

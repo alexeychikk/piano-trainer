@@ -324,7 +324,8 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
     session). **`score` never enters the schedule** — it drives mastery; for recall a half-right
     answer is a miss. The ten-minute first rung is deliberate (one right answer is not learning).
   - **The schedule is replayed from the log, never trusted from the record**: `applyAttempt` folds
-    `review()` in at `attempt.ts`, so `deriveSkills()` reproduces it and a reload cannot wipe it
+    `review()` in inside `$lib/practice/mastery.ts` (at the attempt's own `ts`), so `deriveSkills()`
+    reproduces it and a reload cannot wipe it
     (ADR 0002 §3's trap). Consequently **no `PRACTICE_SCHEMA_VERSION` bump** — the three fields were
     already in the record and the export payload, and only their meaning narrowed.
   - **`new` is not `due`**: `isDue` needs `reps > 0`, so an unpractised skill is `new` (UX §6.2) and
@@ -340,7 +341,10 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
     `TARGET_SAMPLE_TRIES` (16) seeds and keeps the first question whose `skillId` the planner asked
     for, passing `targetSkillId` into `generate()` for the day an exercise honours it. No draw
     lands ⇒ an ordinary question, never a hang. The runner still compares ids and nothing else, so
-    it learns nothing about any exercise.
+    it learns nothing about any exercise. **The target set is `targetSkillsFor()`'s overdue/weak
+    items only** — it falls back to the `new` ones just for an exercise that owes nothing. A bias's
+    strength is what it excludes: including 31 unseen skills of 36 accepted the first draw ~89 % of
+    the time and made `?due=1` indistinguishable from an ordinary drill.
   - The schedule's wording is in `copy.ts` like everything else: `dueNow` (`12 due`), `dueBadge`
     (`Due 4`), `skillsDueToday`, `timeUntil` (`in 3 h` / `now`), and `skillDetail` now carries
     UX §6.2's `due …` clause. The word `due` is always in the text — `--warn` only carries it.

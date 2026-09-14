@@ -180,13 +180,56 @@ describe('per-exercise counts and targets', () => {
   it('exposes one exercise’s targets in plan order, and nothing for a stranger', () => {
     const plan = buildPlan(
       EXERCISES,
-      map(skill({ skillId: 'find-the-note:pc:1', dueAt: NOW - 10 })),
+      map(
+        skill({ skillId: 'find-the-note:pc:1', dueAt: NOW - 10 }),
+        skill({ skillId: 'find-the-note:pc:0', dueAt: NOW - 20 }),
+      ),
       NOW,
     );
     expect(targetSkillsFor(plan, 'find-the-note')).toEqual([
-      'find-the-note:pc:1',
       'find-the-note:pc:0',
+      'find-the-note:pc:1',
     ]);
     expect(targetSkillsFor(plan, 'nope')).toEqual([]);
+  });
+
+  it('targets only what is owed when due and unseen skills are mixed', () => {
+    // 1 overdue, 1 weak, the rest never touched — the bias has to exclude the
+    // unseen ones or a targeted run is just an ordinary run.
+    const plan = buildPlan(
+      [
+        {
+          id: 'find-the-note',
+          skillIds: [
+            'find-the-note:pc:0',
+            'find-the-note:pc:1',
+            'find-the-note:pc:2',
+            'find-the-note:pc:3',
+          ],
+        },
+      ],
+      map(
+        skill({ skillId: 'find-the-note:pc:2', dueAt: NOW - 10 }),
+        skill({
+          skillId: 'find-the-note:pc:3',
+          dueAt: NOW + DAY_MS,
+          mastery: 0.1,
+        }),
+      ),
+      NOW,
+    );
+    expect(plan.byExercise.get('find-the-note')?.items).toHaveLength(4);
+    expect(targetSkillsFor(plan, 'find-the-note')).toEqual([
+      'find-the-note:pc:2',
+      'find-the-note:pc:3',
+    ]);
+  });
+
+  it('falls back to the unseen skills when an exercise owes nothing', () => {
+    const plan = buildPlan(EXERCISES, map(), NOW);
+    expect(targetSkillsFor(plan, 'intervals')).toEqual([
+      'intervals:7:asc',
+      'intervals:3:asc',
+    ]);
   });
 });
