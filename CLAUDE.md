@@ -272,9 +272,10 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
   - **The graded quantity is the progression in a key** (slice 8's rule, one level up):
     `spellsProgression()` requires each chord to spell its degree's quality over **its own root**
     (`spellsQualityFromRoot`, new in `chords.ts` — `spellsQuality` with the key pinned). Free:
-    register, octave, spacing, doubling and note order *inside* a chord, and enharmonics. Rejected:
-    another key, another quality, the chords in another order, an inverted chord, a shell, and any
-    answer that is not exactly twelve notes. Binary scoring (ADR §10).
+    register, octave, spacing and note order *inside* a chord, and enharmonics. Rejected: another
+    key, another quality, the chords in another order, an inverted chord, a shell, a doubling (it
+    always costs a chord tone — the answer is twelve notes and a chord is four, slice 8's rule), and
+    any answer that is not exactly twelve notes. Binary scoring (ADR §10).
   - **Chords are separated by count, not by time** — each chord is four notes, so the answer is
     chunked 4–4–4 in played order. Nothing downstream *can* use timing: an `Answer` carries notes,
     order and a source and no timestamps. Slice 7's `CHORD_SETTLE_MS` note therefore stays

@@ -253,10 +253,15 @@ export function chunkIntoChords(
  *
  * The rule, stated once (slice 10): the answer is cut into chords by count and
  * in played order, and **every chord must spell its degree's quality over its
- * own root** (`spellsQualityFromRoot`). So register, octave, spacing, doubling
- * and the order of the notes *inside* a chord are all free, enharmonics
- * compare equal for free, and what is graded is the cadence in the key: the
- * order of the chords, each chord's quality and each chord's root.
+ * own root** (`spellsQualityFromRoot`). So register, octave, spacing and the
+ * order of the notes *inside* a chord are all free, enharmonics compare equal
+ * for free, and what is graded is the cadence in the key: the order of the
+ * chords, each chord's quality and each chord's root.
+ *
+ * A **doubling is a miss**, for slice 8's reason: the answer is exactly twelve
+ * notes and a chord is exactly four, so a doubled note always costs a chord
+ * tone and leaves its chunk a pitch class short (`intervalsAboveBass` dedupes).
+ * The note itself is not rejected — the missing one is.
  */
 export function spellsProgression(
   notes: readonly Midi[],

@@ -150,6 +150,14 @@ describe('spellsQualityFromRoot', () => {
     expect(spellsQualityFromRoot([61, 65, 68, 72], 1, 'maj7')).toBe(true);
   });
 
+  it('tolerates a doubling — the fixed answer length is what rejects one', () => {
+    // This primitive only compares pitch classes above the bass, so a doubled
+    // root is fine here. In the drill it is a miss: an answer is exactly twelve
+    // notes and a chord exactly four, so a doubling always costs a chord tone
+    // and leaves its chunk a pitch class short (see `spellsProgression`).
+    expect(spellsQualityFromRoot([60, 64, 67, 71, 72], 0, 'maj7')).toBe(true);
+  });
+
   it('is root position: the lowest note played is the root', () => {
     expect(spellsQualityFromRoot([64, 67, 71, 72], 0, 'maj7')).toBe(false);
     expect(spellsQualityFromRoot([], 0, 'maj7')).toBe(false);

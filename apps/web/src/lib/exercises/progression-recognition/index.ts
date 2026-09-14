@@ -15,10 +15,12 @@
  *   what makes all 12 keys worth drilling.
  * - **order** — the cadence's. ii, then V, then I; playing them in another
  *   order is a named miss, never a silent one.
- * - **octave / register / spacing / doubling** — free, per chord and for the
- *   whole progression: only the pitch classes above each chord's bass are
- *   compared, so a wide left-hand chord and a close right-hand one grade the
- *   same.
+ * - **octave / register / spacing** — free, per chord and for the whole
+ *   progression: only the pitch classes above each chord's bass are compared,
+ *   so a wide left-hand chord and a close right-hand one grade the same.
+ * - **doubling** — fails, exactly as it does in slice 8: the answer is twelve
+ *   notes and a chord is four, so a doubled note always costs a chord tone and
+ *   leaves its chunk a pitch class short.
  * - **inversion** — root position, chord by chord. A pitch-class set alone
  *   does not name one quality (slice 7's reasoning: Cm7 and Eb6 are the same
  *   four notes), so the lowest note of each chord is read as its root.
