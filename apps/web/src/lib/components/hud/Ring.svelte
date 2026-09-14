@@ -28,10 +28,19 @@
     sweep = false,
   }: Props = $props();
 
+  /**
+   * Mirrors `--ring-stroke` in `tokens.css`, the same way `piano/geometry.ts`
+   * mirrors the keyboard tokens: SVG geometry is computed in JS and cannot
+   * read a custom property. Keep the two in step — if the token changes and
+   * this does not, the arc clips at the viewBox edge.
+   */
+  const STROKE_PX = 10;
+
   const clamped = $derived(Math.min(1, Math.max(0, value)));
   const percent = $derived(Math.round(clamped * 100));
-  // The stroke is centred on the path, so the radius leaves half of it inside.
-  const radius = $derived(size / 2 - 6);
+  // The stroke is centred on the path, so the radius leaves half of it inside
+  // (plus a px of breathing room, so the glow is not clipped either).
+  const radius = $derived(size / 2 - STROKE_PX / 2 - 1);
   const circumference = $derived(2 * Math.PI * radius);
   const offset = $derived(circumference * (1 - clamped));
 

@@ -200,6 +200,12 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
     spread, so the `--glow-*` box-shadow tokens cannot be reused there: `hud.css` mixes the same
     tokens into `--hud-glow-*` colours with `color-mix`. That is the *only* place a colour is
     derived, and it still starts from a token.
+  - **`--on-accent` is white, and it is only valid over `--grad-primary` / `--accent-deep`.** It
+    clears AA on the gradient's stops (4.65 / 8.62) but measures **2.77 on flat `--accent`** — so a
+    *filled* accent surface is the gradient (pressed toggles, the active beat pip, a played key),
+    while flat `--accent` stays a border, glyph, link and text colour. The other `--on-*` roles all
+    resolve to `--bg-0` and are unaffected; this one role sign-changed in the re-skin, so a
+    pre-re-skin `background: var(--accent); color: var(--on-accent)` pair is always a contrast bug.
   - **Focus on a chamfered element** drops `outline` (it follows the unclipped rectangle) and turns
     the edge layer into the ring: edge → `--focus`, face margin → 3 px.
   - Headings, buttons, labels, numerals use `--font-display`; **body copy stays `--font-sans` and

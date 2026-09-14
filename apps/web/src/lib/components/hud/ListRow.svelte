@@ -10,6 +10,12 @@
    *
    * Rows are separated by a hairline, never striped; a row inside a scrolling
    * panel does not chamfer (§3.1), which is why the row itself never does.
+   *
+   * **The separator needs the rows to be DOM siblings.** It is drawn with
+   * `:not(:first-child)`, so wrapping each row in its own `<li>` (or any other
+   * element) makes every row a first child and the hairlines silently vanish.
+   * Render the rows directly inside their container, or draw the separator on
+   * the wrapper yourself.
    */
   interface Props {
     tone?: Tone;

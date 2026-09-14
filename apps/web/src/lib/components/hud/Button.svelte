@@ -40,6 +40,19 @@
     children,
   }: Props = $props();
 
+  /**
+   * A disabled link has no `href`, so it leaves the tab order and cannot be
+   * activated by the keyboard — but a click on it would still reach `onclick`.
+   * Swallow it, so `disabled` means the same thing in both renderings.
+   */
+  function onLinkClick(event: MouseEvent) {
+    if (disabled) {
+      event.preventDefault();
+      return;
+    }
+    onclick?.(event);
+  }
+
   const glow = $derived(
     variant === 'primary'
       ? 'hud-glow hud-glow-accent'
@@ -68,7 +81,7 @@
     href={disabled ? undefined : href}
     aria-disabled={disabled ? 'true' : undefined}
     aria-label={ariaLabel}
-    {onclick}
+    onclick={onLinkClick}
     class="btn {variant} {size} {glow}"
     class:block
     class:disabled

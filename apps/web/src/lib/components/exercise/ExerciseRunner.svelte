@@ -260,9 +260,13 @@
     border-bottom: 1px solid var(--border);
   }
 
+  /* An `h1` that is only 20 px: uppercase stops there (spec §4.2), so the
+     strip's exercise title keeps the sentence case of the copy deck. */
   .exercise {
     font-size: var(--fs-h2);
     font-weight: var(--fw-semibold);
+    text-transform: none;
+    letter-spacing: var(--track-none);
   }
 
   .stats {

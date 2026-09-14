@@ -431,8 +431,11 @@
     cursor: default;
   }
 
+  /* `--grad-primary`, not flat `--accent`: the 12 px key label is `--on-accent`
+     (white), which clears AA over the gradient's stops but only reaches 2.77
+     on flat `--accent`. Same rule as every other filled accent surface. */
   .played {
-    background: var(--accent);
+    background: var(--grad-primary);
     color: var(--on-accent);
     transform: translateY(2px);
     box-shadow: var(--shadow-key-down);
