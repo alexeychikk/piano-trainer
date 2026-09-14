@@ -66,12 +66,16 @@ export class PracticeStore {
     }
     const snapshot = await storage.read();
     this.attempts = snapshot.attempts;
-    // The attempt log is the source of truth: a skill record that went missing
-    // (or was never written because a write failed) is rebuilt from it.
-    const derived = deriveSkills(snapshot.attempts);
-    this.skills = snapshot.skills.length
-      ? snapshot.skills.map((skill) => derived.get(skill.skillId) ?? skill)
-      : [...derived.values()];
+    // The attempt log is the source of truth (ADR 0002 §1): a skill the log
+    // knows about is rebuilt from it, whatever the stored record says, and a
+    // stored skill with no attempts behind it (an import, slice 5b) is kept.
+    const merged = new Map(
+      snapshot.skills.map((skill) => [skill.skillId, skill]),
+    );
+    for (const [skillId, skill] of deriveSkills(snapshot.attempts)) {
+      merged.set(skillId, skill);
+    }
+    this.skills = [...merged.values()];
     this.hydrated = true;
   }
 

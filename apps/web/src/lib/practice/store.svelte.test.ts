@@ -89,6 +89,43 @@ describe('PracticeStore', () => {
     expect(second.byId.get('find-the-note:pc:0')?.reps).toBe(1);
   });
 
+  it('keeps a stored skill the log knows nothing about', async () => {
+    // What an imported profile looks like before its attempts land (slice 5b).
+    const open = indexedDB.open('piano-trainer', 1);
+    await new Promise((resolve) => {
+      open.onupgradeneeded = () => {
+        const db = open.result;
+        const attempts = db.createObjectStore('attempts', { keyPath: 'id' });
+        attempts.createIndex('by-ts', 'ts');
+        attempts.createIndex('by-skill', 'skillId');
+        db.createObjectStore('skills', { keyPath: 'skillId' });
+        db.createObjectStore('meta', { keyPath: 'key' });
+      };
+      open.onsuccess = () => {
+        const tx = open.result.transaction('skills', 'readwrite');
+        tx.objectStore('skills').put({
+          skillId: 'find-the-note:pc:5',
+          exerciseId: 'find-the-note',
+          reps: 4,
+          lapses: 1,
+          easiness: 2.5,
+          intervalDays: 0,
+          dueAt: 0,
+          mastery: 0.6,
+          lastSeenAt: 1_700_000_000_000,
+        });
+        tx.oncomplete = () => {
+          open.result.close();
+          resolve(null);
+        };
+      };
+    });
+
+    const store = new PracticeStore();
+    await store.hydrate();
+    expect(store.byId.get('find-the-note:pc:5')?.mastery).toBeCloseTo(0.6);
+  });
+
   it('hydrates once; `reload()` re-reads for slice 5b', async () => {
     const store = new PracticeStore();
     await store.hydrate();

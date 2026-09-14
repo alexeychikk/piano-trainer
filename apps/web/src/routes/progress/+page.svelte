@@ -60,8 +60,15 @@
     ),
   );
 
-  const hasData = $derived(practice.attempts.length > 0);
-  const practised = $derived(groups.filter((group) => group.attempts > 0));
+  const hasData = $derived(
+    practice.attempts.length > 0 || practice.skills.length > 0,
+  );
+  // An exercise nothing has touched gets no panel — the screen answers "what is
+  // solid?", and twelve `new` cells answer nothing. Mastery, not the attempt
+  // count, is the test: an imported profile (slice 5b) may arrive without a log.
+  const practised = $derived(
+    groups.filter((group) => group.attempts > 0 || group.mastery !== null),
+  );
 
   const streakLabel = $derived(
     totals.streakDays === 1 ? '1 day' : `${totals.streakDays} days`,
