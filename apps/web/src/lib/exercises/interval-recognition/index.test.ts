@@ -79,8 +79,8 @@ describe('interval-recognition · generate', () => {
   });
 
   it('drops intervals the instrument range cannot hold', () => {
-    // A 13-semitone range cannot hold the octave *and* leave a root to ask it
-    // from more than once, but it can hold everything smaller.
+    // A ten-semitone range cannot hold the octave at all, but it can hold
+    // everything smaller.
     for (let seed = 0; seed < 200; seed += 1) {
       const question = ask(seed, { low: 60, high: 70 });
       expect(Math.abs(question.payload.semitones)).toBeLessThanOrEqual(10);

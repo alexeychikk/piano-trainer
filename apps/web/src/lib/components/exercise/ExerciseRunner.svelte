@@ -162,6 +162,22 @@
       void end();
       return;
     }
+    if (event.key === 'Backspace') {
+      /*
+       * §4.5's row reads "clear the answer in progress"; we take back the *last*
+       * note instead — §4.4's own wording, what the shortcut bar promises
+       * (`⌫ clear last`) and the better reading: one fumbled key should not cost
+       * the notes already played right.
+       *
+       * Deliberately handled above the `inKeyboard` return: the piano keyboard
+       * binds no Backspace (§5.5 is `Space`/`Enter`), so answering with roving
+       * focus on the on-screen keys would otherwise have no undo at all. The
+       * runner ignores it outside a `note-sequence` answer.
+       */
+      event.preventDefault();
+      runner.backspace();
+      return;
+    }
     if (inKeyboard) return;
     if (event.key === ' ') {
       event.preventDefault();
@@ -172,12 +188,6 @@
       event.preventDefault();
       runner.skip();
       return;
-    }
-    if (event.key === 'Backspace') {
-      // §4.5: clear the answer in progress — `note-sequence` only, and the
-      // runner ignores it everywhere else.
-      event.preventDefault();
-      runner.backspace();
     }
   }
 

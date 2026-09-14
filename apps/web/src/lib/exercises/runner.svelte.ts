@@ -351,6 +351,11 @@ export class ExerciseRunner {
   #resetSequence(): void {
     this.#clearSequenceTimer();
     this.#sequence = [];
+    // The slots render from `answerNotes`, so dropping the sequence has to drop
+    // what is drawn with it: a paused question that came back showing a note it
+    // no longer counts would only self-correct on the next note-on. The two
+    // callers that keep an answer (`#finish`, `#next`) assign straight after.
+    this.answerNotes = [];
   }
 
   // ---- machine -----------------------------------------------------------
@@ -390,6 +395,13 @@ export class ExerciseRunner {
       this.phase = 'awaiting';
       this.#askedAt = this.#now();
       this.#armIdleTimer();
+      // A replay during `awaiting` keeps the half-played answer, so it must
+      // keep the answer's silence window too: `#closeSequence()` refuses to
+      // grade while `presenting`, so a gap that elapsed during the replay was
+      // swallowed and nothing re-armed it — the answer stayed open with no way
+      // of closing itself. Restart it from the end of the playback, which is
+      // when the silence the user is being timed on actually begins.
+      if (this.#sequence.length > 0) this.#armSequenceTimer();
     }, durationMs);
   }
 

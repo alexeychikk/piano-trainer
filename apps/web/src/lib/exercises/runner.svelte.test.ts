@@ -396,6 +396,27 @@ describe('ExerciseRunner · note-sequence answers', () => {
     expect(h.runner.outcome).toBe('correct');
   });
 
+  it('re-arms the silence window when the gap elapses during a replay', async () => {
+    const h = await started(harness(sequenceStub));
+    h.runner.noteOn(62, 'midi');
+    h.tick(SEQUENCE_GAP_MS - 500);
+    // The replay lasts longer than the 500 ms left on the window, so the gap
+    // elapses while the question is presenting — when nothing may be graded.
+    h.runner.replay();
+    h.tick(PLAYBACK_MS);
+    expect(h.runner.phase).toBe('awaiting');
+    expect(h.runner.answerNotes).toEqual([62]);
+
+    // The window runs again from the end of the replay: the answer is still
+    // open, and it still closes on its own (§4.3).
+    h.tick(SEQUENCE_GAP_MS - 1);
+    expect(h.runner.phase).toBe('awaiting');
+
+    h.tick(1);
+    expect(h.runner.phase).toBe('feedback');
+    expect(h.runner.outcome).toBe('wrong');
+  });
+
   it('starts the next question with an empty answer', async () => {
     const h = await started(harness(sequenceStub));
     h.runner.noteOn(62, 'midi');
@@ -418,9 +439,13 @@ describe('ExerciseRunner · note-sequence answers', () => {
     // answer long before the 90 s idle pause could reach it.
     h.runner.pause();
     expect(h.runner.phase).toBe('paused');
+    // The slots render from `answerNotes`, so the discarded note must leave the
+    // screen with the answer — not linger until the next note-on.
+    expect(h.runner.answerNotes).toEqual([]);
 
     h.runner.space();
     h.tick(PLAYBACK_MS);
+    expect(h.runner.answerNotes).toEqual([]);
     h.runner.noteOn(60, 'midi');
     h.runner.noteOn(67, 'midi');
     expect(h.runner.outcome).toBe('correct');

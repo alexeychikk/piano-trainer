@@ -7,6 +7,7 @@ import {
   isSimpleInterval,
   spokenInterval,
 } from './intervals';
+import { nameToMidi } from './notes';
 
 describe('intervalBetween', () => {
   it('is signed: up is positive, down is negative', () => {
@@ -16,8 +17,13 @@ describe('intervalBetween', () => {
   });
 
   it('is enharmonic-blind, because it is arithmetic on MIDI numbers', () => {
-    // Eb4 and D#4 are the same integer, so there is nothing to compare.
-    expect(intervalBetween(60, 63)).toBe(intervalBetween(60, 63));
+    // Eb4 and D#4 are the same integer, so a minor 3rd above C4 is a minor 3rd
+    // however the answer is spelled — the reason grading never sees a string.
+    const eFlat = nameToMidi('Eb4') ?? -1;
+    const dSharp = nameToMidi('D#4') ?? -1;
+    expect(eFlat).toBe(dSharp);
+    expect(intervalBetween(60, eFlat)).toBe(3);
+    expect(intervalBetween(60, dSharp)).toBe(3);
     expect(intervalBetween(60, 72)).toBe(OCTAVE);
   });
 });
