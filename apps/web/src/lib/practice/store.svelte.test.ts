@@ -259,6 +259,63 @@ describe('PracticeStore', () => {
     expect(onError).not.toHaveBeenCalled();
   });
 
+  it('resets everything, on disk as well as on screen', async () => {
+    const store = new PracticeStore();
+    store.record(attempt());
+    store.record(attempt({ ts: 1_700_000_030_000, questionId: 'second' }));
+    await settle();
+
+    const persisted = await store.resetAll();
+
+    expect(persisted).toBe(true);
+    expect(store.attempts).toEqual([]);
+    expect(store.skills).toEqual([]);
+    expect(store.masteryFor(['find-the-note:pc:0'])).toBeNull();
+    expect(store.degraded).toBe(false);
+
+    const reopened = new PracticeStore();
+    await reopened.hydrate();
+    expect(reopened.attempts).toEqual([]);
+    expect(reopened.skills).toEqual([]);
+  });
+
+  it('lets an attempt recorded a moment earlier land, then wipes it too', async () => {
+    // The reset is on the write queue: the queued write must not resurrect
+    // itself on top of an emptied log.
+    const store = new PracticeStore();
+    store.record(attempt());
+    await store.resetAll();
+    await settle();
+
+    const reopened = new PracticeStore();
+    await reopened.hydrate();
+    expect(reopened.attempts).toEqual([]);
+  });
+
+  it('resets in memory when there is no storage, and says it is degraded', async () => {
+    Reflect.deleteProperty(globalThis, 'indexedDB');
+    const store = new PracticeStore();
+    const onError = vi.fn();
+    store.onError = onError;
+    // Seeded through the import path, so nothing has reported a failed write
+    // yet — this asserts what the *reset* says, not what a lost attempt said.
+    await store.replaceAll({
+      attempts: [{ ...attempt(), attemptId: 'x' }],
+      skills: [],
+    });
+    expect(store.attempts).toHaveLength(1);
+
+    const persisted = await store.resetAll();
+
+    expect(persisted).toBe(false);
+    expect(store.attempts).toEqual([]);
+    expect(store.skills).toEqual([]);
+    expect(store.degraded).toBe(true);
+    // Like the import: the storage sentence is about a lost *attempt*, and the
+    // section has its own line for a reset that could not be saved.
+    expect(onError).not.toHaveBeenCalled();
+  });
+
   it('`sync()` waits for queued writes, then re-reads storage', async () => {
     const store = new PracticeStore();
     await store.hydrate();

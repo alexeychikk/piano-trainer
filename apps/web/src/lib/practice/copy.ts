@@ -5,6 +5,8 @@
  * §9) verbatim; the functions assemble the spec's own templates (UX §6.2's
  * detail line) the way `midi/status.ts` assembles a device line.
  */
+import { RESET_CONFIRM_WORD } from './reset';
+
 export const PRACTICE_COPY = {
   /** A failed write. Practice continues; the banner says what was lost. */
   storageFailed:
@@ -22,7 +24,30 @@ export const PRACTICE_COPY = {
   /** The import landed, but only in memory (no storage, or a failed write). */
   importNotSaved:
     'Imported, but it could not be saved — it lasts until you close this tab.',
+  /**
+   * The nudge above `Reset all practice data` (sci-fi-screens.md §8.5). Says
+   * what is lost and offers the way to keep it, in the deck's voice; the
+   * control itself is the warning, so this never shouts.
+   */
+  resetNudge: 'Export first if you want a copy — a reset cannot be undone.',
+  /** The field's label, built from the word the reducer matches (§10.1). */
+  resetConfirmLabel: `Type ${RESET_CONFIRM_WORD} to confirm`,
+  /**
+   * The same question in front of a *file* that would empty the log — an
+   * honest export of an empty log, dropped on a real one (QA, slice 5b).
+   * Names the file's emptiness, because nothing else on screen does.
+   */
+  importEmptyNudge:
+    'That file contains no attempts or skills — importing it empties your practice data.',
+  /** The reset landed, but only in memory (no storage, or a failed write). */
+  resetNotSaved:
+    'Reset here, but it could not be saved — the old data may come back when you reload.',
 } as const;
+
+/** `Reset 412 attempts and 37 skills.` — the counts that were wiped. */
+export function resetDone(attempts: number, skills: number): string {
+  return `Reset ${count(attempts, 'attempt')} and ${count(skills, 'skill')}.`;
+}
 
 /** `Exported 412 attempts and 37 skills.` — copy deck (UX §9), verbatim. */
 export function exportDone(attempts: number, skills: number): string {

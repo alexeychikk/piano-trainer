@@ -133,6 +133,21 @@ export class PracticeStore {
     return persisted;
   }
 
+  /**
+   * Wipe the practice log and every skill record — Settings → Data's
+   * `Reset all practice data`. A reset *is* a replace with nothing, so it is
+   * the same one transaction on the same write queue: an attempt recorded a
+   * moment earlier cannot survive it, and a failed or interrupted reset
+   * changes nothing on disk at all. Settings are not practice data and are
+   * untouched here.
+   *
+   * Returns whether it was persisted, like `replaceAll`; without storage the
+   * session is emptied in memory and `degraded` says so.
+   */
+  resetAll(): Promise<boolean> {
+    return this.replaceAll({ attempts: [], skills: [] });
+  }
+
   async #load(keepPending: boolean): Promise<void> {
     const storage = await this.#open();
     if (!storage) {
