@@ -554,6 +554,13 @@ nav on the left at ≥ 1100 px. Every control applies **immediately** — no Sav
 
 ## 7. Visual language and design tokens
 
+> **Superseded (2026-09-14) by [`sci-fi-visual-language.md`](sci-fi-visual-language.md).** The
+> owner asked for a sci-fi/HUD re-skin; that document and the rewritten [`tokens.css`](tokens.css)
+> now own the palette, type treatment, elevation, glow and motion **values**. The rest of this
+> spec — behaviour, layout, information architecture, states, timings and the copy deck — is
+> unchanged and still wins. §7 below is kept for the *rationale* and for the token **names and
+> roles**, which did not change; read its hex values as historical.
+
 Dark-first. A light theme exists as a token override only (`[data-theme='light']`) and is not a v1
 design target — it must merely be legible.
 
