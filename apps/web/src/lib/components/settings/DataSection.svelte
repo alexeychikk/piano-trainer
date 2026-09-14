@@ -14,11 +14,15 @@
    *   line here: the banner is the spec's channel, the inline line survives a
    *   full banner stack and sits where the user just clicked.
    *
-   * `Reset all practice data` — §8.5's third control — is deliberately not
-   * here; it is destructive, it has its own inline-confirmation behaviour, and
-   * this ticket is backup/restore. See the closing comment.
+   * §8.5's third control, `Reset all practice data`, is the `danger` button
+   * below, in front of the inline `Type RESET to confirm` field the same
+   * section owns. Its state machine is the pure `$lib/practice/reset.ts`, and
+   * the **same** affordance guards an import that would empty the log — see
+   * `ConfirmTarget`.
    */
+  import { tick } from 'svelte';
   import Button from '$lib/components/hud/Button.svelte';
+  import MicroLabel from '$lib/components/hud/MicroLabel.svelte';
   import { audio } from '$lib/audio/engine.svelte';
   import { metronome } from '$lib/audio/metronome.svelte';
   import { midiInput } from '$lib/midi/input.svelte';
@@ -27,18 +31,36 @@
     exportDone,
     importDone,
     PRACTICE_COPY,
+    resetDone,
   } from '$lib/practice/copy';
   import { exportPracticeData } from '$lib/practice/download';
+  import {
+    canConfirm,
+    confirmReducer,
+    IDLE,
+    type ConfirmEvent,
+    type ConfirmState,
+    type ConfirmTarget,
+  } from '$lib/practice/reset';
   import { practice } from '$lib/practice/store.svelte';
-  import { parsePracticeFile } from '$lib/practice/transfer';
+  import { parsePracticeFile, type PracticeFile } from '$lib/practice/transfer';
   import { banners } from '$lib/components/shell/banners.svelte';
   import { settings, type AppSettings } from '$lib/storage/settings.svelte';
 
   /** One clock for the screen, like `/progress` — no timer behind the user. */
   const now = Date.now();
 
+  /** The `empty-import` warning's id, so the field can be described by it. */
+  const EMPTY_IMPORT_NUDGE_ID = 'data-empty-import-nudge';
+
   let picker = $state<HTMLInputElement | null>(null);
   let busy = $state(false);
+  /** The inline confirmation in front of anything that empties the log. */
+  let confirm = $state<ConfirmState>(IDLE);
+  /** The parsed file waiting behind an `empty-import` confirmation. */
+  let pendingImport = $state<PracticeFile | null>(null);
+  let field = $state<HTMLInputElement | null>(null);
+  let root = $state<HTMLDivElement | null>(null);
   /** The last export/import result, shown inline. Glyph + word, never colour. */
   let result = $state<{ ok: boolean; message: string } | null>(null);
 
@@ -73,6 +95,11 @@
     input.value = '';
     if (!file) return;
 
+    // A file pick supersedes an open confirmation: the question on screen is
+    // no longer the one being answered.
+    dispatch({ type: 'cancel' });
+    pendingImport = null;
+
     busy = true;
     try {
       const parsed = parsePracticeFile(await file.text());
@@ -80,26 +107,115 @@
         report(false, parsed.message);
         return;
       }
-      const persisted = await practice.replaceAll({
-        attempts: parsed.file.attempts,
-        skills: parsed.file.skills,
-      });
-      // A file that carries no settings block restores the log only: the
-      // taught range, the remembered piano and the sound stay as they are
-      // (`parsePracticeFile` keeps the two cases apart).
-      if (parsed.file.settings) applySettings(parsed.file.settings);
-      report(
-        persisted,
-        persisted
-          ? importDone(parsed.file.attempts.length, parsed.file.skills.length)
-          : PRACTICE_COPY.importNotSaved,
-      );
+      if (wipesTheLog(parsed.file)) {
+        // A legitimate file that happens to carry nothing, dropped on a log
+        // that has something: the outcome is a reset, so it asks the reset's
+        // question first (QA, slice 5b). Nothing has been written yet.
+        pendingImport = parsed.file;
+        await ask('empty-import');
+        return;
+      }
+      await applyImport(parsed.file);
     } catch {
       // An unreadable file (a directory, a revoked permission) is a file we
       // cannot parse — same outcome, same sentence.
       report(false, PRACTICE_COPY.importInvalid);
     } finally {
       busy = false;
+    }
+  }
+
+  /** True when applying this file would leave the user with less than nothing. */
+  function wipesTheLog(file: PracticeFile): boolean {
+    if (file.attempts.length > 0 || file.skills.length > 0) return false;
+    return practice.attempts.length > 0 || practice.skills.length > 0;
+  }
+
+  async function applyImport(file: PracticeFile) {
+    const persisted = await practice.replaceAll({
+      attempts: file.attempts,
+      skills: file.skills,
+    });
+    // A file that carries no settings block restores the log only: the
+    // taught range, the remembered piano and the sound stay as they are
+    // (`parsePracticeFile` keeps the two cases apart).
+    if (file.settings) applySettings(file.settings);
+    report(
+      persisted,
+      persisted
+        ? importDone(file.attempts.length, file.skills.length)
+        : PRACTICE_COPY.importNotSaved,
+    );
+  }
+
+  function dispatch(event: ConfirmEvent) {
+    confirm = confirmReducer(confirm, event);
+  }
+
+  /** Open the confirmation and put the caret where the question is asked. */
+  async function ask(target: ConfirmTarget) {
+    dispatch({ type: 'ask', target });
+    await tick();
+    field?.focus();
+  }
+
+  /**
+   * Which control opened the question — `Reset all practice data` for the
+   * button, `Import JSON…` for a wiping file. Focus goes back to *that* one:
+   * parking a file-picker user on a danger button they never invoked, several
+   * controls from where they were, is worse than losing focus outright.
+   */
+  const OPENED_BY: Record<ConfirmTarget, string> = {
+    reset: 'reset-data',
+    'empty-import': 'import-json',
+  };
+
+  /**
+   * Hand focus back to the control that opened the question — the field it was
+   * on is about to leave the DOM, and a focus that falls to `<body>` loses the
+   * keyboard user's place (UX §8). The target has to be read *before* the
+   * closing dispatch: by the time this runs the state is `IDLE`.
+   */
+  async function restoreFocus(target: ConfirmTarget) {
+    await tick();
+    root
+      ?.querySelector<HTMLElement>(`[data-testid="${OPENED_BY[target]}"]`)
+      ?.focus();
+  }
+
+  /** Close it without touching anything. */
+  async function cancel() {
+    if (confirm.phase !== 'confirming') return;
+    const { target } = confirm;
+    dispatch({ type: 'cancel' });
+    pendingImport = null;
+    await restoreFocus(target);
+  }
+
+  async function runConfirm() {
+    const armed = confirm;
+    if (armed.phase !== 'confirming' || !canConfirm(armed)) return;
+    dispatch({ type: 'confirm' });
+    busy = true;
+    try {
+      if (armed.target === 'reset') {
+        // The counts are what is about to be wiped: after the replace they
+        // are both 0, and "Reset 0 attempts" says nothing about what happened.
+        const attempts = practice.attempts.length;
+        const skills = practice.skills.length;
+        const persisted = await practice.resetAll();
+        report(
+          persisted,
+          persisted ? resetDone(attempts, skills) : PRACTICE_COPY.resetNotSaved,
+        );
+      } else if (pendingImport) {
+        await applyImport(pendingImport);
+      }
+    } finally {
+      pendingImport = null;
+      busy = false;
+      dispatch({ type: 'settled' });
+      await restoreFocus(armed.target);
     }
   }
 
@@ -127,7 +243,7 @@
   }
 </script>
 
-<div class="measure">
+<div class="measure" bind:this={root}>
   <p class="note">Export and import your practice data as a JSON file.</p>
 
   <div class="actions">
@@ -172,6 +288,88 @@
   {/if}
 
   <p class="note small">Importing replaces the data stored here.</p>
+
+  <!-- §8.5's third control. The nudge sits above it, 14 px --text-2, and the
+       confirmation is inline: the button reveals the field, the danger button
+       stays disabled until it matches, and a ghost `Cancel` closes it. -->
+  <hr class="rule" />
+
+  <p class="note small">{PRACTICE_COPY.resetNudge}</p>
+
+  {#if confirm.phase === 'idle'}
+    <div class="actions">
+      <Button
+        variant="danger"
+        disabled={busy}
+        testId="reset-data"
+        onclick={() => void ask('reset')}
+      >
+        Reset all practice data
+      </Button>
+    </div>
+  {:else}
+    <div class="confirm">
+      {#if confirm.target === 'empty-import'}
+        <!-- Only the file case needs a sentence: what the picked file would do
+             is not otherwise on screen. It is the field's `aria-describedby`,
+             not a live region: a region created and populated in the same frame
+             is announced unreliably, and `field.focus()` a moment later would
+             read only the label — a screen-reader user could type RESET without
+             ever hearing *why* they were asked. Described by it, focusing the
+             field reads the label and then the reason. The `!` carries the
+             state with --warn — nothing here is *wrong* yet (part 2 §11). -->
+        <p class="question" id={EMPTY_IMPORT_NUDGE_ID}>
+          <span aria-hidden="true">!</span>
+          {PRACTICE_COPY.importEmptyNudge}
+        </p>
+      {/if}
+
+      <div class="actions">
+        <label class="field">
+          <MicroLabel>{PRACTICE_COPY.resetConfirmLabel}</MicroLabel>
+          <input
+            bind:this={field}
+            class="hud-field hud-cut hud-cut-sm word"
+            type="text"
+            autocomplete="off"
+            spellcheck="false"
+            value={confirm.phase === 'confirming' ? confirm.typed : ''}
+            disabled={confirm.phase === 'working'}
+            aria-describedby={confirm.target === 'empty-import'
+              ? EMPTY_IMPORT_NUDGE_ID
+              : undefined}
+            data-testid="reset-word"
+            oninput={(event) =>
+              dispatch({ type: 'type', value: event.currentTarget.value })}
+            onkeydown={(event) => {
+              if (event.key === 'Escape') void cancel();
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                void runConfirm();
+              }
+            }}
+          />
+        </label>
+
+        <Button
+          variant="danger"
+          disabled={!canConfirm(confirm) || busy}
+          testId="reset-confirm"
+          onclick={() => void runConfirm()}
+        >
+          Reset all practice data
+        </Button>
+        <Button
+          variant="ghost"
+          disabled={confirm.phase === 'working'}
+          testId="reset-cancel"
+          onclick={() => void cancel()}
+        >
+          Cancel
+        </Button>
+      </div>
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -209,6 +407,60 @@
   .note {
     margin-top: var(--space-3);
     color: var(--text-2);
+  }
+
+  /* Backup/restore above, the destructive control below — a hairline, the
+     same --grad-rule the keyboard's apron uses, so the two halves of the
+     section read apart without a second panel (§8.5 adds no region). */
+  .rule {
+    height: 1px;
+    margin: var(--space-5) 0 0;
+    border: 0;
+    background: var(--grad-rule);
+  }
+
+  /* The reveal is a height/opacity settle, not a slide: --dur-base already
+     collapses to 1 ms under `prefers-reduced-motion` (tokens.css), so this
+     honours it without a second media query. */
+  .confirm {
+    margin-top: var(--space-4);
+    animation: reveal var(--dur-base) ease-out;
+  }
+
+  @keyframes reveal {
+    from {
+      opacity: 0;
+      /* A one-off nudge distance, like the runner's strips (§7 exemption). */
+      transform: translateY(-4px);
+    }
+  }
+
+  .question {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-2);
+    margin: 0 0 var(--space-3);
+    font-size: var(--fs-small);
+    color: var(--warn);
+  }
+
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+
+  /* Wide enough for the word and its tracking, and no wider — it takes five
+     letters, not a sentence. */
+  .word {
+    width: 14ch;
+    letter-spacing: var(--track-hud);
+    text-transform: uppercase;
+  }
+
+  /* The field and the two buttons sit on one baseline row. */
+  .confirm .actions {
+    align-items: flex-end;
   }
 
   .small {

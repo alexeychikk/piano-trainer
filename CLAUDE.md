@@ -291,9 +291,22 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
     `deviceValue(key, devices)` in `$lib/midi/status.ts`. The key itself stays remembered.
   - **The same blank-`<select>` rule binds the instrument**, which has no placeholder to fall back
     to: `audio.setInstrument()` validates the id **before it persists it** (`isInstrumentId` →
-    `DEFAULT_INSTRUMENT`), not only before it loads it, so a junk id from a hand-edited
-    `localStorage` or an imported file can never leave `/settings` showing nothing while the default
-    plays. The guard lives in the engine because `storage` may not import `$lib/audio/instruments`.
+    `DEFAULT_INSTRUMENT`), not only before it loads it, so a junk id from an **imported file** can
+    never leave `/settings` showing nothing while the default plays. The guard lives in the engine
+    because `storage` may not import `$lib/audio/instruments` — and it therefore covers the import
+    path only: a junk id hand-edited into `localStorage` is read by `settings.hydrate()`, which
+    never goes through the engine, and still renders the `<select>` blank at boot.
+- **Destroying practice data asks first** (Settings → Data, sci-fi-screens.md §8.5): the reset is
+  `practice.resetAll()` — a `replaceAll` with nothing, so it is the same single transaction on the
+  same write queue, and an attempt recorded a moment earlier cannot survive it. Settings are not
+  practice data and are never touched. The affordance is the pure reducer
+  `$lib/practice/reset.ts` (`confirmReducer`/`canConfirm`/`matchesConfirmWord`), **never
+  `confirm()` and never a dialog**: re-asking always reopens with an empty field, a cancel changes
+  nothing at all, and `working` ignores a cancel because the transaction is already queued. The
+  same confirmation guards an import that would **empty** the log (`ConfirmTarget`
+  `empty-import`): `parsePracticeFile()` cannot refuse an honest export of an empty log, so the
+  question is asked in the UI instead — `offered > 0 && parsed === 0` stays the parser's only
+  guard.
 - **The `AudioContext` starts on a capture-phase listener** in `+layout.svelte`. A piano key's own
   `pointerdown` runs at the target first, so a bubble-phase start was always one press too late and
   the first click was silent.
