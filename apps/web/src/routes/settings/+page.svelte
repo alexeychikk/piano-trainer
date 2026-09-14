@@ -17,12 +17,13 @@
   import RangeWizard from '$lib/components/midi/RangeWizard.svelte';
   import PianoKeyboard from '$lib/components/piano/PianoKeyboard.svelte';
   import type { KeyHighlight } from '$lib/components/piano/highlights';
+  import DataSection from '$lib/components/settings/DataSection.svelte';
   import SectionRail from '$lib/components/settings/SectionRail.svelte';
   import { audio } from '$lib/audio/engine.svelte';
   import { INSTRUMENTS } from '$lib/audio/instruments';
   import { audioExplanation } from '$lib/audio/status';
   import { midiInput } from '$lib/midi/input.svelte';
-  import { deviceAction, deviceSelect } from '$lib/midi/status';
+  import { deviceAction, deviceSelect, deviceValue } from '$lib/midi/status';
   import {
     settings,
     type CountIn,
@@ -47,6 +48,15 @@
   ];
 
   const volumePercent = $derived(Math.round(settings.value.volume * 100));
+
+  /**
+   * A remembered device that is switched off has no `<option>`, and the
+   * control would render blank rather than its placeholder — the fallback is
+   * the pure `deviceValue()` (PR #16 review + QA; fixed in slice 5b).
+   */
+  const selectedDevice = $derived(
+    deviceValue(settings.value.midiDeviceKey, midiInput.devices),
+  );
   const soundExplanation = $derived(audioExplanation({ status: audio.status }));
 
   /**
@@ -118,7 +128,7 @@
             <select
               id="midi-device"
               class="hud-field hud-cut hud-cut-sm"
-              value={settings.value.midiDeviceKey ?? ''}
+              value={selectedDevice}
               onchange={selectDevice}
               disabled={select.disabled}
               data-testid="midi-device"
@@ -240,6 +250,7 @@
               value={volumePercent}
               oninput={(event) =>
                 audio.setVolume(Number(event.currentTarget.value) / 100)}
+              onchange={() => settings.flush()}
             />
           </label>
           <span class="readout tabular">{volumePercent}%</span>
@@ -315,14 +326,7 @@
         chamfer="lg"
         padding="lg"
       >
-        <div class="measure">
-          <p class="note">
-            Export and import your practice data as a JSON file.
-          </p>
-          <!-- §8.5's controls (export/import, the inline RESET confirmation)
-               land with the data they act on, in slice 5. -->
-          <p class="note small">Arrives in slice 5.</p>
-        </div>
+        <DataSection />
       </HudPanel>
     </section>
   </div>

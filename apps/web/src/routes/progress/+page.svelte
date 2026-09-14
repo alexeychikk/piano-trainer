@@ -13,7 +13,10 @@
    * Two things the spec draws that slice 5a has no data for, and does not
    * fake: the `DUE NOW` counter (with the per-panel `DUE n` badge) and
    * `Drill these` — both belong to the spaced-repetition planner, which is
-   * slice 9. `Export JSON` is slice 5b.
+   * slice 9.
+   *
+   * `Export JSON` (slice 5b) is the same one-click action as Settings → Data,
+   * through the same `exportPracticeData()` — the screen only reports it.
    */
   import { base } from '$app/paths';
   import Button from '$lib/components/hud/Button.svelte';
@@ -23,8 +26,10 @@
   import MicroLabel from '$lib/components/hud/MicroLabel.svelte';
   import Ring from '$lib/components/hud/Ring.svelte';
   import IconPlay from '$lib/components/icons/IconPlay.svelte';
+  import { banners } from '$lib/components/shell/banners.svelte';
   import { DEFAULT_EXERCISE_ID, EXERCISES } from '$lib/exercises/registry';
-  import { PRACTICE_COPY } from '$lib/practice/copy';
+  import { exportDone, PRACTICE_COPY } from '$lib/practice/copy';
+  import { exportPracticeData } from '$lib/practice/download';
   import {
     buildGroups,
     fallbackSkillLabel,
@@ -76,6 +81,19 @@
   const stripLabel = $derived(
     `Attempts over the last ${STRIP_DAYS} days, ending today: ${totals.stripCounts.join(', ')}`,
   );
+
+  /** One click, no dialog (§7); the result is a banner, like Settings → Data. */
+  let exporting = $state(false);
+
+  async function exportNow() {
+    exporting = true;
+    try {
+      const counts = await exportPracticeData();
+      banners.show(exportDone(counts.attempts, counts.skills), 'success');
+    } finally {
+      exporting = false;
+    }
+  }
 </script>
 
 <svelte:head>
@@ -86,7 +104,21 @@
   <IconPlay size="1.1em" />
 {/snippet}
 
-<h1>Progress</h1>
+<div class="title-row">
+  <h1>Progress</h1>
+  {#if hasData}
+    <!-- §7: the title's one trailing control. Hidden while there is nothing to
+         export — an empty backup answers no question the owner has. -->
+    <Button
+      variant="secondary"
+      disabled={exporting}
+      testId="export-json"
+      onclick={() => void exportNow()}
+    >
+      Export JSON
+    </Button>
+  {/if}
+</div>
 
 {#if hasData}
   <section class="today" aria-labelledby="today-heading">
@@ -194,6 +226,14 @@
 {/if}
 
 <style>
+  .title-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+  }
+
   .today,
   .group {
     margin-top: var(--space-6);

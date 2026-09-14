@@ -19,6 +19,7 @@ import {
   attemptKey,
   openPracticeStorage,
   type NewAttempt,
+  type PracticeData,
   type PracticeStorage,
   type SkillState,
   type StoredAttempt,
@@ -77,6 +78,61 @@ export class PracticeStore {
     await this.#load(false);
   }
 
+  /**
+   * Let queued writes land, then re-read storage — what export calls, so the
+   * file is what is *stored* (another tab may have practised) rather than the
+   * snapshot this tab hydrated with. Without storage it is a no-op and memory
+   * stands, which is the most current thing there is.
+   */
+  async sync(): Promise<void> {
+    await this.#queue;
+    await this.reload();
+  }
+
+  /**
+   * Swap the whole log out for an imported one (slice 5b). Storage is replaced
+   * in a single transaction and then re-read, so what the screens show is what
+   * is on disk; with no storage — or a failed write — the import still applies
+   * to this session, in memory, and `degraded` says so.
+   *
+   * Returns whether it was persisted. Never throws: an import is a user
+   * action, and its result is a banner, not an exception.
+   */
+  async replaceAll(data: PracticeData): Promise<boolean> {
+    // On the write queue, so an attempt recorded a moment ago cannot land on
+    // top of the imported log after the swap.
+    const task = this.#queue.then(async () => {
+      const storage = await this.#open();
+      if (!storage) return false;
+      await storage.replace({
+        // Plain objects only: the state proxy cannot be structured-cloned.
+        attempts: data.attempts.map((attempt) => ({ ...attempt })),
+        skills: data.skills.map((skill) => ({ ...skill })),
+      });
+      return true;
+    });
+    this.#queue = task.then(
+      () => {},
+      () => {},
+    );
+    let persisted = false;
+    try {
+      persisted = await task;
+    } catch {
+      persisted = false;
+    }
+    if (persisted) {
+      await this.reload();
+    } else {
+      this.#apply({ attempts: [...data.attempts], skills: [...data.skills] });
+      // Degraded, but *not* reported through `onError`: the storage banner's
+      // sentence is about a lost attempt, and the caller has the one that fits
+      // an import (`PRACTICE_COPY.importNotSaved`).
+      this.degraded = true;
+    }
+    return persisted;
+  }
+
   async #load(keepPending: boolean): Promise<void> {
     const storage = await this.#open();
     if (!storage) {
@@ -93,14 +149,17 @@ export class PracticeStore {
       for (const item of this.attempts) byKey.set(item.attemptId, item);
       attempts = [...byKey.values()].sort((a, b) => a.ts - b.ts);
     }
-    this.attempts = attempts;
+    this.#apply({ attempts, skills: snapshot.skills });
+  }
+
+  /** Put one set of records on screen, skills rebuilt from the log. */
+  #apply(data: PracticeData): void {
+    this.attempts = data.attempts;
     // The attempt log is the source of truth (ADR 0002 §1): a skill the log
     // knows about is rebuilt from it, whatever the stored record says, and a
     // stored skill with no attempts behind it (an import, slice 5b) is kept.
-    const skills = new Map(
-      snapshot.skills.map((skill) => [skill.skillId, skill]),
-    );
-    for (const [skillId, skill] of deriveSkills(attempts)) {
+    const skills = new Map(data.skills.map((skill) => [skill.skillId, skill]));
+    for (const [skillId, skill] of deriveSkills(data.attempts)) {
       skills.set(skillId, skill);
     }
     this.skills = [...skills.values()];

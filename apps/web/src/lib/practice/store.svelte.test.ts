@@ -190,6 +190,92 @@ describe('PracticeStore', () => {
     expect(store.attempts).toHaveLength(1);
   });
 
+  it('replaces everything on import, and persists it (slice 5b)', async () => {
+    const store = new PracticeStore();
+    store.record(attempt());
+    await settle();
+
+    const imported = {
+      attemptId: '1700000900000:imported',
+      questionId: 'imported',
+      ts: 1_700_000_900_000,
+      exerciseId: 'find-the-note',
+      skillId: 'find-the-note:pc:5',
+      seed: 1,
+      correct: true,
+      score: 1,
+      responseMs: 500,
+      replays: 0,
+      answerSource: 'midi',
+    };
+    const persisted = await store.replaceAll({
+      attempts: [imported],
+      skills: [],
+    });
+
+    expect(persisted).toBe(true);
+    expect(store.attempts.map((item) => item.questionId)).toEqual(['imported']);
+    expect(store.byId.get('find-the-note:pc:0')).toBeUndefined();
+    expect(store.degraded).toBe(false);
+
+    // …and the old log really is gone from disk, not just from the screen.
+    const reopened = new PracticeStore();
+    await reopened.hydrate();
+    expect(reopened.attempts.map((item) => item.questionId)).toEqual([
+      'imported',
+    ]);
+    expect(reopened.byId.get('find-the-note:pc:5')?.reps).toBe(1);
+  });
+
+  it('lets an in-flight attempt land before the import replaces it', async () => {
+    const store = new PracticeStore();
+    // Recorded and queued, then imported over — the queued write must not
+    // resurrect itself on top of the imported log.
+    store.record(attempt());
+    await store.replaceAll({ attempts: [], skills: [] });
+    await settle();
+
+    const reopened = new PracticeStore();
+    await reopened.hydrate();
+    expect(reopened.attempts).toHaveLength(0);
+  });
+
+  it('imports in memory when there is no storage, and says it is degraded', async () => {
+    Reflect.deleteProperty(globalThis, 'indexedDB');
+    const store = new PracticeStore();
+    const onError = vi.fn();
+    store.onError = onError;
+
+    const persisted = await store.replaceAll({
+      attempts: [{ ...attempt(), attemptId: 'x' }],
+      skills: [],
+    });
+
+    expect(persisted).toBe(false);
+    expect(store.attempts).toHaveLength(1);
+    expect(store.degraded).toBe(true);
+    // The storage-failure sentence is about a lost *attempt*; the import has
+    // its own line, and the component is what says it.
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it('`sync()` waits for queued writes, then re-reads storage', async () => {
+    const store = new PracticeStore();
+    await store.hydrate();
+    const writer = new PracticeStore();
+    writer.record(attempt());
+    await settle();
+
+    // No `settle()` here: `sync()` is what export relies on to see its own
+    // writes and anything another tab has written.
+    store.record(attempt({ ts: 1_700_000_500_000, questionId: 'mine' }));
+    await store.sync();
+    expect(store.attempts.map((item) => item.questionId)).toEqual([
+      'find-the-note:7:60',
+      'mine',
+    ]);
+  });
+
   it('keeps practising without storage, and says so once', async () => {
     Reflect.deleteProperty(globalThis, 'indexedDB');
     const store = new PracticeStore();

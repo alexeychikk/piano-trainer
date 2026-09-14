@@ -1,9 +1,12 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   DEFAULT_SETTINGS,
   SettingsStore,
+  WRITE_DEBOUNCE_MS,
   parseSettings,
 } from './settings.svelte';
+
+const STORAGE_KEY = 'piano-trainer:settings';
 
 describe('parseSettings', () => {
   it('falls back to the defaults for missing or broken data', () => {
@@ -92,6 +95,64 @@ describe('SettingsStore', () => {
     reloaded.hydrate();
     expect(reloaded.value.midiDeviceKey).toBe('Roland:FP-30');
     expect(reloaded.value.noteLabels).toBe('c-only');
+  });
+});
+
+describe('SettingsStore — the debounced write (slice 5b)', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    vi.useFakeTimers();
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it('applies at once but writes once the drag settles', () => {
+    const store = new SettingsStore();
+    store.hydrate();
+    for (const volume of [0.1, 0.2, 0.3, 0.4]) store.patchSoon({ volume });
+
+    // In memory immediately — the gain must not wait for a disk write.
+    expect(store.value.volume).toBeCloseTo(0.4);
+    expect(parseSettings(localStorage.getItem(STORAGE_KEY)).volume).toBe(
+      DEFAULT_SETTINGS.volume,
+    );
+
+    vi.advanceTimersByTime(WRITE_DEBOUNCE_MS);
+    expect(parseSettings(localStorage.getItem(STORAGE_KEY)).volume).toBeCloseTo(
+      0.4,
+    );
+  });
+
+  it('flushes a pending write early (the slider let go)', () => {
+    const store = new SettingsStore();
+    store.hydrate();
+    store.patchSoon({ volume: 0.5 });
+    store.flush();
+    expect(parseSettings(localStorage.getItem(STORAGE_KEY)).volume).toBeCloseTo(
+      0.5,
+    );
+    // A second flush is a no-op, not a second write.
+    localStorage.removeItem(STORAGE_KEY);
+    store.flush();
+    expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
+  });
+
+  it('reads what is stored, not the hydrated snapshot', () => {
+    const store = new SettingsStore();
+    store.hydrate();
+    // Another tab (or this one, before `hydrate()` was ever called) moved on.
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ ...DEFAULT_SETTINGS, noteLabels: 'all' }),
+    );
+    expect(store.value.noteLabels).toBe('c-only');
+    expect(store.read().noteLabels).toBe('all');
+  });
+
+  it('flushes before reading, so a debounced change is never missed', () => {
+    const store = new SettingsStore();
+    store.hydrate();
+    store.patchSoon({ volume: 0.33 });
+    expect(store.read().volume).toBeCloseTo(0.33);
   });
 });
 

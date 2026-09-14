@@ -11,7 +11,61 @@ export const PRACTICE_COPY = {
     'Could not save this attempt — practice continues, but progress may be lost.',
   /** `/progress` with nothing recorded yet. */
   empty: 'No attempts yet. Practice something and this fills up.',
+  /**
+   * A file that is not ours (or not JSON at all). The copy deck has no line
+   * for it — it names the wrong-version case only — so this is the one new
+   * sentence slice 5b adds, in the deck's voice: says what happened, offers
+   * the next move, never blames.
+   */
+  importInvalid:
+    'That file is not piano-trainer practice data — nothing was changed.',
+  /** The import landed, but only in memory (no storage, or a failed write). */
+  importNotSaved:
+    'Imported, but it could not be saved — it lasts until you close this tab.',
 } as const;
+
+/** `Exported 412 attempts and 37 skills.` — copy deck (UX §9), verbatim. */
+export function exportDone(attempts: number, skills: number): string {
+  return `Exported ${count(attempts, 'attempt')} and ${count(skills, 'skill')}.`;
+}
+
+/** `Imported 402 attempts, 37 skills.` — UX §6.3, verbatim. */
+export function importDone(attempts: number, skills: number): string {
+  return `Imported ${count(attempts, 'attempt')}, ${count(skills, 'skill')}.`;
+}
+
+/**
+ * `This file is from schema v2; this app reads v1.` — copy deck (UX §9),
+ * verbatim. A newer file is refused rather than half-understood.
+ */
+export function importWrongVersion(fileVersion: number, appVersion: number) {
+  return `This file is from schema v${fileVersion}; this app reads v${appVersion}.`;
+}
+
+/**
+ * The `#data` stats line (sci-fi-screens.md §8.5):
+ * `412 attempts · 37 skills · last export 3 d ago`. The spec's `1.2 MB` clause
+ * is dropped — see the section component.
+ */
+export function dataStats(input: {
+  attempts: number;
+  skills: number;
+  lastExportAt: number | null;
+  now: number;
+}): string {
+  const parts = [
+    count(input.attempts, 'attempt'),
+    count(input.skills, 'skill'),
+  ];
+  if (input.lastExportAt !== null) {
+    parts.push(`last export ${timeAgo(input.lastExportAt, input.now)}`);
+  }
+  return parts.join(' · ');
+}
+
+function count(n: number, noun: string): string {
+  return `${n} ${noun}${n === 1 ? '' : 's'}`;
+}
 
 /** `2 h ago` — the granularity of the detail line (UX §6.2), not a clock. */
 export function timeAgo(ts: number, now: number): string {

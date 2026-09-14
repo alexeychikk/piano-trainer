@@ -174,9 +174,17 @@ export class AudioEngine {
 
   // ---- settings ----------------------------------------------------------
 
-  /** Persist and apply the master volume (UX spec §6.3: applies at once). */
+  /**
+   * Persist and apply the master volume (UX spec §6.3: applies at once).
+   *
+   * The gain moves now; only the `localStorage` write is debounced. A slider
+   * drag fires `input` every few milliseconds and each one was serialising the
+   * whole settings object synchronously — this is the one control in the app
+   * that changes continuously (slice 5b). `settings.flush()` commits it early
+   * (the slider's `change`), and anything that *reads* storage flushes first.
+   */
   setVolume(volume: number): void {
-    settings.patch({ volume });
+    settings.patchSoon({ volume });
     this.#applyGain();
   }
 

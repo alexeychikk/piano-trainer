@@ -121,6 +121,24 @@ export function deviceSelect({
   return { placeholder: 'None', disabled: false };
 }
 
+/**
+ * What the device `<select>` should *display*, given the remembered key and
+ * the ports that exist right now.
+ *
+ * A remembered piano that is switched off has no `<option>`, and a `<select>`
+ * whose value matches nothing renders **blank** (`selectedIndex = -1`) instead
+ * of its placeholder — so a returning user saw an empty control (PR #16 review
+ * + QA). The key stays remembered, because the piano comes back; only the
+ * displayed value falls back to the placeholder's `''`.
+ */
+export function deviceValue(
+  key: string | null,
+  devices: readonly { key: string }[],
+): string {
+  if (!key) return '';
+  return devices.some((device) => device.key === key) ? key : '';
+}
+
 export interface DeviceAction {
   label: string;
   disabled: boolean;
