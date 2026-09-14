@@ -183,9 +183,46 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
   literal in the component that draws them — tokenising a single-use 2 px only hides where it came
   from. Cite the spec section in a comment; everything reusable still becomes a token.
   Shared HUD primitives from the sci-fi language (`HudPanel`, `MicroLabel`, `Chip`/`Badge`/
-  `GlyphBadge`, `Button`, `ProgressBar`, `MasteryPips`, `Meter`, `ListRow`) live in
+  `GlyphBadge`, `Button`, `ProgressBar`, `MasteryPips`, `Ring`, `Meter`, `ListRow`) live in
   `$lib/components/hud/` and may import nothing but tokens and icons; icons are inline SVG Svelte
-  components in `$lib/components/icons/` — **no icon font, no icon package**.
+  components in `$lib/components/icons/` — **no icon font, no icon package**. They landed with
+  redesign pass 1 and every screen from pass 2 on **reuses them instead of re-styling a panel,
+  a button or a pip row**.
+- **The HUD skin, in practice (redesign pass 1)** — the sci-fi values are live; the old dark
+  palette notes above them are superseded:
+  - **Chamfer + glow are two classes, not a copy-paste**: `.hud-cut` (+ `-lg`/`-sm`) and `.hud-glow`
+    (+ `-hot`/`-accent`/`-success`) in `$lib/styles/hud.css`, imported once in the root layout.
+    The markup is always **glow → edge → face**: `clip-path` is applied *after* `filter`, so a
+    chamfered element cannot wear its own glow, and the 1 px luminous edge is a background with the
+    face inset 1 px (a real border would be clipped away). The edge is `display: flex` and the face
+    `flex: 1`, so the inset holds at any height.
+  - Glows are **static** `drop-shadow`s, ≤ 10 px blur, ≤ 12 on a screen. `drop-shadow()` takes no
+    spread, so the `--glow-*` box-shadow tokens cannot be reused there: `hud.css` mixes the same
+    tokens into `--hud-glow-*` colours with `color-mix`. That is the *only* place a colour is
+    derived, and it still starts from a token.
+  - **`--on-accent` is white, and it is only valid over `--grad-primary` / `--accent-deep`.** It
+    clears AA on the gradient's stops (4.65 / 8.62) but measures **2.77 on flat `--accent`** — so a
+    *filled* accent surface is the gradient (pressed toggles, the active beat pip, a played key),
+    while flat `--accent` stays a border, glyph, link and text colour. The other `--on-*` roles all
+    resolve to `--bg-0` and are unaffected; this one role sign-changed in the re-skin, so a
+    pre-re-skin `background: var(--accent); color: var(--on-accent)` pair is always a contrast bug.
+  - **A key face is not a panel.** Piano-key labels (and the `◇` ghost glyph) take **`--key-ink` on
+    white keys** and **`--text-2` on black keys** — the two ink roles the spec's §9 pairs with the
+    key tokens (15.57 / 10.87). `--text-3` is panel text: on `--key-white` it measures 2.61 (2.26 on
+    hover), and `--key-ink` on `--key-black` is 1.02, so neither role survives being used on the
+    other face.
+  - **Focus on a chamfered element** drops `outline` (it follows the unclipped rectangle) and turns
+    the edge layer into the ring: edge → `--focus`, face margin → 3 px.
+  - Headings, buttons, labels, numerals use `--font-display`; **body copy stays `--font-sans` and
+    uppercase stops at 20 px**. Uppercase is always `text-transform`, never in the DOM text — but
+    note that **Chromium folds `text-transform` into the accessible name**, so a Playwright
+    `getByRole(..., { name })` on uppercased text needs a case-insensitive regex.
+  - The page texture (grid + scanline + vignette) lives on `<body>` in `app.css` only; panels are
+    opaque so it never crosses text, and the scanline is dropped under `prefers-reduced-motion`.
+  - Mastery is **always** `MasteryPips` + the percentage, quantised by the pure
+    `hud/mastery.ts` (7 pips, `round(mastery * 7)`, `null` = never practised = the word `new`).
+  - Pass 2 (runner, `PianoKeyboard`, Free Play, Progress, Settings, `/session`) is a separate
+    ticket: those screens currently wear the new tokens but their old layout treatment.
 - Prettier: single quotes, width 80, trailing commas, LF, 2 spaces. Commits follow **Conventional
   Commits** (`feat:`, `fix:`, `docs:`, `chore:`) — enforced by commitlint.
 - Tests: pure logic (theory, grading, scheduler, MIDI parsing) always gets a Vitest test; glue and

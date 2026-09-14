@@ -1,47 +1,84 @@
 <script lang="ts">
-  // Home / "Practice now" (UX spec §3). With the first exercise registered
-  // (slice 4) the hero starts a drill; the length control, the Today card and
-  // the due counts arrive with persistence (slice 5) and sessions (slice 9),
-  // so the hero uses the copy deck's empty-state wording until then.
+  // Home / "Practice now" (UX spec §3, re-skinned by the sci-fi visual
+  // language §8). The regions and the copy are the spec's; only the treatment
+  // is new. With the first exercise registered (slice 4) the hero starts a
+  // drill; the length control, the Today card and the due counts arrive with
+  // persistence (slice 5) and sessions (slice 9), so until then the hero uses
+  // the copy deck's empty-state wording and the Today card is the "How this
+  // works" well the spec prescribes for the empty state.
   import { base } from '$app/paths';
   import { DEFAULT_EXERCISE_ID, EXERCISES } from '$lib/exercises/registry';
+  import { midiInput } from '$lib/midi/input.svelte';
+  import Button from '$lib/components/hud/Button.svelte';
+  import HudPanel from '$lib/components/hud/HudPanel.svelte';
+  import MasteryPips from '$lib/components/hud/MasteryPips.svelte';
+  import IconKeyboard from '$lib/components/icons/IconKeyboard.svelte';
+  import IconPlay from '$lib/components/icons/IconPlay.svelte';
 </script>
 
 <svelte:head>
   <title>Practice · piano-trainer</title>
 </svelte:head>
 
+{#snippet playGlyph()}
+  <IconPlay size="1.1em" />
+{/snippet}
+
 <h1>Ready to practise</h1>
 
 <div class="hero-row">
   <div class="hero-col">
-    <a class="hero" href={`${base}/practice/${DEFAULT_EXERCISE_ID}/`}>
-      <span class="label">
-        <span aria-hidden="true">▶</span> Start your first session
-      </span>
-      <span class="sub">Ten minutes is enough</span>
-    </a>
-    <p class="how">
-      Sit at your piano. Connect it, or use the on-screen keyboard. You answer
-      by playing — space replays the sound.
-    </p>
+    <Button
+      variant="primary"
+      size="hero"
+      block
+      href={`${base}/practice/${DEFAULT_EXERCISE_ID}/`}
+      sub="Ten minutes is enough"
+      glyph={playGlyph}
+    >
+      Start your first session
+    </Button>
   </div>
 
-  <aside class="card">
-    <h2>Exercises</h2>
-    <ul class="exercises">
-      {#each EXERCISES as exercise (exercise.id)}
-        <li>
-          <a href={`${base}/practice/${exercise.id}/`}>{exercise.title}</a>
-          <span class="desc">{exercise.description}</span>
-        </li>
-      {/each}
-    </ul>
-    <p class="empty">
-      Practice numbers appear once attempts are stored (slice 5).
-    </p>
+  <aside class="side">
+    <HudPanel header="How this works" chamfer="md" well padding="md">
+      <p class="how">
+        Sit at your piano. Connect it, or use the on-screen keyboard. You answer
+        by playing — space replays the sound.
+      </p>
+    </HudPanel>
   </aside>
 </div>
+
+<section class="drill">
+  <h2>Or drill one thing</h2>
+  <ul class="cards">
+    {#each EXERCISES as exercise (exercise.id)}
+      <li>
+        <HudPanel
+          href={`${base}/practice/${exercise.id}/`}
+          chamfer="md"
+          padding="md"
+        >
+          <span class="card">
+            <span class="title">{exercise.title}</span>
+            <span class="desc">{exercise.description}</span>
+            <span class="foot">
+              <!-- No attempts are stored yet (slice 5), so every skill is
+                   honestly `new`: seven empty pips and the word. -->
+              <MasteryPips mastery={null} />
+              {#if exercise.requiresMidi && !midiInput.connected}
+                <span class="needs">
+                  <IconKeyboard /> Needs a MIDI keyboard
+                </span>
+              {/if}
+            </span>
+          </span>
+        </HudPanel>
+      </li>
+    {/each}
+  </ul>
+</section>
 
 <style>
   .hero-row {
@@ -53,71 +90,74 @@
 
   .hero-col {
     flex: 1 1 420px;
-    max-width: 640px;
+    max-width: 640px; /* UX spec §3: the hero never grows past 640 px. */
   }
 
-  .hero {
+  .side {
+    flex: 0 1 320px;
+  }
+
+  .how {
+    font-size: var(--fs-body);
+    color: var(--text-2);
+  }
+
+  .drill {
+    margin-top: var(--space-7);
+  }
+
+  .cards {
     display: flex;
-    text-decoration: none;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: var(--space-1);
-    width: 100%;
-    height: 96px;
-    border: none;
-    border-radius: var(--radius-lg);
-    background: var(--accent);
-    color: var(--on-accent);
-    cursor: pointer;
-  }
-
-  .hero:hover {
-    text-decoration: none;
-    filter: brightness(1.08);
-  }
-
-  .exercises {
-    margin: var(--space-3) 0 0;
+    flex-wrap: wrap;
+    gap: var(--space-4);
+    margin: var(--space-4) 0 0;
     padding: 0;
     list-style: none;
   }
 
-  .exercises li + li {
-    margin-top: var(--space-3);
+  .cards li {
+    /* UX spec §3: exercise cards are 320 × 140. */
+    width: 320px;
+    min-height: 140px;
   }
 
-  .desc {
-    display: block;
-    font-size: var(--fs-small);
-    color: var(--text-3);
-  }
-
-  .label {
-    font-size: var(--fs-h1);
-    font-weight: var(--fw-bold);
-  }
-
-  .sub {
-    font-size: var(--fs-small);
-  }
-
-  .how {
-    margin-top: var(--space-5);
-    font-size: var(--fs-body-lg);
-    color: var(--text-2);
+  .cards li :global(.panel) {
+    height: 100%;
   }
 
   .card {
-    flex: 0 1 320px;
-    padding: var(--space-5);
-    background: var(--bg-1);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    height: 100%;
   }
 
-  .empty {
-    margin-top: var(--space-3);
+  /* Card titles stay sentence case — uppercase stops at 20 px (§4.2). */
+  .title {
+    font-family: var(--font-display);
+    font-size: var(--fs-h2);
+    font-weight: var(--fw-semibold);
+    line-height: var(--lh-snug);
+    color: var(--text-1);
+  }
+
+  .desc {
+    font-size: var(--fs-small);
+    color: var(--text-2);
+  }
+
+  .foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-3);
+    margin-top: auto;
+  }
+
+  .needs {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
     font-size: var(--fs-small);
     color: var(--text-3);
   }

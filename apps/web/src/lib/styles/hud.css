@@ -1,0 +1,79 @@
+/**
+ * The two recipes the HUD language repeats everywhere (sci-fi visual language
+ * §3.1): the 45° chamfer and the static outer glow. They live here rather than
+ * in every component because `clip-path` and `filter` have to be split across
+ * two elements in exactly the same way each time, and because one place can
+ * switch both off for the light fallback theme.
+ *
+ * Markup shape, used by `$lib/components/hud/*`:
+ *
+ *   <element class="hud-glow">          outer glow; unclipped, so it survives
+ *     <span class="hud-cut">            the 1 px luminous edge (a background)
+ *       <span class="hud-cut">…</span>  the face, inset 1 px
+ *
+ * A chamfered element cannot wear its own glow: clipping is applied after
+ * filtering, so a `drop-shadow` on the clipped element is clipped away too.
+ */
+
+/* Two opposite 45° corner cuts: top-right and bottom-left. */
+.hud-cut {
+  --cut: var(--chamfer-md);
+
+  clip-path: polygon(
+    0 0,
+    calc(100% - var(--cut)) 0,
+    100% var(--cut),
+    100% 100%,
+    var(--cut) 100%,
+    0 calc(100% - var(--cut))
+  );
+}
+
+.hud-cut-lg {
+  --cut: var(--chamfer-lg);
+}
+
+.hud-cut-sm {
+  --cut: var(--chamfer-sm);
+}
+
+/*
+ * Glow. `filter: drop-shadow()` takes no spread, so the `--glow-*` tokens
+ * (box-shadow syntax, with a negative spread) cannot be reused verbatim on a
+ * chamfered element. These four are the drop-shadow colours of the same roles,
+ * mixed from the very same tokens — still no raw colour outside tokens.css.
+ *
+ * Static only (§7): painted once, never animated, blur ≤ 10 px, ≤ 12 glowing
+ * elements on a screen. Switch one with `--hud-glow-color`, not a new filter.
+ */
+:root {
+  --hud-glow-panel: color-mix(
+    in srgb,
+    var(--panel-border-hot) 34%,
+    transparent
+  );
+  --hud-glow-cyan: color-mix(in srgb, var(--cyan) 34%, transparent);
+  --hud-glow-accent: color-mix(in srgb, var(--accent) 45%, transparent);
+  --hud-glow-success: color-mix(in srgb, var(--success) 40%, transparent);
+}
+
+.hud-glow {
+  filter: drop-shadow(0 0 10px var(--hud-glow-color, var(--hud-glow-panel)));
+}
+
+.hud-glow-hot {
+  --hud-glow-color: var(--hud-glow-cyan);
+}
+
+.hud-glow-accent {
+  --hud-glow-color: var(--hud-glow-accent);
+}
+
+.hud-glow-success {
+  --hud-glow-color: var(--hud-glow-success);
+}
+
+/* The light theme keeps the token contract but drops the language (§ dev. 15). */
+[data-theme='light'] .hud-glow {
+  filter: none;
+}

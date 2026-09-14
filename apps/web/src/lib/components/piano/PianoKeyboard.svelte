@@ -400,7 +400,11 @@
     padding-bottom: var(--space-2);
     border: 1px solid var(--bg-0);
     background: var(--key-white);
-    color: var(--text-3);
+    /* Key faces are not panels: `--text-3` is a panel-text colour and measures
+       2.61 on `--key-white` (2.26 on hover). The sci-fi spec §9 pairs the key
+       label with `--key-ink` — 15.57 dark / 19.09 light. `.black` overrides it
+       below, because `--key-ink` on `--key-black` is 1.02. */
+    color: var(--key-ink);
     cursor: pointer;
     transition:
       background-color var(--dur-fast) var(--ease),
@@ -431,8 +435,11 @@
     cursor: default;
   }
 
+  /* `--grad-primary`, not flat `--accent`: the 12 px key label is `--on-accent`
+     (white), which clears AA over the gradient's stops but only reaches 2.77
+     on flat `--accent`. Same rule as every other filled accent surface. */
   .played {
-    background: var(--accent);
+    background: var(--grad-primary);
     color: var(--on-accent);
     transform: translateY(2px);
     box-shadow: var(--shadow-key-down);

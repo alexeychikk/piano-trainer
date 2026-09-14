@@ -9,6 +9,15 @@ import { expect, test, type Page } from '@playwright/test';
 const SOUNDFONT_URLS = '**/midi-js-soundfonts/**';
 
 /**
+ * The nav is uppercased with `text-transform` (sci-fi visual language §6) and
+ * Chromium folds CSS text transformation into the accessible name, so an
+ * exact 'Settings' string no longer matches what the browser computes. The
+ * regex keeps the match exact — only the *casing* is left to CSS, which is
+ * the same reason the DOM text stays sentence case for screen readers (§9.3).
+ */
+const SETTINGS_LINK = /^settings$/i;
+
+/**
  * The runner's routes are not prerendered, so a static host answers them with
  * the SPA fallback — `404.html`, with a real 404 status, exactly as GitHub
  * Pages does (and as `e2e/static-server.mjs` reproduces). Chromium may log
@@ -53,7 +62,7 @@ test('the shell renders and the nav reaches every v1 screen', async ({
   await page.getByRole('link', { name: 'Free play' }).click();
   await expect(page.getByRole('heading', { name: 'Free play' })).toBeVisible();
 
-  await page.getByRole('link', { name: 'Settings', exact: true }).click();
+  await page.getByRole('link', { name: SETTINGS_LINK }).click();
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
 
   // The runner route is client-rendered through the SPA fallback (`404.html`,
@@ -169,7 +178,7 @@ test('the metronome toggles from the keyboard and keeps running across routes', 
   await expect(page.getByTestId('metronome-tempo')).toHaveValue('120');
 
   // The click survives navigation — Settings shows the same running state.
-  await page.getByRole('link', { name: 'Settings', exact: true }).click();
+  await page.getByRole('link', { name: SETTINGS_LINK }).click();
   const settingsToggle = page.getByTestId('metronome-toggle');
   await expect(settingsToggle).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByTestId('metronome-tempo')).toHaveValue('120');

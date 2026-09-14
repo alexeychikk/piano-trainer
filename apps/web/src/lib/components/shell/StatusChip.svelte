@@ -25,36 +25,73 @@
 </script>
 
 <a
-  class="chip"
-  class:success={tone === 'success'}
-  class:warn={tone === 'warn'}
-  class:danger={tone === 'danger'}
+  class="chip {tone} hud-glow"
   class:pulse
   href={`${base}${href}`}
   aria-label={srLabel}
 >
-  <span class="glyph" aria-hidden="true">{glyph}</span>
-  <span class="label">{label}</span>
+  <span class="edge hud-cut">
+    <span class="face hud-cut">
+      <span class="glyph" aria-hidden="true">{glyph}</span>
+      <span class="label">{label}</span>
+    </span>
+  </span>
 </a>
 
 <style>
+  /*
+   * The status pill (sci-fi visual language §5.2): chamfered, raised, with a
+   * meaningful edge and a fixed-width glyph column so the pills do not jitter
+   * when the state changes. Copy is UX spec §2.2 and §9, verbatim.
+   */
   .chip {
-    display: inline-flex;
+    display: inline-block;
+    height: calc(var(--topbar-h) - var(--space-5));
+    color: var(--text-3);
+    text-decoration: none;
+  }
+
+  .edge {
+    display: flex;
+    height: 100%;
+    background: var(--panel-border-hot);
+  }
+
+  .face {
+    display: flex;
+    flex: 1;
     align-items: center;
     gap: var(--space-2);
-    height: calc(var(--topbar-h) - var(--space-5));
+    margin: 1px;
     padding: 0 var(--space-3);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-pill);
     background: var(--bg-2);
-    color: var(--text-3);
     font-size: var(--fs-small);
     white-space: nowrap;
   }
 
-  .chip:hover {
-    text-decoration: none;
-    border-color: var(--accent);
+  .chip:hover .face,
+  .chip:focus-visible .face {
+    background: var(--bg-1);
+  }
+
+  /* The glyph column is fixed so a state change never reflows the row (§5.2). */
+  .glyph {
+    display: inline-block;
+    width: 1.25em;
+    text-align: center;
+  }
+
+  /*
+   * The label keeps the copy deck's own casing: it is either a state phrase or
+   * a device name ("Roland FP-30"), and a proper noun is not shouted. See the
+   * ticket comment on this deviation from §5.2's uppercase state word.
+   */
+  .label {
+    max-width: 22ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-family: var(--font-display);
+    letter-spacing: var(--track-hud);
   }
 
   .success {
@@ -69,36 +106,42 @@
     color: var(--danger);
   }
 
-  .label {
-    max-width: 22ch;
-    overflow: hidden;
-    text-overflow: ellipsis;
+  /* Chamfered focus: the edge layer is the ring (§3.4). */
+  .chip:focus-visible {
+    outline: none;
+    box-shadow: none;
+  }
+
+  .chip:focus-visible .edge {
+    background: var(--focus);
+  }
+
+  .chip:focus-visible .face {
+    margin: 3px;
   }
 
   /*
-   * "Audio not started" pulses once per 4 s (UX spec §2.2) — a nudge, not an
-   * animation. The 4 s period and the 1.6 % lift are one-off values the spec
-   * fixes for this chip alone, so they stay literal here (CLAUDE.md).
+   * "Audio not started" pulses once per 4 s (UX spec §2.2) — the one looping
+   * animation in the shell, opacity only, on the glyph only (§7). The 4 s
+   * period is a one-off the spec fixes for this chip, so it stays literal.
    */
-  .pulse {
+  .pulse .glyph {
     animation: chip-pulse 4s var(--ease) infinite;
   }
 
   @keyframes chip-pulse {
     0%,
-    88%,
+    80%,
     100% {
-      transform: scale(1);
-      border-color: var(--border);
+      opacity: 1;
     }
-    94% {
-      transform: scale(1.016);
-      border-color: currentcolor;
+    90% {
+      opacity: 0.35;
     }
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .pulse {
+    .pulse .glyph {
       animation: none;
     }
   }

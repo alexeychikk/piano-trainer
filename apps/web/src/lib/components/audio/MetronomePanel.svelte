@@ -145,8 +145,12 @@
     cursor: pointer;
   }
 
+  /* A filled accent surface is `--grad-primary`, never flat `--accent`:
+     `--on-accent` is white and only clears AA over the gradient's stops
+     (4.65 / 8.62) — on flat `--accent` it measures 2.77. */
   .toggle[aria-pressed='true'] {
-    background: var(--accent);
+    background: var(--grad-primary);
+    border-color: var(--accent-deep);
     color: var(--on-accent);
   }
 
@@ -220,8 +224,8 @@
   }
 
   .pip.active {
-    background: var(--accent);
-    border-color: var(--accent);
+    background: var(--grad-primary);
+    border-color: var(--accent-deep);
     color: var(--on-accent);
     transform: scale(1.15);
   }

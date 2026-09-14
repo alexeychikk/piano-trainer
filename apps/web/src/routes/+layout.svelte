@@ -1,6 +1,7 @@
 <script lang="ts">
   import '$lib/styles/tokens.css';
   import '$lib/styles/app.css';
+  import '$lib/styles/hud.css';
   import TopBar from '$lib/components/shell/TopBar.svelte';
   import BannerStack from '$lib/components/shell/BannerStack.svelte';
   import { banners } from '$lib/components/shell/banners.svelte';
