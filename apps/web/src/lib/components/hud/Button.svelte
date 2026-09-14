@@ -159,12 +159,14 @@
     align-items: center;
   }
 
+  /* The sub-label is body copy: sentence case, sans, and at full opacity —
+     white on the lightest --grad-primary stop is 4.65:1, and fading it would
+     spend that AA margin on decoration (§9.1). */
   .sub {
     font-family: var(--font-sans);
     font-size: var(--fs-small);
     letter-spacing: var(--track-none);
     text-transform: none;
-    opacity: 0.85;
   }
 
   /* ---- variants ------------------------------------------------------- */
