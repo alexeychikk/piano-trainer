@@ -72,6 +72,31 @@ describe('SessionSummary', () => {
     expect(rows[0]?.querySelector('[role="img"]')).not.toBeNull();
   });
 
+  it('gives a flat delta its own glyph and tone, not a green rise', () => {
+    const rows = mount({
+      ...SUMMARY,
+      rows: [
+        {
+          ...SUMMARY.rows[0]!,
+          mastery: 0,
+          deltaPercent: 0,
+          direction: 'flat',
+        },
+      ],
+    }).querySelectorAll('div.row');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.textContent).toContain('±0%');
+    expect(rows[0]?.textContent).not.toContain('▲');
+    expect(rows[0]?.textContent).toContain('●');
+    expect(rows[0]?.className).not.toContain('success');
+  });
+
+  it('never nests a panel inside a paragraph', () => {
+    // `HudPanel` renders a `<div>`; a `<p>` around it is invalid markup that
+    // only client-side rendering hides (and SSR refuses).
+    expect(mount().querySelector('p div')).toBeNull();
+  });
+
   it('names the weakest skill and offers both ways out', () => {
     const container = mount();
     expect(container.textContent).toContain('Weakest: m7 (4 of 9)');

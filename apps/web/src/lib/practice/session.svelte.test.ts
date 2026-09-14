@@ -62,6 +62,59 @@ describe('SessionRun · the clock', () => {
   });
 });
 
+describe('SessionRun · when the plan owes nothing', () => {
+  /**
+   * Every skill practised, strong and not yet due: `buildPlan()` returns no
+   * items at all (a practised-not-due skill is deliberately absent from the
+   * plan), so the session queue is empty. That is a *well-practised* user —
+   * exactly the one who has earned a mixed session — and the screen still has
+   * to mix.
+   */
+  function settledRun() {
+    const skills = new Map(
+      REGISTRY.flatMap((exercise) =>
+        exercise.skillIds.map((skillId) => [
+          skillId,
+          {
+            skillId,
+            exerciseId: exercise.id,
+            reps: 6,
+            lapses: 0,
+            easiness: 2.5,
+            intervalDays: 7,
+            dueAt: 7 * 86_400_000,
+            mastery: 0.9,
+            lastSeenAt: 0,
+          },
+        ]),
+      ),
+    );
+    const plan = buildPlan(REGISTRY, skills, 0);
+    expect(plan.items).toEqual([]);
+    return new SessionRun({
+      exercises: EXERCISES,
+      plan,
+      lengthMin: 10,
+      now: () => 0,
+    });
+  }
+
+  it('cycles the registry instead of repeating one exercise', () => {
+    const run = settledRun();
+    expect(run.first).toBe(EXERCISES[0]);
+    const seen = EXERCISES.map(() => run.pickExercise()?.id);
+    expect(seen).toEqual(EXERCISES.map((exercise) => exercise.id));
+    // And round again: a session is timed, not counted.
+    expect(run.pickExercise()?.id).toBe(EXERCISES[0]!.id);
+  });
+
+  it('asks ordinary questions — nothing is owed, so nothing is targeted', () => {
+    const run = settledRun();
+    run.pickExercise();
+    expect(run.targetSkills()).toEqual([]);
+  });
+});
+
 describe('SessionRun · through the real runner', () => {
   /**
    * The acceptance path, without a browser: the real exercises, the real

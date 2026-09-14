@@ -368,6 +368,12 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
     right and is wrong: with 12/7/5/36 skills it alternates between the two lowest-ranked
     exercises and never reaches the other two. The queue is the **whole** plan and `SessionCursor`
     **cycles** it, because a session is timed, not counted.
+  - **An empty plan still mixes.** A user with every skill practised, none overdue and none weak
+    gets `items: []` (a practised-not-due skill is deliberately absent from the plan), so the queue
+    is empty — and that is the *well-practised* user, exactly the one who earned a mixed session.
+    `SessionRun` then round-robins the **registry** (`#nextFallback()`), never `#order[0]`
+    repeated, and `targetSkills()` stays `[]`, so the questions are ordinary ones. Same shape as
+    `targetSkillsFor()`'s "an exercise that owes nothing falls back to its whole list".
   - **A session is a length, not a question count**: 5 / 10 / 20 min (`sessionLengthMin` in
     `settings`, default 10, home's segmented control), the rail's `ProgressBar` is `label="Time"`
     counting **down**, and the clock starts at the **first question** (`pickExercise()`), not at
@@ -378,8 +384,9 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
     filter.
   - **The summary is a full screen that replaces the runner**
     (`$lib/components/session/SessionSummary.svelte`), never a modal: `Ring` + three readouts,
-    `SKILLS TOUCHED` `ListRow`s (max 6, |delta| descending, ▲/▼ **and** a signed number — never
-    colour alone), the weakest line in a well, `Space` = practice again, `Esc` = done. Numbers
+    `SKILLS TOUCHED` `ListRow`s (max 6, |delta| descending, ▲ / ▼ / ● **and** a signed number —
+    never colour alone; `flat` is a real third state, a wrong answer at mastery 0 moves nothing,
+    so it takes `●` + `neutral` rather than a green ▲ over `±0%`), the weakest line in a well, `Space` = practice again, `Esc` = done. Numbers
     from the pure `summariseSession()`; wording from `copy.ts` (`sessionComplete`,
     `sessionWeakest`, `masteryDelta`). Mastery deltas are read **from the practice store** either
     side of `record()` — the store is the one authority on mastery — and an unpractised skill's

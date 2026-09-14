@@ -60,6 +60,8 @@ export class SessionRun {
   /** Insertion-ordered, so a tie in the summary breaks the way it happened. */
   #skills = new Map<string, SessionSkillTally>();
   #current: SessionItem | null = null;
+  /** Where the round-robin over the *registry* stands — see `#nextFallback`. */
+  #fallbackIndex = 0;
 
   constructor(options: SessionRunOptions) {
     this.#order = options.exercises;
@@ -80,7 +82,7 @@ export class SessionRun {
   get first(): AnyExercise | null {
     const item = this.#cursor.peek();
     return (
-      (item && this.#exercises.get(item.exerciseId)) ?? this.#order[0] ?? null
+      (item && this.#exercises.get(item.exerciseId)) ?? this.#peekFallback()
     );
   }
 
@@ -108,9 +110,35 @@ export class SessionRun {
     this.startedAt ??= this.#now();
     this.tick();
     const item = this.#cursor.next();
-    this.#current = item;
-    if (!item) return this.#order[0] ?? null;
-    return this.#exercises.get(item.exerciseId) ?? this.#order[0] ?? null;
+    const exercise = item ? this.#exercises.get(item.exerciseId) : undefined;
+    // Only an item whose exercise we actually have may bias the question:
+    // otherwise the fallback below answers, and it targets nothing.
+    this.#current = exercise ? item : null;
+    return exercise ?? this.#nextFallback();
+  }
+
+  /**
+   * What a session asks when the queue is empty — which is not a rare corner:
+   * a user with every skill practised, none overdue and none weak gets
+   * `items: []` from the planner (a practised-not-due skill is deliberately
+   * absent), and that user is exactly the one who has earned a mixed session.
+   *
+   * So the fallback is a **round-robin over the registry**, not `#order[0]`
+   * repeated: the questions are ordinary ones (`targetSkills()` stays empty,
+   * because nothing is owed), but they still come from every exercise, which
+   * is what the screen promises. It mirrors `targetSkillsFor()`'s own rule —
+   * an exercise that owes nothing falls back to its whole list rather than to
+   * nothing at all.
+   */
+  #nextFallback(): AnyExercise | null {
+    const exercise = this.#peekFallback();
+    if (exercise) this.#fallbackIndex += 1;
+    return exercise;
+  }
+
+  #peekFallback(): AnyExercise | null {
+    if (this.#order.length === 0) return null;
+    return this.#order[this.#fallbackIndex % this.#order.length]!;
   }
 
   /** The skills the current question should favour (a bias, not a filter). */

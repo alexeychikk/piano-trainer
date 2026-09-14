@@ -23,7 +23,28 @@
     sessionComplete,
     sessionWeakest,
   } from '$lib/practice/copy';
-  import type { SessionSummary } from '$lib/practice/session';
+  import type {
+    SessionSummary,
+    SessionSummaryRow,
+  } from '$lib/practice/session';
+  import type { Tone } from '$lib/components/hud/tones';
+
+  /**
+   * The three directions `summariseSession()` reports, each with its own
+   * glyph *and* tone. `flat` is a real state — a wrong answer at mastery 0
+   * moves nothing — so it takes the neutral pair rather than falling in with
+   * the rises.
+   */
+  const GLYPHS: Record<SessionSummaryRow['direction'], string> = {
+    up: '▲',
+    down: '▼',
+    flat: '●',
+  };
+  const TONES: Record<SessionSummaryRow['direction'], Tone> = {
+    up: 'success',
+    down: 'danger',
+    flat: 'neutral',
+  };
 
   const {
     summary,
@@ -110,15 +131,16 @@
              `:not(:first-child)` and a wrapper per row would erase it. -->
         {#each summary.rows as row (row.skillId)}
           <ListRow
-            tone={row.direction === 'down' ? 'danger' : 'success'}
+            tone={TONES[row.direction]}
             lead={row.label}
             detail={row.exerciseTitle}
             meta={masteryDelta(row.deltaPercent)}
           >
             {#snippet glyph()}
-              <!-- Direction is the triangle *and* the sign, never the colour
-                   alone (UX §4.8). -->
-              {row.direction === 'down' ? '▼' : '▲'}
+              <!-- Direction is the glyph *and* the sign, never the colour
+                   alone (UX §4.8) — and `flat` gets its own pair: a green ▲
+                   over `±0%` says the opposite of what happened. -->
+              {GLYPHS[row.direction]}
             {/snippet}
             {#snippet trailing()}
               <MasteryPips mastery={row.mastery} skill={row.label} />
@@ -130,7 +152,10 @@
   {/if}
 
   {#if summary.weakest}
-    <p class="weakest">
+    <!-- A `<div>`, not a `<p>`: `HudPanel` renders a `<div>`, which a
+         paragraph may not contain — invalid markup that only client-side
+         rendering hides. -->
+    <div class="weakest">
       <HudPanel well chamfer="md" padding="md">
         <span class="weakest-line">
           {sessionWeakest(
@@ -140,7 +165,7 @@
           )}
         </span>
       </HudPanel>
-    </p>
+    </div>
   {/if}
 
   <p class="actions">
