@@ -5,8 +5,10 @@
   motion, and every shared component in its new skin — plus the re-skin of the app shell and the
   home screen.
 - **Out of scope**: the exercise runner, `PianoKeyboard`, Free Play, Progress, Settings and
-  `/session`. Those are **part 2**, a separate ticket. The tokens here are already sized to carry
-  them; no new token should be needed for part 2 beyond two-hand colours (UX spec §11).
+  `/session`. Those are **part 2** — delivered 2026-09-14 as [`sci-fi-screens.md`](sci-fi-screens.md),
+  which also corrects two measured numbers in §9 below and drops the light-theme token block
+  (its §2.5). Part 2 needed exactly two new tokens, both composed of existing key colours
+  (`--grad-key-white`, `--grad-key-black`); two-hand colours (UX spec §11) are still deferred.
 - **Authority**
   - [`ADR 0001`](../decisions/0001-target-architecture-and-stack.md) wins on architecture,
     vocabulary and contracts.
@@ -616,16 +618,23 @@ Everything in `core-practice-ux.md` §8 stands. Re-measured for the new values:
 | `--success` / `--warn` on `--bg-0` | 12.82 / 12.64 | AAA |
 | `--danger` on `--bg-0` | 7.47 | AAA |
 | `--hint` on `--bg-0` | 7.87 | AAA |
-| `--focus` on `--bg-0` / on `--key-white` | 13.92 / 3.43 | AAA / AA non-text |
+| `--focus` on `--bg-0` / on `--key-white` | 13.92 / **1.19** | AAA / **fails — see note** |
 | `--on-accent` white on `--grad-primary` (lightest stop `#2A6BF5`) | 4.65 | AA |
 | `--key-ink` on `--key-white` | 15.57 | AAA |
-| `--panel-border-hot` on `--bg-1` | 2.92 → **use ≥ 2 px, or pair with a glyph** | see note |
+| `--panel-border-hot` on `--bg-1` | 3.85 (re-measured; was quoted 2.92) → **still use ≥ 2 px, or pair with a glyph** | see note |
 | `--panel-border` on `--bg-0` | 1.83 | decorative only |
 
-Note on `--panel-border-hot`: at 3.11:1 on `--bg-0` it satisfies the 3:1 non-text requirement on the
-page background, but at 2.92:1 on a panel it is marginally under. A hot edge **inside** a panel must
-therefore be 2 px, or accompanied by a glyph/label — never a 1 px hairline as the sole indicator.
-Hover and focus always add the focus ring or a text change as well, so this is a belt-and-braces rule.
+Note on `--panel-border-hot`: re-measured it is 4.10:1 on `--bg-0` and 3.85:1 on `--bg-1`, so it does
+clear the 3:1 non-text threshold on both. **Keep the stricter rule anyway**: a hot edge **inside** a
+panel is 2 px, or accompanied by a glyph/label — never a 1 px hairline as the sole indicator. Hover
+and focus always add the focus ring or a text change as well, so this is belt-and-braces
+([`sci-fi-screens.md`](sci-fi-screens.md) §2.2).
+
+Note on `--focus` and piano keys: the 3.43 figure above was wrong — `--focus` on `--key-white`
+measures **1.19**, and at `outline-offset: 2px` a key's ring lands on its white neighbours, so a
+keyboard-only user has no visible focus indicator. Piano keys therefore override the global ring with
+a dual-tone ring drawn **inside** the key face (a 2 px `--bg-0` keyline plus a 3 px `--focus` band):
+[`sci-fi-screens.md`](sci-fi-screens.md) §2.1. Every other pairing in this table reproduces exactly.
 
 Additional rules this language introduces:
 
@@ -697,6 +706,7 @@ Recorded deliberately; each is a legibility, scope or performance call, not an o
     put dark ink on filled accents. White clears AA (4.65) on the lightest gradient stop.
 14. **The display font is optional.** If pass 1 ships without self-hosting Chakra Petch, the
     condensed fallback stack carries the look at some cost in character (§4.1).
-15. **Light theme drops the language.** `[data-theme='light']` keeps the token contract but zeroes
-    every glow, gradient and texture. It remains a legibility fallback, not a design target
-    (UX spec §11).
+15. ~~**Light theme drops the language.**~~ **Superseded 2026-09-14**: the `[data-theme='light']`
+    block was dropped altogether ([`sci-fi-screens.md`](sci-fi-screens.md) §2.5). Nothing toggled it
+    and no screen was ever measured against it; the language is dark-only, and a light theme would be
+    its own ticket with its own contrast pass.
