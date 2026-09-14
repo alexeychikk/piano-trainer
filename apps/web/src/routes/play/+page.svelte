@@ -7,6 +7,9 @@
    */
   import MetronomePanel from '$lib/components/audio/MetronomePanel.svelte';
   import SoundStrip from '$lib/components/audio/SoundStrip.svelte';
+  import Chip from '$lib/components/hud/Chip.svelte';
+  import HudPanel from '$lib/components/hud/HudPanel.svelte';
+  import MicroLabel from '$lib/components/hud/MicroLabel.svelte';
   import NoMidiStrip from '$lib/components/midi/NoMidiStrip.svelte';
   import PianoKeyboard from '$lib/components/piano/PianoKeyboard.svelte';
   import type { KeyHighlight } from '$lib/components/piano/highlights';
@@ -51,6 +54,14 @@
           .join(' — '),
   );
 
+  /**
+   * The readout's hot micro-label (§6, §10.1): `CURRENT NOTE` while 0-1 notes
+   * are held, `CURRENT CHORD` with two or more. It is live, so it is hot.
+   */
+  const readoutLabel = $derived(
+    held.length >= 2 ? 'Current chord' : 'Current note',
+  );
+
   let announcement = $state('');
 
   $effect(() => {
@@ -69,39 +80,50 @@
 
 <h1>Free play</h1>
 <p class="lede">
-  Play anything — your notes sound and light up here. Press <kbd>M</kbd> to mute.
+  Play anything — your notes sound and light up here. Press <Chip variant="key"
+    >M</Chip
+  > to mute.
 </p>
 
 <NoMidiStrip />
 <SoundStrip />
 
-<!-- Visual only: see `ANNOUNCE_SETTLE_MS` for what is announced instead. -->
-<section class="readout">
-  <p class="chord" data-testid="chord">
-    {#if chords.length > 0}
-      {chords[0].name}
-    {:else if held.length > 0}
-      {noteNames.join(' ')}
-    {:else}
-      <span class="idle">Play a chord</span>
-    {/if}
-  </p>
-  <p class="notes" data-testid="held-notes">
-    {#if held.length > 0}
-      <span class="tabular">{noteNames.join(' · ')}</span>
-      {#if chords.length > 1}
-        <span class="alternatives">
-          also {chords
-            .slice(1, 4)
-            .map((chord) => chord.name)
-            .join(' · ')}
-        </span>
-      {/if}
-    {:else}
-      &nbsp;
-    {/if}
-  </p>
-</section>
+<!--
+  The reference's `CURRENT NOTE` HUD readout (§6): the same sunken well as the
+  runner's prompt, so the two screens feel like one instrument.
+  Visual only — see `ANNOUNCE_SETTLE_MS` for what is announced instead.
+-->
+<div class="readout">
+  <HudPanel well chamfer="lg" padding="lg">
+    <div class="readout-body">
+      <MicroLabel hot>{readoutLabel}</MicroLabel>
+      <p class="chord" data-testid="chord">
+        {#if chords.length > 0}
+          {chords[0].name}
+        {:else if held.length > 0}
+          {noteNames.join(' ')}
+        {:else}
+          <span class="idle">Play a chord</span>
+        {/if}
+      </p>
+      <p class="notes" data-testid="held-notes">
+        {#if held.length > 0}
+          <span class="tabular">{noteNames.join(' · ')}</span>
+          {#if chords.length > 1}
+            <span class="alternatives">
+              also {chords
+                .slice(1, 4)
+                .map((chord) => chord.name)
+                .join(' · ')}
+            </span>
+          {/if}
+        {:else}
+          &nbsp;
+        {/if}
+      </p>
+    </div>
+  </HudPanel>
+</div>
 
 <p
   class="visually-hidden"
@@ -121,8 +143,9 @@
 />
 
 <p class="hint">
-  Computer keys <kbd>{COMPUTER_KEY_HINT}</kbd> play from {octaveLabel} upwards;
-  <kbd>Z</kbd> / <kbd>X</kbd> shift the octave.
+  Computer keys <Chip variant="key">{COMPUTER_KEY_HINT}</Chip> play from {octaveLabel}
+  upwards;
+  <Chip variant="key">Z</Chip> / <Chip variant="key">X</Chip> shift the octave.
 </p>
 
 <MetronomePanel />
@@ -136,27 +159,53 @@
 
   .readout {
     margin: var(--space-6) 0;
+    max-width: var(--content-max);
+  }
+
+  .readout-body {
+    position: relative;
     text-align: center;
+  }
+
+  /* The hot micro-label sits at the well's top-left, as the runner's phase
+     label does — the two readouts are the same object (§6). */
+  .readout-body :global(.micro) {
+    position: absolute;
+    top: 0;
+    left: 0;
+    text-align: left;
   }
 
   .chord {
     /* Reserved height, so the line never pushes the keyboard around. */
     min-height: calc(var(--fs-display) * var(--lh-tight));
+    font-family: var(--font-display);
     font-size: var(--fs-display);
     line-height: var(--lh-tight);
     font-weight: var(--fw-bold);
+    text-shadow: var(--glow-text);
   }
 
+  /* The idle line is a sentence, not a readout: no uppercase, no glow. */
   .idle {
     color: var(--text-3);
     font-size: var(--fs-h1);
     font-weight: var(--fw-regular);
+    text-shadow: none;
   }
 
+  /* The held notes are a live numeric HUD readout, so they take --cyan. */
   .notes {
     min-height: calc(var(--fs-body-lg) * var(--lh-base));
-    color: var(--text-2);
+    color: var(--cyan);
     font-size: var(--fs-body-lg);
+  }
+
+  /* `.tabular` (app.css) already fixes the digits; the readout face and
+     tracking are what make it a HUD line. */
+  .tabular {
+    font-family: var(--font-display);
+    letter-spacing: var(--track-hud);
   }
 
   .alternatives {
@@ -170,15 +219,5 @@
     text-align: center;
     color: var(--text-3);
     font-size: var(--fs-small);
-  }
-
-  kbd {
-    padding: 0 var(--space-1);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    background: var(--bg-1);
-    color: var(--text-2);
-    font-family: var(--font-mono);
-    font-size: var(--fs-micro);
   }
 </style>

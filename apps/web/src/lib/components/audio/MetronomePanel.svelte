@@ -1,14 +1,17 @@
 <script lang="ts">
   /**
-   * Metronome controls (slice 3). The UX spec only fixes the *setting*
-   * (§6.3: `Metronome tempo [ 90 ] bpm`), so this panel follows the shell's
-   * visual language rather than inventing a new one: one row, everything
-   * reachable with Tab, and `m` still mutes globally.
+   * Metronome controls (slice 3), in the part-2 language (sci-fi-screens.md
+   * §6): a `HudPanel` with the `METRONOME` header band, `Button` for start and
+   * stop, §5.11 fields for tempo and beats-per-bar, and numbered diamond pips.
    *
-   * The beat indicator is a row of numbered pips — the running beat is filled
-   * *and* larger, and the downbeat is outlined, so the state never rests on
-   * colour alone (UX spec §8).
+   * The beat indicator never rests on colour alone (UX spec §8): the running
+   * beat is filled *and* larger *and* numbered, and the downbeat is outlined.
+   * The visible beat still follows in `requestAnimationFrame` — the light may
+   * lag, the click may not.
    */
+  import Button from '$lib/components/hud/Button.svelte';
+  import MicroLabel from '$lib/components/hud/MicroLabel.svelte';
+  import HudPanel from '$lib/components/hud/HudPanel.svelte';
   import { metronome } from '$lib/audio/metronome.svelte';
   import {
     MAX_BEATS_PER_BAR,
@@ -16,6 +19,7 @@
     MIN_BEATS_PER_BAR,
     MIN_BPM,
   } from '$lib/audio/scheduler';
+  import { TEMPO_RANGE_HINT, readTempoField } from '$lib/audio/tempo-field';
 
   /** ± steps that feel right on a tempo field. */
   const NUDGE_BPM = 5;
@@ -24,35 +28,62 @@
     Array.from({ length: metronome.beatsPerBar }, (_, index) => index),
   );
 
+  const barOptions = Array.from(
+    { length: MAX_BEATS_PER_BAR - MIN_BEATS_PER_BAR + 1 },
+    (_, index) => index + MIN_BEATS_PER_BAR,
+  );
+
   /**
-   * Committed on `change`, not on every keystroke: clamping mid-typing would
-   * rewrite "1" to the minimum tempo before the "20" arrives.
+   * The field is a display of the *committed* value (§8.4). While the typed
+   * text is out of range it says so; it is only ever committed on `change` and
+   * blur, never on `input` — clamping mid-typing would rewrite `1` to the
+   * minimum before the `20` of `120` arrives.
    */
-  function onTempoChange(event: Event) {
-    const value = Number((event.currentTarget as HTMLInputElement).value);
-    if (Number.isFinite(value)) metronome.setTempo(value);
+  let tempoOutOfRange = $state(false);
+
+  function onTempoInput(event: Event) {
+    tempoOutOfRange = readTempoField(
+      (event.currentTarget as HTMLInputElement).value,
+    ).outOfRange;
+  }
+
+  function commitTempo(event: Event) {
+    const field = event.currentTarget as HTMLInputElement;
+    const { bpm } = readTempoField(field.value);
+    if (bpm !== null) metronome.setTempo(bpm);
+    // Write the committed value back, so the field and the engine can never
+    // disagree once the user has left it — an empty field self-repairs too.
+    field.value = String(metronome.bpm);
+    tempoOutOfRange = false;
+  }
+
+  /** `Escape` reverts the field and leaves the tempo alone (§8.4 point 4). */
+  function onTempoKeydown(event: KeyboardEvent) {
+    if (event.key !== 'Escape') return;
+    const field = event.currentTarget as HTMLInputElement;
+    field.value = String(metronome.bpm);
+    tempoOutOfRange = false;
   }
 </script>
 
-<section class="metronome" aria-labelledby="metronome-heading">
-  <h2 id="metronome-heading">Metronome</h2>
-
+<HudPanel header="Metronome" chamfer="md" padding="md">
   <div class="controls">
-    <button
-      type="button"
-      class="toggle"
-      aria-pressed={metronome.running}
-      data-testid="metronome-toggle"
+    <Button
+      variant={metronome.running ? 'secondary' : 'go'}
+      ariaPressed={metronome.running}
+      testId="metronome-toggle"
       onclick={() => void metronome.toggle()}
     >
-      <span aria-hidden="true">{metronome.running ? '■' : '▶'}</span>
+      {#snippet glyph()}
+        <span aria-hidden="true">{metronome.running ? '■' : '▶'}</span>
+      {/snippet}
       {metronome.running ? 'Stop' : 'Start'}
-    </button>
+    </Button>
 
     <div class="tempo">
       <button
         type="button"
-        class="nudge"
+        class="nudge hud-cut hud-cut-sm"
         aria-label="Slower"
         onclick={() => metronome.setTempo(metronome.bpm - NUDGE_BPM)}
       >
@@ -61,19 +92,25 @@
       <label class="field">
         <span class="visually-hidden">Tempo in beats per minute</span>
         <input
+          class="hud-field hud-cut hud-cut-sm tempo-input"
           type="number"
           min={MIN_BPM}
           max={MAX_BPM}
           step="1"
           value={metronome.bpm}
-          onchange={onTempoChange}
+          aria-invalid={tempoOutOfRange ? 'true' : undefined}
+          aria-describedby={tempoOutOfRange ? 'tempo-range' : undefined}
+          oninput={onTempoInput}
+          onchange={commitTempo}
+          onblur={commitTempo}
+          onkeydown={onTempoKeydown}
           data-testid="metronome-tempo"
         />
       </label>
       <span class="unit">bpm</span>
       <button
         type="button"
-        class="nudge"
+        class="nudge hud-cut hud-cut-sm"
         aria-label="Faster"
         onclick={() => metronome.setTempo(metronome.bpm + NUDGE_BPM)}
       >
@@ -82,13 +119,14 @@
     </div>
 
     <label class="field">
-      <span>Beats per bar</span>
+      <MicroLabel>Beats per bar</MicroLabel>
       <select
+        class="hud-field hud-cut hud-cut-sm"
         value={metronome.beatsPerBar}
         onchange={(event) =>
           metronome.setBeatsPerBar(Number(event.currentTarget.value))}
       >
-        {#each Array.from({ length: MAX_BEATS_PER_BAR - MIN_BEATS_PER_BAR + 1 }, (_, index) => index + MIN_BEATS_PER_BAR) as option (option)}
+        {#each barOptions as option (option)}
           <option value={option}>{option}</option>
         {/each}
       </select>
@@ -101,57 +139,25 @@
           class:downbeat={beat === 0}
           class:active={metronome.running && metronome.beat === beat}
         >
-          {beat + 1}
+          <span class="pip-number">{beat + 1}</span>
         </span>
       {/each}
     </p>
   </div>
-</section>
+
+  {#if tempoOutOfRange}
+    <p class="hint" id="tempo-range" data-testid="tempo-hint">
+      {TEMPO_RANGE_HINT}
+    </p>
+  {/if}
+</HudPanel>
 
 <style>
-  .metronome {
-    margin-top: var(--space-6);
-    padding: var(--space-4) var(--space-5);
-    background: var(--bg-1);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-  }
-
-  h2 {
-    font-size: var(--fs-h2);
-    color: var(--text-2);
-  }
-
   .controls {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: var(--space-4);
-    margin-top: var(--space-3);
-  }
-
-  .toggle {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-2);
-    min-width: 7rem;
-    min-height: var(--hit-min);
-    padding: 0 var(--space-4);
-    background: var(--bg-2);
-    border: 1px solid var(--accent);
-    border-radius: var(--radius-sm);
-    color: var(--accent);
-    font: inherit;
-    cursor: pointer;
-  }
-
-  /* A filled accent surface is `--grad-primary`, never flat `--accent`:
-     `--on-accent` is white and only clears AA over the gradient's stops
-     (4.65 / 8.62) — on flat `--accent` it measures 2.77. */
-  .toggle[aria-pressed='true'] {
-    background: var(--grad-primary);
-    border-color: var(--accent-deep);
-    color: var(--on-accent);
   }
 
   .tempo {
@@ -160,15 +166,27 @@
     gap: var(--space-2);
   }
 
+  /* §6: the −/+ nudges are 44 px secondary buttons. They carry no label of
+     their own, so they stay native buttons with the field's skin. */
   .nudge {
     width: var(--hit-min);
     height: var(--hit-min);
     background: var(--bg-2);
     border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
     color: var(--text-1);
     font: inherit;
     cursor: pointer;
+  }
+
+  .nudge:hover {
+    border-color: var(--panel-border-hot);
+    color: var(--accent);
+  }
+
+  .tempo-input {
+    width: 5rem;
+    font-family: var(--font-display);
+    font-variant-numeric: tabular-nums;
   }
 
   .field {
@@ -178,24 +196,14 @@
     color: var(--text-2);
   }
 
-  input,
-  select {
-    min-height: var(--hit-min);
-    padding: 0 var(--space-3);
-    background: var(--bg-2);
-    color: var(--text-1);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    font: inherit;
-  }
-
-  input {
-    width: 5rem;
-    font-family: var(--font-mono);
-  }
-
   .unit {
     color: var(--text-3);
+    font-size: var(--fs-small);
+  }
+
+  .hint {
+    margin-top: var(--space-2);
+    color: var(--warn);
     font-size: var(--fs-small);
   }
 
@@ -205,29 +213,41 @@
     margin-left: auto;
   }
 
+  /* Diamonds like `MasteryPips` (part 1 §5.5), but numbered — so the pip row
+     is not re-implemented, only counted. The number counter-rotates so it
+     stays upright inside the 45° square. */
   .pip {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     width: var(--space-6);
     height: var(--space-6);
+    transform: rotate(45deg);
     border: 1px solid var(--border);
-    border-radius: var(--radius-pill);
+    border-radius: var(--radius-sm);
+    background: var(--bg-well);
     color: var(--text-3);
-    font-family: var(--font-mono);
+    font-family: var(--font-display);
     font-size: var(--fs-small);
     transition: transform var(--dur-fast) var(--ease);
+  }
+
+  .pip-number {
+    transform: rotate(-45deg);
   }
 
   .pip.downbeat {
     border-color: var(--text-3);
   }
 
+  /* A filled accent surface is `--grad-primary`, never flat `--accent`:
+     `--on-accent` is white and only clears AA over the gradient's stops
+     (4.65 / 8.62) — on flat `--accent` it measures 2.77. */
   .pip.active {
     background: var(--grad-primary);
     border-color: var(--accent-deep);
     color: var(--on-accent);
-    transform: scale(1.15);
+    transform: rotate(45deg) scale(1.15);
   }
 
   .pip.downbeat.active {

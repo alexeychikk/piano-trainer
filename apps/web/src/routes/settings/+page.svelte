@@ -1,18 +1,28 @@
 <script lang="ts">
   /**
-   * Settings (UX spec §6.3). Section ids are fixed because the status chips in
-   * the top bar deep-link to them; each section is filled by the slice that
-   * owns it. Every control applies immediately — no Save button, no dialogs.
+   * Settings (UX spec §6.3) in the part-2 language (sci-fi-screens.md §8):
+   * four `HudPanel` sections with their header bands, the sticky section rail
+   * at ≥ 1100 px, and §5.11 fields throughout.
+   *
+   * Section ids are fixed because the status chips in the top bar deep-link to
+   * them; each section is filled by the slice that owns it. Every control
+   * applies immediately — no Save button, no dialogs.
    */
   import { base } from '$app/paths';
   import MetronomePanel from '$lib/components/audio/MetronomePanel.svelte';
+  import Button from '$lib/components/hud/Button.svelte';
+  import Chip from '$lib/components/hud/Chip.svelte';
+  import HudPanel from '$lib/components/hud/HudPanel.svelte';
+  import MicroLabel from '$lib/components/hud/MicroLabel.svelte';
   import RangeWizard from '$lib/components/midi/RangeWizard.svelte';
   import PianoKeyboard from '$lib/components/piano/PianoKeyboard.svelte';
   import type { KeyHighlight } from '$lib/components/piano/highlights';
+  import SectionRail from '$lib/components/settings/SectionRail.svelte';
   import { audio } from '$lib/audio/engine.svelte';
   import { INSTRUMENTS } from '$lib/audio/instruments';
   import { audioExplanation } from '$lib/audio/status';
   import { midiInput } from '$lib/midi/input.svelte';
+  import { deviceAction, deviceSelect } from '$lib/midi/status';
   import {
     settings,
     type CountIn,
@@ -28,8 +38,28 @@
     { midi: MIDDLE_C + 11, at: 0.54 },
   ];
 
+  /** The rail's items: the four §6.3 sections, in page order. */
+  const SECTIONS = [
+    { id: 'midi', label: 'MIDI' },
+    { id: 'sound', label: 'Sound' },
+    { id: 'practice', label: 'Practice' },
+    { id: 'data', label: 'Data' },
+  ];
+
   const volumePercent = $derived(Math.round(settings.value.volume * 100));
   const soundExplanation = $derived(audioExplanation({ status: audio.status }));
+
+  /**
+   * §8.2: what the select and its button say is a function of `MidiStatus`, so
+   * we stop claiming "No device found" before access was ever requested.
+   */
+  const select = $derived(
+    deviceSelect({
+      status: midiInput.status,
+      inputCount: midiInput.devices.length,
+    }),
+  );
+  const action = $derived(deviceAction({ status: midiInput.status }));
 
   async function testSound() {
     // Pressing "Test" means "let me hear it": while the app is muted the
@@ -43,15 +73,6 @@
   const COUNT_INS: { value: CountIn; label: string }[] = [
     { value: 'off', label: 'Off' },
     { value: '1-bar', label: 'One bar' },
-  ];
-
-  const PENDING_SECTIONS = [
-    {
-      id: 'data',
-      title: 'Data',
-      note: 'Export and import your practice data as a JSON file.',
-      slice: 5,
-    },
   ];
 
   const LABEL_MODES: { value: LabelMode; label: string }[] = [
@@ -77,280 +98,328 @@
 
 <h1>Settings</h1>
 
-<section id="midi">
-  <h2>MIDI</h2>
-
-  <div class="row">
-    <label for="midi-device">Input device</label>
-    <select
-      id="midi-device"
-      value={settings.value.midiDeviceKey ?? ''}
-      onchange={selectDevice}
-      disabled={midiInput.devices.length === 0}
-    >
-      <option value="">
-        {midiInput.devices.length === 0 ? 'No device found' : 'None'}
-      </option>
-      {#each midiInput.devices as device (device.key)}
-        <option value={device.key}>{device.name}</option>
-      {/each}
-    </select>
-    <span class="state" class:connected={midiInput.connected}>
-      <span aria-hidden="true">{midiInput.chip.glyph}</span>
-      {midiInput.chip.label}
-    </span>
+<div class="layout">
+  <div class="rail-col">
+    <SectionRail sections={SECTIONS} />
   </div>
 
-  {#if midiInput.explanation}
-    <p class="note">{midiInput.explanation}</p>
-  {/if}
+  <div class="panels">
+    <section id="midi">
+      <HudPanel header="MIDI" chamfer="lg" padding="lg">
+        <div class="row">
+          <label class="field" for="midi-device">
+            <MicroLabel>Input device</MicroLabel>
+            <select
+              id="midi-device"
+              class="hud-field hud-cut hud-cut-sm"
+              value={settings.value.midiDeviceKey ?? ''}
+              onchange={selectDevice}
+              disabled={select.disabled}
+              data-testid="midi-device"
+            >
+              <option value="">{select.placeholder}</option>
+              {#each midiInput.devices as device (device.key)}
+                <option value={device.key}>{device.name}</option>
+              {/each}
+            </select>
+          </label>
 
-  {#if midiInput.supported}
-    <button
-      type="button"
-      class="action"
-      onclick={() => midiInput.connect()}
-      disabled={midiInput.status === 'requesting'}
-    >
-      {midiInput.status === 'granted' ? 'Rescan devices' : 'Connect MIDI'}
-    </button>
-  {/if}
+          <!-- The top-bar pill's smaller sibling (§8.1): glyph + state word in
+               the state colour, never colour alone. -->
+          <span class="state {midiInput.chip.tone}">
+            <span aria-hidden="true">{midiInput.chip.glyph}</span>
+            <MicroLabel>{midiInput.chip.label}</MicroLabel>
+          </span>
+        </div>
 
-  <div class="preview">
-    <PianoKeyboard
-      layout={49}
-      {highlights}
-      labels={settings.value.noteLabels}
-      interactive={false}
-      maxHeightPx={72}
-    />
-    <p class="caption">
-      Play a key — it lights up here as well as in
-      <a href={`${base}/play`}>Free play</a>.
-    </p>
+        {#if midiInput.explanation}
+          <p class="note">{midiInput.explanation}</p>
+        {/if}
+
+        {#if action}
+          <p class="action-row">
+            <Button
+              variant="secondary"
+              disabled={action.disabled}
+              testId="midi-action"
+              onclick={() => midiInput.connect()}
+            >
+              {action.label}
+            </Button>
+          </p>
+        {/if}
+
+        <div class="preview">
+          <!-- §8.3: 72 px, not the UX spec's 48 — at 49 keys that left ~7 px
+               of key face and pushed the labels under the 12 px floor. -->
+          <PianoKeyboard
+            layout={49}
+            {highlights}
+            labels={settings.value.noteLabels}
+            interactive={false}
+            maxHeightPx={72}
+          />
+          <p class="note small">
+            Play a key — it lights up here as well as in
+            <a href={`${base}/play`}>Free play</a>.
+          </p>
+        </div>
+
+        <fieldset class="row">
+          <legend><MicroLabel>Note labels</MicroLabel></legend>
+          {#each LABEL_MODES as mode (mode.value)}
+            <label class="choice">
+              <input
+                type="radio"
+                name="note-labels"
+                value={mode.value}
+                checked={settings.value.noteLabels === mode.value}
+                onchange={() => settings.patch({ noteLabels: mode.value })}
+              />
+              {mode.label}
+            </label>
+          {/each}
+        </fieldset>
+
+        <RangeWizard />
+      </HudPanel>
+    </section>
+
+    <section id="sound">
+      <HudPanel header="Sound" chamfer="lg" padding="lg">
+        <div class="row">
+          <label class="field" for="instrument">
+            <MicroLabel>Instrument</MicroLabel>
+            <select
+              id="instrument"
+              class="hud-field hud-cut hud-cut-sm"
+              value={settings.value.instrument}
+              onchange={(event) =>
+                audio.setInstrument(event.currentTarget.value)}
+            >
+              {#each INSTRUMENTS as instrument (instrument.id)}
+                <option value={instrument.id}>{instrument.name}</option>
+              {/each}
+            </select>
+          </label>
+          <span class="state {audio.chip.tone}">
+            <span aria-hidden="true">{audio.chip.glyph}</span>
+            <MicroLabel>{audio.chip.label}</MicroLabel>
+          </span>
+        </div>
+
+        {#if soundExplanation}
+          <p class="note">{soundExplanation}</p>
+        {/if}
+
+        <div class="row">
+          <label class="field" for="volume">
+            <MicroLabel>Volume</MicroLabel>
+            <input
+              id="volume"
+              class="slider"
+              type="range"
+              min="0"
+              max="100"
+              step="1"
+              value={volumePercent}
+              oninput={(event) =>
+                audio.setVolume(Number(event.currentTarget.value) / 100)}
+            />
+          </label>
+          <span class="readout tabular">{volumePercent}%</span>
+          <Button variant="secondary" onclick={testSound}>
+            {#snippet glyph()}
+              <span aria-hidden="true">♪</span>
+            {/snippet}
+            Test
+          </Button>
+        </div>
+
+        <div class="row">
+          <label class="choice" for="sound-on">
+            <input
+              id="sound-on"
+              type="checkbox"
+              checked={settings.value.soundEnabled}
+              onchange={(event) => audio.setMuted(!event.currentTarget.checked)}
+            />
+            Sound on
+          </label>
+          <span class="note small">
+            Press <Chip variant="key">M</Chip> anywhere to mute.
+          </span>
+        </div>
+
+        <MetronomePanel />
+      </HudPanel>
+    </section>
+
+    <section id="practice">
+      <HudPanel header="Practice" chamfer="lg" padding="lg">
+        <div class="measure">
+          <fieldset class="row">
+            <legend><MicroLabel>Count-in</MicroLabel></legend>
+            {#each COUNT_INS as option (option.value)}
+              <label class="choice">
+                <input
+                  type="radio"
+                  name="count-in"
+                  value={option.value}
+                  checked={settings.value.countIn === option.value}
+                  onchange={() => settings.patch({ countIn: option.value })}
+                />
+                {option.label}
+              </label>
+            {/each}
+          </fieldset>
+          <p class="note">
+            One bar of metronome clicks before each question, at the tempo above
+            — a beat to settle your hands before you listen.
+          </p>
+
+          <p class="note small">
+            Session length and per-exercise settings arrive with the practice
+            loop (slice 9).
+          </p>
+        </div>
+      </HudPanel>
+    </section>
+
+    <section id="data">
+      <HudPanel header="Data" chamfer="lg" padding="lg">
+        <div class="measure">
+          <p class="note">
+            Export and import your practice data as a JSON file.
+          </p>
+          <!-- §8.5's controls (export/import, the inline RESET confirmation)
+               land with the data they act on, in slice 5. -->
+          <p class="note small">Arrives in slice 5.</p>
+        </div>
+      </HudPanel>
+    </section>
   </div>
-
-  <fieldset class="row">
-    <legend>Note labels</legend>
-    {#each LABEL_MODES as mode (mode.value)}
-      <label class="choice">
-        <input
-          type="radio"
-          name="note-labels"
-          value={mode.value}
-          checked={settings.value.noteLabels === mode.value}
-          onchange={() => settings.patch({ noteLabels: mode.value })}
-        />
-        {mode.label}
-      </label>
-    {/each}
-  </fieldset>
-
-  <RangeWizard />
-</section>
-
-<section id="sound">
-  <h2>Sound</h2>
-
-  <div class="row">
-    <label for="instrument">Instrument</label>
-    <select
-      id="instrument"
-      value={settings.value.instrument}
-      onchange={(event) => audio.setInstrument(event.currentTarget.value)}
-    >
-      {#each INSTRUMENTS as instrument (instrument.id)}
-        <option value={instrument.id}>{instrument.name}</option>
-      {/each}
-    </select>
-    <span class="state" class:connected={audio.status === 'ready'}>
-      <span aria-hidden="true">{audio.chip.glyph}</span>
-      {audio.chip.label}
-    </span>
-  </div>
-
-  {#if soundExplanation}
-    <p class="note">{soundExplanation}</p>
-  {/if}
-
-  <div class="row">
-    <label for="volume">Volume</label>
-    <input
-      id="volume"
-      type="range"
-      min="0"
-      max="100"
-      step="1"
-      value={volumePercent}
-      oninput={(event) =>
-        audio.setVolume(Number(event.currentTarget.value) / 100)}
-    />
-    <span class="state tabular">{volumePercent}%</span>
-    <button type="button" class="action inline" onclick={testSound}>
-      Test <span aria-hidden="true">♪</span>
-    </button>
-  </div>
-
-  <div class="row">
-    <label class="choice" for="sound-on">
-      <input
-        id="sound-on"
-        type="checkbox"
-        checked={settings.value.soundEnabled}
-        onchange={(event) => audio.setMuted(!event.currentTarget.checked)}
-      />
-      Sound on
-    </label>
-    <span class="slice">Press <kbd>M</kbd> anywhere to mute.</span>
-  </div>
-
-  <MetronomePanel />
-</section>
-
-<section id="practice">
-  <h2>Practice</h2>
-
-  <fieldset class="row">
-    <legend>Count-in</legend>
-    {#each COUNT_INS as option (option.value)}
-      <label class="choice">
-        <input
-          type="radio"
-          name="count-in"
-          value={option.value}
-          checked={settings.value.countIn === option.value}
-          onchange={() => settings.patch({ countIn: option.value })}
-        />
-        {option.label}
-      </label>
-    {/each}
-  </fieldset>
-  <p class="note">
-    One bar of metronome clicks before each question, at the tempo above — a
-    beat to settle your hands before you listen.
-  </p>
-
-  <p class="slice">
-    Session length and per-exercise settings arrive with the practice loop
-    (slice 9).
-  </p>
-</section>
-
-{#each PENDING_SECTIONS as section (section.id)}
-  <section id={section.id}>
-    <h2>{section.title}</h2>
-    <p class="note">{section.note}</p>
-    <p class="slice">Arrives in slice {section.slice}.</p>
-  </section>
-{/each}
+</div>
 
 <style>
-  section {
-    margin-top: var(--space-6);
-    padding: var(--space-5);
-    background: var(--bg-1);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    max-width: 60ch;
-  }
-
-  #midi,
-  #sound {
+  .layout {
+    display: grid;
+    gap: var(--space-6);
+    margin-top: var(--space-5);
     max-width: var(--content-max);
   }
 
-  .tabular {
-    font-family: var(--font-mono);
+  .rail-col {
+    display: none;
   }
 
-  .inline {
-    margin-top: 0;
+  .panels {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+    min-width: 0;
   }
 
-  input[type='range'] {
-    width: 16rem;
-    accent-color: var(--accent);
+  /* §8.1: the rail only exists at ≥ 1100 px; below it the sections stand in
+     DOM order and the top-bar chips still deep-link. */
+  @media (min-width: 1100px) {
+    .layout {
+      grid-template-columns: 160px minmax(0, 1fr);
+    }
+
+    .rail-col {
+      display: block;
+    }
   }
 
-  kbd {
-    padding: 0 var(--space-1);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    background: var(--bg-2);
-    color: var(--text-2);
-    font-family: var(--font-mono);
-    font-size: var(--fs-micro);
+  section {
+    /* The anchor must clear the sticky top bar when a chip deep-links here. */
+    scroll-margin-top: calc(var(--topbar-h) + var(--space-4));
   }
 
-  .note {
-    margin-top: var(--space-2);
-    color: var(--text-2);
-  }
-
-  .slice {
-    margin-top: var(--space-2);
-    font-size: var(--fs-small);
-    color: var(--text-3);
+  /* Prose sections keep their readable measure (§8.1). */
+  .measure {
+    max-width: 60ch;
   }
 
   .row {
     display: flex;
-    align-items: center;
+    flex-wrap: wrap;
+    align-items: flex-end;
     gap: var(--space-4);
+    margin: 0;
     margin-top: var(--space-4);
     padding: 0;
     border: none;
   }
 
-  legend {
-    padding: 0;
+  .row:first-child {
+    margin-top: 0;
+  }
+
+  /* §5.11: label above the field, not beside it. */
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
     color: var(--text-2);
   }
 
-  select {
-    min-height: var(--hit-min);
-    padding: 0 var(--space-3);
-    background: var(--bg-2);
-    color: var(--text-1);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    font: inherit;
+  legend {
+    padding: 0;
+  }
+
+  .slider {
+    width: 16rem;
+    height: var(--hit-min);
+    accent-color: var(--accent);
+  }
+
+  .readout {
+    color: var(--cyan);
+    font-family: var(--font-display);
   }
 
   .state {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
     color: var(--text-3);
-    font-size: var(--fs-small);
   }
 
-  .state.connected {
+  /* The tone is an accelerator only: the glyph and the state word carry it. */
+  .state.success {
     color: var(--success);
   }
 
-  .action {
-    min-height: var(--hit-min);
-    margin-top: var(--space-4);
-    padding: 0 var(--space-4);
-    background: var(--bg-2);
-    border: 1px solid var(--accent);
-    border-radius: var(--radius-sm);
-    color: var(--accent);
-    cursor: pointer;
+  .state.warn {
+    color: var(--warn);
   }
 
-  .action:disabled {
-    border-color: var(--border);
+  .state.danger {
+    color: var(--danger);
+  }
+
+  .state :global(.micro) {
+    color: inherit;
+  }
+
+  .note {
+    margin-top: var(--space-3);
+    color: var(--text-2);
+  }
+
+  .small {
+    font-size: var(--fs-small);
     color: var(--text-3);
-    cursor: default;
+  }
+
+  .action-row {
+    margin-top: var(--space-4);
   }
 
   .preview {
     margin-top: var(--space-5);
-  }
-
-  .caption {
-    margin-top: var(--space-2);
-    color: var(--text-3);
-    font-size: var(--fs-small);
   }
 
   .choice {

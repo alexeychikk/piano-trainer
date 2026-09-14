@@ -236,9 +236,10 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
     `[data-theme='light']` block, and the `hud.css` light branch went with it. `app.html` keeps
     `data-theme="dark"` as a marker of intent. A light theme is its own ticket with its own contrast
     pass; never re-add a light override.
-  - **Developer pass 2b** (Free Play, Settings and the four §6.3 gaps) is still open and is specified
-    by `docs/design/sci-fi-screens.md` §6, §8; until it lands those screens wear the new tokens with
-    their old treatment. `/progress` and `/session` land with slices 5 and 9, in this language.
+  - **Developer pass 2b has landed — the redesign is closed.** Free Play, Settings and the four
+    §6.3 gaps are in the part-2 language (`docs/design/sci-fi-screens.md` §6, §8). `/progress` and
+    `/session` land with slices 5 and 9, in this language; they are the only screens still wearing
+    the new tokens with an older treatment.
 - **The runner and the keyboard in the part-2 language (redesign pass 2a)**:
   - `PianoKeyboard` draws a **bed**: `--key-bed` face, 1 px `--border` edge, one `--chamfer-lg` clip
     for the whole component, and a 6 px apron with a `--grad-rule` hairline and a `--cyan` tick per C
@@ -262,6 +263,37 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
   - Primitive extensions this pass made, instead of forking a primitive: `Tone` gained `hint`
     (the reveal state), `hud.css` gained `.hud-glow-danger`/`.hud-glow-hint`, and `Button` gained
     `testId` so e2e can assert on the real control rather than a wrapper.
+- **Free Play and Settings in the part-2 language (redesign pass 2b — closes the redesign)**:
+  - **A form field is `hud-field hud-cut hud-cut-sm`**, the §5.11 recipe shared from
+    `$lib/styles/hud.css` for the same reason the chamfer is: Settings and the metronome panel both
+    dress native `<input>`/`<select>`s, and a copy-pasted recipe is how two screens drift. A clipped
+    field cannot wear the global ring (`outline` follows the unclipped rectangle and is cut away), so
+    its **own border becomes the ring** and an inset keyline carries `--focus` inside the clip.
+  - **The tempo field displays the *committed* value** (§8.4). Commit on `change` and blur — never on
+    `input`, which would rewrite `1` to the minimum before the `20` of `120` arrives — then write
+    `metronome.bpm` back into the field, so it and the engine can never disagree. `Escape` reverts the
+    field and leaves the tempo alone. The pure half is `$lib/audio/tempo-field.ts`
+    (`readTempoField`, `TEMPO_RANGE_HINT`); out of range is `--warn` + the hint, never `--danger`
+    (danger means *wrong* in the answer path). **The hint's numbers come from the scheduler's
+    constants** (`MIN_BPM`–`MAX_BPM` = 40–240), not from the spec's illustrative `30–300`.
+  - **What the device `<select>` says is a function of `MidiStatus`**, not of `devices.length`:
+    `deviceSelect()` / `deviceAction()` in `$lib/midi/status.ts`, unit-tested. Saying "No device
+    found" before `requestMIDIAccess` has ever run is a lie — we have not looked. A disabled select
+    still shows its current option, so the state is never blank, and `denied`/`unsupported` get no
+    request button because asking again would change nothing.
+  - The Settings **preview keyboard is 72 px** (§8.3 amends UX §6.3's 48: at 49 keys that left ~7 px
+    of key face), and the **sticky section rail** (`$lib/components/settings/SectionRail.svelte`) is
+    rendered only at ≥ 1100 px. Its links are plain anchors so deep links and the keyboard work with
+    the `IntersectionObserver` switched off — the observer only *decorates* the active item.
+  - Free Play's readout is **the same sunken well as the runner's prompt**, so the two screens feel
+    like one instrument: hot micro-label (`CURRENT NOTE` at 0–1 notes, `CURRENT CHORD` at 2+), the
+    value in `--font-display` with `--glow-text`, held notes in `--cyan`. **No input/level meter** —
+    we have pitches, not a level (deviation 18).
+  - `Button` gained `ariaPressed` (the metronome's Start/Stop) rather than being forked, the same
+    move pass 2a made with `testId`.
+  - **The sound chip's `🔇`/`🔈`/`🔊` stay.** §2.7 retires emoji from the HUD but exempts these:
+    they are *copy* (`SoundChip.glyph` in `$lib/audio/status.ts`), so they are out of the re-skin's
+    reach and recorded as a known inconsistency — do not "fix" them without a copy change.
 - Prettier: single quotes, width 80, trailing commas, LF, 2 spaces. Commits follow **Conventional
   Commits** (`feat:`, `fix:`, `docs:`, `chore:`) — enforced by commitlint.
 - Tests: pure logic (theory, grading, scheduler, MIDI parsing) always gets a Vitest test; glue and

@@ -86,3 +86,45 @@
 .hud-glow-hint {
   --hud-glow-color: var(--hud-glow-hint);
 }
+
+/**
+ * The §5.11 field, shared for the same reason the chamfer is: Settings and the
+ * metronome panel both dress native `<input>`s and `<select>`s, and a
+ * copy-pasted recipe is how two screens drift apart.
+ *
+ * `--bg-well`, 1 px `--border`, 44 px, `--space-3` padding. The chamfer is the
+ * existing recipe: a field also carries `hud-cut hud-cut-sm`.
+ */
+.hud-field {
+  min-height: var(--hit-min);
+  padding: 0 var(--space-3);
+  background: var(--bg-well);
+  border: 1px solid var(--border);
+  color: var(--text-1);
+  font: inherit;
+  font-size: var(--fs-body);
+}
+
+/**
+ * Focus on a chamfered element drops `outline` — it follows the unclipped
+ * rectangle, and on a clipped field it is cut away entirely. A native field
+ * has no edge/face pair to recolour, so its own border becomes the ring and an
+ * inset keyline carries the `--focus` band inside the clip.
+ */
+.hud-field:focus-visible {
+  outline: none;
+  border-color: var(--panel-border-hot);
+  box-shadow: inset 0 0 0 2px var(--focus);
+}
+
+/* Out of range (sci-fi-screens.md §8.4): `--warn`, never `--danger` — danger
+   means *wrong* in the answer path. Paired with the `30–300 bpm` hint, so the
+   state is never colour alone. */
+.hud-field[aria-invalid='true'] {
+  border-color: var(--warn);
+}
+
+.hud-field:disabled {
+  color: var(--text-3);
+  cursor: not-allowed;
+}
