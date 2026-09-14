@@ -8,6 +8,12 @@
   notation, mobile layouts, onboarding tours, theming beyond dark/light.
 - **Companion files**: [`tokens.css`](tokens.css) — the design tokens below, ready to copy to
   `apps/web/src/lib/styles/tokens.css`.
+- **Visual language (read after this document, before building)**:
+  [`sci-fi-visual-language.md`](sci-fi-visual-language.md) — part 1: palette, panel anatomy, type,
+  motion, the shared primitives, the shell and home. [`sci-fi-screens.md`](sci-fi-screens.md) —
+  part 2: the exercise runner, `PianoKeyboard`, Free Play, Progress, Settings and `/session`, plus
+  the three amendments it makes to this document (§6.3's preview-keyboard height and section nav,
+  §11's light theme). Together they supersede §7 below; everything else here still wins.
 - **Authority**: [`ADR 0001`](../decisions/0001-target-architecture-and-stack.md) wins on
   architecture, vocabulary and contracts. This spec wins on layout, states, copy and visuals.
   Deviations from the ADR are flagged inline as **[deviation]**.
@@ -159,6 +165,9 @@ Specifics:
 ---
 
 ## 4. Screen — Exercise runner (`/practice/[exerciseId]`, `/session`)
+
+> **Visual treatment**: [`sci-fi-screens.md`](sci-fi-screens.md) §5 (runner), §9 (`/session` and the
+> summary). The regions, dimensions, states, timings, shortcuts and copy below are unchanged.
 
 One layout, every exercise, always. `ExerciseRunner.svelte` owns the frame; the exercise contributes
 only the prompt text, the playback, and (optionally) an `AnswerComponent` rendered inside the answer
@@ -340,6 +349,11 @@ rows. Direction is shown by both a triangle glyph and colour.
 
 ## 5. Piano keyboard component (`PianoKeyboard.svelte`)
 
+> **Visual treatment**: [`sci-fi-screens.md`](sci-fi-screens.md) §4 — the bed, the octave apron,
+> the lit key states and the **key-only focus ring** (§2.1: the global ring is invisible on a white
+> key). Props, geometry, precedence, behaviour and a11y below are unchanged; glyphs are 16 px, as
+> §5.3 always said (§2.6).
+
 One component, two jobs (input surface + display surface), pure presentation: props in, `NoteEvent`s
 out (ADR §3). It holds no exercise knowledge.
 
@@ -451,6 +465,12 @@ Label rendering: bottom-aligned, 12 px (`W` ≥ 32 px) or 10 px (below that), `-
 ---
 
 ## 6. Screens — Progress (`/progress`) and Settings (`/settings`)
+
+> **Visual treatment**: [`sci-fi-screens.md`](sci-fi-screens.md) §7 (Progress) and §8 (Settings).
+> §8 also **amends §6.3** on two points — the live preview keyboard is **72 px**, not 48 px, and the
+> sticky section nav's width, offset and active rule are fixed there — and closes the two §6.3 gaps
+> that were never specified: what the device `<select>` says before MIDI access is requested, and
+> what the tempo field does with an out-of-range value.
 
 ### 6.1 Progress
 
@@ -717,8 +737,12 @@ Not a new slice plan — this maps the spec onto ADR §10 so nothing is built be
 
 ## 11. Open questions (decide when you get there, do not block on them)
 
-- Light theme values — token overrides only; nobody has asked for it yet.
+- ~~Light theme values~~ — **closed 2026-09-14** ([`sci-fi-screens.md`](sci-fi-screens.md) §2.5):
+  there is no light theme in v1 and the dormant `[data-theme='light']` token block was dropped. The
+  HUD language is dark-only; a light theme would be its own ticket with its own contrast pass.
 - Whether the status strip should show a running session timer in `/practice/[exerciseId]` too
   (currently: question count there, time in `/session`).
 - Left-hand/right-hand split display for two-handed voicing drills (slice 8) — the keyboard component
-  supports it via `highlights`, but no colour is reserved yet.
+  supports it via `highlights`, but no colour is reserved yet. Still deliberately deferred to slice 8
+  ([`sci-fi-screens.md`](sci-fi-screens.md) §3.3), and it will need a **glyph** per hand: the palette
+  has no headroom for two more hues that survive greyscale.

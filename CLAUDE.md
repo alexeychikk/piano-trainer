@@ -7,7 +7,7 @@ backend, static hosting. Desktop browser first.
 — it fixes the stack, the internal music vocabulary, the exercise contract and the slice order.
 Anything below is the short version; the ADR wins on detail.
 
-**Before building any UI**, read both, in this order:
+**Before building any UI**, read all three, in this order:
 
 1. [`docs/design/core-practice-ux.md`](docs/design/core-practice-ux.md) — routes, app shell,
    exercise-runner states and timing, piano-keyboard spec, a11y rules and the copy deck. Authoritative
@@ -16,8 +16,13 @@ Anything below is the short version; the ADR wins on detail.
    re-skin (owner request, 2026-09-14). Authoritative for **visuals**: palette, the chamfer/glow panel
    anatomy, background texture, typography and tracking, iconography, component skins, the motion
    budget, and the shell + home treatment. It is a re-skin, not a re-plan: it moves no region, adds no
-   screen and changes no word of copy. Part 2 (runner, `PianoKeyboard`, Free Play, Progress, Settings,
-   `/session`) is a separate design ticket.
+   screen and changes no word of copy.
+3. [`docs/design/sci-fi-screens.md`](docs/design/sci-fi-screens.md) — **part 2** of the same re-skin
+   (2026-09-14): the exercise runner, `PianoKeyboard`, Free Play, Progress, Settings, `/session` and
+   its summary. Also owns the fixes pass 2 must land — the piano-key focus ring (`--focus` is
+   invisible on a white key), the `ProgressBar` ramp, the dropped light theme, 16 px key glyphs, no
+   emoji — and closes the four Settings §6.3 gaps. It amends `core-practice-ux.md` §6.3 and §11 and
+   corrects two numbers in part 1's §9 contrast table.
 
 ## Repository layout
 
@@ -214,6 +219,10 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
     other face.
   - **Focus on a chamfered element** drops `outline` (it follows the unclipped rectangle) and turns
     the edge layer into the ring: edge → `--focus`, face margin → 3 px.
+  - **Focus on a piano key is its own rule.** `--focus` measures **1.19 on `--key-white`**, and the
+    global ring's `outline-offset: 2px` lands on the white *neighbours*, so a key wears a dual-tone
+    ring drawn inside its face: `outline: 3px solid var(--focus); outline-offset: -5px` plus
+    `inset 0 0 0 2px var(--bg-0)` (sci-fi-screens.md §2.1). Never reuse the global ring on a key.
   - Headings, buttons, labels, numerals use `--font-display`; **body copy stays `--font-sans` and
     uppercase stops at 20 px**. Uppercase is always `text-transform`, never in the DOM text — but
     note that **Chromium folds `text-transform` into the accessible name**, so a Playwright
@@ -222,8 +231,12 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
     opaque so it never crosses text, and the scanline is dropped under `prefers-reduced-motion`.
   - Mastery is **always** `MasteryPips` + the percentage, quantised by the pure
     `hud/mastery.ts` (7 pips, `round(mastery * 7)`, `null` = never practised = the word `new`).
-  - Pass 2 (runner, `PianoKeyboard`, Free Play, Progress, Settings, `/session`) is a separate
-    ticket: those screens currently wear the new tokens but their old layout treatment.
+  - **Developer pass 2** (runner, `PianoKeyboard`, Free Play, Progress, Settings, `/session`) is
+    ticketed separately and is specified by `docs/design/sci-fi-screens.md`; until it lands those
+    screens wear the new tokens with their old treatment. It starts by **re-copying
+    `docs/design/tokens.css`** — part 2 added `--grad-key-white`/`--grad-key-black` (composed from the
+    existing key colours) and deleted the dormant `[data-theme='light']` block, so the light branches
+    in `hud.css`/`app.css` go with it. Dark-only is now a decision, not a default.
 - Prettier: single quotes, width 80, trailing commas, LF, 2 spaces. Commits follow **Conventional
   Commits** (`feat:`, `fix:`, `docs:`, `chore:`) — enforced by commitlint.
 - Tests: pure logic (theory, grading, scheduler, MIDI parsing) always gets a Vitest test; glue and

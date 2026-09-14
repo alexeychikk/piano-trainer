@@ -1,9 +1,14 @@
 /**
  * piano-trainer — design tokens (v2, "HUD" sci-fi language)
  *
- * Source of truth: docs/design/sci-fi-visual-language.md.
+ * Source of truth: docs/design/sci-fi-visual-language.md (part 1) and
+ * docs/design/sci-fi-screens.md (part 2 — the practice screens and the keyboard).
  * Behaviour, layout, states and copy still come from docs/design/core-practice-ux.md;
  * this file supersedes only its §7 (palette / type / elevation / motion values).
+ *
+ * Dark-only. The dormant [data-theme='light'] block was dropped on 2026-09-14
+ * (sci-fi-screens.md §2.5): nothing toggled it and no screen was ever measured
+ * against it. A light theme would be its own ticket with its own contrast pass.
  *
  * Copy this file byte-for-byte to apps/web/src/lib/styles/tokens.css and import it
  * once in the root layout. Components read tokens only — no raw hex outside this file.
@@ -23,8 +28,10 @@
 
   --border: #123253; /*  1.55 — plain hairline, empty pips, dividers */
   --panel-border: #0c3f70; /*  1.83 — resting luminous panel edge         */
-  --panel-border-hot: #1c74b8; /*  3.11 — meaningful edge: active / hovered / focused panel,
-                                   status-pill outline, key outlines (AA non-text) */
+  --panel-border-hot: #1c74b8; /*  4.10 on --bg-0, 3.85 on --bg-1 — meaningful edge:
+                                   active / hovered / focused panel, status-pill outline,
+                                   key outlines. Still 2 px inside a panel, or paired with
+                                   a glyph (sci-fi-screens.md §2.2). */
 
   /* ---- colour · text ---------------------------------------------------- */
   --text-1: #e8f6ff; /* 18.43 — primary text                        */
@@ -56,8 +63,24 @@
   --key-black-hover: #0c1a2b;
   --key-ink: #041020;
   --key-bed: #020a16; /* the trough the keys sit in                */
+  /* Key faces are slabs with a top sheen (sci-fi-screens.md §3.1). Composed
+     from the four key colours above, so no measured pairing moves: the
+     lightest pixel of a white key is still exactly --key-white. Hover
+     *brightens* in this language — flat --key-white / --key-black-hover. */
+  --grad-key-white: linear-gradient(
+    180deg,
+    var(--key-white) 0%,
+    var(--key-white-hover) 100%
+  );
+  --grad-key-black: linear-gradient(
+    180deg,
+    var(--key-black-hover) 0%,
+    var(--key-black) 100%
+  );
 
-  --focus: #7ce4ff; /* 13.92                                     */
+  --focus: #7ce4ff; /* 13.92 on --bg-0 — but only 1.19 on --key-white, so a
+                       piano key takes the dual-tone inner ring instead
+                       (sci-fi-screens.md §2.1), never this rule as-is. */
 
   /* ---- gradients -------------------------------------------------------- */
   --grad-primary: linear-gradient(180deg, #2a6bf5 0%, #1030d8 100%);
@@ -190,68 +213,6 @@
   --reveal-delay-ms: 250ms;
 }
 
-/* Light theme is a legibility fallback, not a v1 design target (UX spec §11).
-   It keeps the token contract but drops glow, texture and gradients to flat
-   values — the HUD language is dark-only by design. */
-[data-theme='light'] {
-  --bg-0: #f4f8fc;
-  --bg-1: #ffffff;
-  --bg-2: #e8eff7;
-  --bg-well: #dde7f1;
-  --bg-scrim: rgb(16 21 27 / 0.4);
-  --border: #c9d7e4;
-  --panel-border: #b3c7da;
-  --panel-border-hot: #4a7fa8;
-  --text-1: #041020;
-  --text-2: #3f5a72;
-  --text-3: #5c7085;
-  --accent: #1f5fd0;
-  --accent-deep: #123a94;
-  --cyan: #0f6f8c;
-  --success: #0a6e56;
-  --danger: #b52545;
-  --warn: #7a5200;
-  --hint: #6a3fc0;
-  --magenta: #8d2fa8;
-  --on-accent: #ffffff;
-  --on-success: #ffffff;
-  --on-danger: #ffffff;
-  --on-warn: #ffffff;
-  --on-hint: #ffffff;
-  --on-cyan: #ffffff;
-  --key-white: #ffffff;
-  --key-white-hover: #edf3f9;
-  --key-black: #16202c;
-  --key-black-hover: #24313f;
-  --key-ink: #041020;
-  --key-bed: #d2dde8;
-  --focus: #1f5fd0;
-  --grad-primary: linear-gradient(180deg, #2f6fdd 0%, #1f4fb8 100%);
-  --grad-primary-hover: linear-gradient(180deg, #3a7cec 0%, #2a5cc8 100%);
-  --grad-go: linear-gradient(180deg, #0f8468 0%, #0a6e56 100%);
-  --grad-panel: none;
-  --grad-header: none;
-  --grad-data: linear-gradient(90deg, #0f6f8c 0%, #1f5fd0 46%, #6a3fc0 100%);
-  --grad-data-hot: linear-gradient(90deg, #6a3fc0 0%, #8d2fa8 100%);
-  --grad-rule: linear-gradient(
-    90deg,
-    rgb(74 127 168 / 0.5) 0%,
-    rgb(74 127 168 / 0) 100%
-  );
-  --glow-panel: none;
-  --glow-panel-hot: none;
-  --glow-accent: none;
-  --glow-success: none;
-  --glow-danger: none;
-  --glow-hint: none;
-  --glow-text: none;
-  --inset-top: none;
-  --shadow-pop: 0 8px 24px rgb(16 21 27 / 0.18);
-  --texture-grid-line: rgb(74 127 168 / 0.06);
-  --texture-scanline: transparent;
-  --texture-vignette: none;
-}
-
 /* Reduced motion kills every duration and every decorative loop (spec §7). */
 @media (prefers-reduced-motion: reduce) {
   :root {
@@ -262,9 +223,12 @@
   }
 }
 
-/* Focus ring — one rule, used everywhere (spec §3.4). The inner 1px --bg-0
-   shadow keeps the ring visible on white piano keys as well as on dark panels;
-   the outer glow makes it read at a metre. */
+/* Focus ring — one rule for everything except a piano key (spec §3.4). The
+   inner 1px --bg-0 shadow keeps the ring off a dark panel's own edge and the
+   outer glow makes it read at a metre. **A piano key overrides it**: --focus
+   measures 1.19 on --key-white, and at `outline-offset: 2px` the ring lands on
+   the white neighbours — see sci-fi-screens.md §2.1 for the dual-tone ring
+   drawn inside the key face. */
 :where(a, button, [role='button'], input, select, textarea, [tabindex]):focus-visible {
   outline: 3px solid var(--focus);
   outline-offset: 2px;
