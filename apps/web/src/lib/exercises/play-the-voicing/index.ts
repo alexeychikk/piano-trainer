@@ -53,7 +53,6 @@ import {
   qualityOfShellIntervals,
   shellIntervals,
   shellNotes,
-  shellPitchClasses,
   shellSpan,
   spellsShell,
   spellsShellInAnyInversion,
@@ -306,23 +305,19 @@ export function missDetail(
 
   const pcs = new Set(played.map((midi) => pcOf(midi)));
   const bassPc = pcOf(Math.min(...played.map((midi) => Math.round(midi))));
-  const wanted = shellPitchClasses(rootPc, quality) ?? [];
-  if (bassPc === rootPc) {
-    // The 7th by construction, not `wanted`'s last entry: the pitch classes
-    // are sorted, so in most keys the 7th is not the highest of the three.
-    const seventh = shellIntervals(quality)?.[2];
-    const seventhPc =
-      seventh === undefined ? undefined : (rootPc + seventh) % 12;
-    // Kept the 5th, dropped the 7th: the reflex of anyone who learned triads
-    // first, and the one thing a shell is defined by not doing.
-    if (
-      pcs.has((rootPc + 7) % 12) &&
-      !wanted.every((pc) => pcs.has(pc)) &&
-      seventhPc !== undefined &&
-      !pcs.has(seventhPc)
-    )
-      return 'A shell leaves the 5th out — keep the 3rd and the 7th';
-  }
+  // The 7th by construction, never the highest of `shellPitchClasses()`: those
+  // are sorted, so in most keys the 7th is not the last of the three.
+  const seventh = shellIntervals(quality)?.[2];
+  const seventhPc = seventh === undefined ? null : (rootPc + seventh) % 12;
+  // Kept the 5th, dropped the 7th: the reflex of anyone who learned triads
+  // first, and the one thing a shell is defined by not doing.
+  if (
+    bassPc === rootPc &&
+    seventhPc !== null &&
+    !pcs.has(seventhPc) &&
+    pcs.has((rootPc + 7) % 12)
+  )
+    return 'A shell leaves the 5th out — keep the 3rd and the 7th';
 
   // The right shape in the wrong key, or another quality's shell: name what it
   // was, so the mistake is visible as a transposition and not as noise.
