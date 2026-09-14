@@ -256,6 +256,41 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
   - Answer mode is **`note-sequence`** again (slice 7's reasoning: one mouse pointer cannot hold a
     chord, and every drill must be playable with no MIDI device), so the runner needed no change
     beyond the reveal plan.
+- **ii-V-I progressions (slice 10)** — `$lib/exercises/progression-recognition/`, the fifth
+  exercise and the last of ADR §10's plan: a three-chord cadence sounds, chord by chord, and the
+  user plays it back.
+  - **The vocabulary is two cadences**, in `$lib/theory/progressions.ts` (the
+    `intervals.ts`/`chords.ts`/`voicings.ts` rule): `major-ii-V-I` (`m7 · 7 · maj7`) and
+    `minor-ii-V-i` (`m7b5 · 7 · m7` — the minor tonic is a `m7`, which keeps the family inside the
+    seventh-chord vocabulary slices 7–8 already drill). **A progression is degrees, not chords**:
+    semitone offsets from the tonic plus a quality, so all 12 keys are one table and transposition
+    is arithmetic. `progressionSteps`/`progressionChords`/`progressionNotes`/`progressionSpan`/
+    `chunkIntoChords` (build), `spellsProgression` (read) and the three name registers
+    (`progressionName` `Major ii-V-I`, `progressionShortName` `ii-V-I`, `spokenProgression`
+    `a major ii-V-I` — which lower-cases **only the first word**, because the numerals' case *is*
+    the cadence).
+  - **The graded quantity is the progression in a key** (slice 8's rule, one level up):
+    `spellsProgression()` requires each chord to spell its degree's quality over **its own root**
+    (`spellsQualityFromRoot`, new in `chords.ts` — `spellsQuality` with the key pinned). Free:
+    register, octave, spacing, doubling and note order *inside* a chord, and enharmonics. Rejected:
+    another key, another quality, the chords in another order, an inverted chord, a shell, and any
+    answer that is not exactly twelve notes. Binary scoring (ADR §10).
+  - **Chords are separated by count, not by time** — each chord is four notes, so the answer is
+    chunked 4–4–4 in played order. Nothing downstream *can* use timing: an `Answer` carries notes,
+    order and a source and no timestamps. Slice 7's `CHORD_SETTLE_MS` note therefore stays
+    unimplemented (and unneeded here); slice 2's `detectChords()` deviation is untouched.
+  - **Whole four-note chords, not shells**: the minor ii is a `m7b5`, whose shell *is* `m7`'s, so a
+    shelled minor cadence could not be told from the major one.
+  - `SkillId` is `progression-recognition:<type>:<tonicPc>` (the exercise-id prefix rule, not the
+    ticket's suggested bare `progression:`) — 24 skills; `skillLabel()` renders `C ii-V-I`.
+  - **A seventh generic extension to ADR §5: `Question.answerGapMs`.** A twelve-note answer may not
+    be closed by the runner's 1200 ms window while the user hunts for the next chord, so a question
+    may say how long its own silence window is (3 s here). The default still lives in
+    `runner.svelte.ts`; this is the same per-question override `PlaybackPlan.tempoBpm`/`countIn`
+    already are. The idle pause (90 s) still ends an abandoned drill.
+  - The runner's answer slots now **wrap** (`.slots`): twelve slots are wider than the frame on a
+    narrow desktop window, and two rows still fit the reserved 88 px, so §4.1's no-scroll rule holds
+    in both directions.
 - **Settings** are `localStorage` via the `settings` store (`$lib/storage/settings.svelte.ts`) and
   are read only in `hydrate()`, called from the root layout after mount — module init must not touch
   storage or prerendered HTML and the first client render disagree. Slice 4 added `keyboardLow`/

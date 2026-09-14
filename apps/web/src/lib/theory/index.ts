@@ -8,3 +8,4 @@ export * from './notes';
 export * from './chords';
 export * from './intervals';
 export * from './voicings';
+export * from './progressions';

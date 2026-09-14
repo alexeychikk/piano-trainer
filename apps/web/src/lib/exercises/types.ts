@@ -95,6 +95,20 @@ export interface Question<P = unknown> {
    * reveal replays the question, as it always has.
    */
   revealPlayback?: PlaybackPlan;
+  /**
+   * How long a `note-sequence` answer may go silent before it closes itself,
+   * overriding the runner's `SEQUENCE_GAP_MS` — a seventh display extension to
+   * ADR §5, and as generic as the others: it says how long *this* answer may
+   * take, never what it contains.
+   *
+   * The default window is sized for a two-note interval (slice 6). A twelve-
+   * note answer played in three chords (slice 10) needs longer, or the answer
+   * is taken away from a beginner mid-cadence — and a per-question override is
+   * how `PlaybackPlan` already handles `tempoBpm` and `countIn`: the constant
+   * stays in the runner module, the question only says when it does not fit.
+   * The idle pause (`IDLE_PAUSE_MS`) still ends an abandoned drill.
+   */
+  answerGapMs?: number;
   /** Keys this question is answered on; outside them the keyboard dims. */
   range?: KeyRange;
   /** Spelling of the notes in play, for `labelStyle: 'context'`. */

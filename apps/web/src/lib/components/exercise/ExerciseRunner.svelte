@@ -731,6 +731,11 @@
      the answer is graded and the keys carry it in colour and glyph. */
   .slots {
     display: flex;
+    /* A twelve-note answer (slice 10's cadence) is wider than the frame on a
+       narrow desktop window. It wraps rather than overflowing: two rows of
+       slots still fit inside the reserved 88 px, so the runner keeps its
+       height and never gains a scrollbar in either direction (§4.1). */
+    flex-wrap: wrap;
     align-items: center;
     justify-content: center;
     gap: var(--space-2);

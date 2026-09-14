@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EXERCISES } from '$lib/exercises/registry';
-import { ExerciseRunner } from '$lib/exercises/runner.svelte';
+import {
+  ExerciseRunner,
+  SEQUENCE_GAP_MS,
+  expectedLength,
+} from '$lib/exercises/runner.svelte';
 import type { AttemptResult } from '$lib/exercises/types';
 import { buildPlan } from './planner';
 import { summariseSession } from './session';
@@ -146,12 +150,20 @@ describe('SessionRun · through the real runner', () => {
       run,
       runner,
       attempts,
-      /** Answer whatever is on screen — six notes closes any answer mode. */
+      /**
+       * Answer whatever is on screen. The number of notes and the silence
+       * window both come from the **question** — an answer closes at its
+       * expected length (2 for an interval, 12 for a cadence) or after its own
+       * `answerGapMs` — so this helper stays right as exercises are added,
+       * instead of guessing a count that happens to close today's drills.
+       */
       answer(afterMs: number) {
-        for (let note = 0; note < 6; note += 1) {
+        const question = runner.question;
+        const notes = question ? expectedLength(question.expected) : 0;
+        for (let note = 0; note < Math.max(notes, 1); note += 1) {
           runner.noteOn(60 + note, 'onscreen');
         }
-        vi.advanceTimersByTime(2000);
+        vi.advanceTimersByTime((question?.answerGapMs ?? SEQUENCE_GAP_MS) + 1);
         clock += afterMs;
         if (runner.phase === 'feedback') runner.advance();
         vi.advanceTimersByTime(0);
@@ -170,7 +182,7 @@ describe('SessionRun · through the real runner', () => {
       drilled.answer(1000);
     }
 
-    // Round-robin: the four exercises, in registry order, one question each.
+    // Round-robin: every registered exercise, in registry order, one each.
     expect(seen.slice(0, EXERCISES.length)).toEqual(
       EXERCISES.map((exercise) => exercise.id),
     );
