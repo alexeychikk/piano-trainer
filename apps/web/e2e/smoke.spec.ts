@@ -468,6 +468,47 @@ test('the voicing drill reads a chord symbol and takes a three-note answer', asy
   expect(consoleErrors).toEqual([]);
 });
 
+test('the rootless drill asks for a form and takes a four-note answer', async ({
+  page,
+}) => {
+  const consoleErrors = watchConsole(page);
+
+  await page.goto('/practice/rootless-voicing/');
+  const prompt = page.getByTestId('prompt');
+  const replay = page.getByTestId('replay');
+  await expect(prompt).toHaveText('Ready?');
+
+  await page.keyboard.press('Space');
+  // The prompt is the chord symbol *and* the form (slice 11): both halves of
+  // the question are read, never heard.
+  await expect(prompt).toHaveText(/^[A-G][b#]?(maj7|m7|7) \u00b7 [AB]$/);
+  await expect(page.getByTestId('prompt-sub')).toHaveText(
+    /^Play the [AB] form: .+ \u2014 no root$/,
+  );
+  // The reference root is 900 ms long and `presenting` is not an answering
+  // phase, so wait for the drill to be listening — the replay control says so.
+  await expect(replay).toBeEnabled();
+
+  // A rootless voicing is four notes, so the answer has four slots — the count
+  // comes from the question, never from the runner.
+  const slots = page.getByTestId('slots');
+  await expect(slots.locator('.slot')).toHaveCount(4);
+
+  // `A S D F` are C4 D4 E4 F4: almost certainly not the voicing asked for, but
+  // four notes are a graded attempt, and a miss never blocks the drill.
+  for (const key of ['a', 's', 'd', 'f']) await page.keyboard.press(key);
+  await expect(page.getByTestId('answered')).toContainText('/1');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+
+  // The runner never scrolls, four note slots and all (§4.1).
+  const scrolls = await page.evaluate(
+    () => document.documentElement.scrollHeight > window.innerHeight + 1,
+  );
+  expect(scrolls).toBe(false);
+
+  expect(consoleErrors).toEqual([]);
+});
+
 test('the progression drill takes a twelve-note cadence from the computer keys', async ({
   page,
 }) => {

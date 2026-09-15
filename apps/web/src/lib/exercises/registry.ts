@@ -9,6 +9,7 @@ import { findTheNote } from './find-the-note';
 import { intervalRecognition } from './interval-recognition';
 import { playTheVoicing } from './play-the-voicing';
 import { progressionRecognition } from './progression-recognition';
+import { rootlessVoicing } from './rootless-voicing';
 import type { AnyExercise, ExerciseId } from './types';
 
 /** In the order they are offered. */
@@ -17,6 +18,7 @@ export const EXERCISES: readonly AnyExercise[] = [
   intervalRecognition,
   chordQuality,
   playTheVoicing,
+  rootlessVoicing,
   progressionRecognition,
 ];
 
