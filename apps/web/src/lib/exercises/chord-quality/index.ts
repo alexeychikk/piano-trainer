@@ -43,6 +43,7 @@ import {
   chordQualityName,
   chordQualityShortName,
   intervalsAboveBass,
+  isChordQuality,
   midiToName,
   qualityOfIntervals,
   spellsQuality,
@@ -53,6 +54,7 @@ import {
   type NoteName,
 } from '$lib/theory';
 import { randomInt } from '../rng';
+import { skillIdSegments } from '../skill-id';
 import type {
   Answer,
   ExerciseDefinition,
@@ -124,12 +126,15 @@ export function skillIdFor(quality: ChordQuality): SkillId {
  * recognise comes back unchanged.
  */
 export function chordSkillLabel(skillId: SkillId): string {
-  const prefix = `${CHORD_QUALITY_ID}:`;
-  if (!skillId.startsWith(prefix)) return skillId;
-  const quality = skillId.slice(prefix.length) as ChordQuality;
-  return chordIntervals(quality) === null
-    ? skillId
-    : chordQualityShortName(quality);
+  const segments = skillIdSegments(skillId, CHORD_QUALITY_ID, 1);
+  if (segments === null) return skillId;
+  const [quality] = segments;
+  // A quality the app cannot build (`dom7alt`) has no colour to drill and no
+  // grid cell to name; one it does not know at all never was a skill.
+  if (!isChordQuality(quality) || chordIntervals(quality) === null) {
+    return skillId;
+  }
+  return chordQualityShortName(quality);
 }
 
 /** Flats, like every other spelling in the app (find-the-note's rule). */

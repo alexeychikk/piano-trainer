@@ -8,6 +8,7 @@ import {
   detectChords,
   intervalsAboveBass,
   isBuildableQuality,
+  isChordQuality,
   qualityOfIntervals,
   spellsQuality,
   spellsQualityFromRoot,
@@ -15,6 +16,7 @@ import {
   spokenChordQuality,
   toChordSymbol,
 } from './chords';
+import type { ChordQuality } from './types';
 
 describe('detectChords', () => {
   it('needs at least two notes', () => {
@@ -116,6 +118,45 @@ describe('chord-quality vocabulary', () => {
     expect(spellsQuality([60, 64, 67], 'dom7alt')).toBe(false);
     expect(spellsQualityInAnyInversion([60, 64, 67], 'dom7alt')).toBe(false);
     expect(spellsQuality([], 'maj7')).toBe(false);
+  });
+});
+
+describe('a quality that is not one', () => {
+  // A quality reaches the tables from a skill id, which the user can hand-edit
+  // in IndexedDB or import from a file. `'constructor' in TABLE` is true for
+  // every object literal, so an own-key check is the only honest membership
+  // test: without it the tables answered with `Object.prototype`'s functions,
+  // which `shellIntervals()` then called `.find()` on and threw.
+  const inherited = [
+    'constructor',
+    'toString',
+    '__proto__',
+    'valueOf',
+    'hasOwnProperty',
+  ] as unknown as ChordQuality[];
+
+  it('is not a quality', () => {
+    expect(isChordQuality('maj7')).toBe(true);
+    expect(isChordQuality('dom7alt')).toBe(true);
+    for (const quality of inherited)
+      expect(isChordQuality(quality)).toBe(false);
+  });
+
+  it('has no intervals, no notes and no structure', () => {
+    for (const quality of inherited) {
+      expect(chordIntervals(quality), quality).toBeNull();
+      expect(isBuildableQuality(quality), quality).toBe(false);
+      expect(chordNotes(60, quality), quality).toBeNull();
+      expect(spellsQuality([60, 64, 67, 71], quality), quality).toBe(false);
+    }
+  });
+
+  it('comes back as itself rather than as a function, wherever it is named', () => {
+    for (const quality of inherited) {
+      expect(chordQualityName(quality), quality).toBe(quality);
+      expect(chordQualityShortName(quality), quality).toBe(quality);
+      expect(chordSymbolText(0, quality), quality).toBe(`C${quality}`);
+    }
   });
 });
 

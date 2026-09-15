@@ -254,3 +254,31 @@ describe('the unknown type', () => {
     expect(spellsProgression([60], 0, unknown)).toBe(false);
   });
 });
+
+describe('an inherited key is not a type', () => {
+  // A type reaches these tables from a skill id, which the user can hand-edit
+  // or import: `'constructor' in STEPS_BY_TYPE` is true, so the membership
+  // test has to be an own-key one (it used to render the grid cell as
+  // `C function Object() { [native code] }`).
+  const inherited = [
+    'constructor',
+    'toString',
+    '__proto__',
+    'valueOf',
+    'hasOwnProperty',
+  ] as unknown as 'major-ii-V-I'[];
+
+  it('is not a progression', () => {
+    for (const type of inherited) expect(isProgressionType(type)).toBe(false);
+  });
+
+  it('has no steps, and is named as itself rather than as a function', () => {
+    for (const type of inherited) {
+      expect(progressionSteps(type), type).toBeNull();
+      expect(progressionLength(type), type).toBe(0);
+      expect(progressionChords(0, type), type).toBeNull();
+      expect(progressionName(type), type).toBe(type);
+      expect(progressionShortName(type), type).toBe(type);
+    }
+  });
+});
