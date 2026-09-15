@@ -28,6 +28,11 @@ import {
   type Semitones,
 } from '$lib/theory';
 import { randomInt } from '../rng';
+import {
+  MAX_SEMITONE_SEGMENT,
+  integerSegment,
+  skillIdSegments,
+} from '../skill-id';
 import type {
   Answer,
   ExerciseDefinition,
@@ -101,13 +106,13 @@ export function skillIdFor(
  * An id this exercise does not recognise comes back unchanged.
  */
 export function intervalSkillLabel(skillId: SkillId): string {
-  const prefix = `${INTERVAL_RECOGNITION_ID}:`;
-  if (!skillId.startsWith(prefix)) return skillId;
-  const [size, direction] = skillId.slice(prefix.length).split(':');
-  const semitones = Number(size);
-  if (!Number.isInteger(semitones) || semitones < 0) return skillId;
-  const arrow = direction === 'desc' ? '↓' : '↑';
-  return `${intervalShortName(semitones)} ${arrow}`;
+  const segments = skillIdSegments(skillId, INTERVAL_RECOGNITION_ID, 2);
+  if (segments === null) return skillId;
+  const [size, direction] = segments;
+  const semitones = integerSegment(size, MAX_SEMITONE_SEGMENT);
+  if (semitones === null) return skillId;
+  if (direction !== 'asc' && direction !== 'desc') return skillId;
+  return `${intervalShortName(semitones)} ${direction === 'desc' ? '↓' : '↑'}`;
 }
 
 /** Flats, like every other spelling in the app (find-the-note's rule). */

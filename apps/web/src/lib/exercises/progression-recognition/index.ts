@@ -80,6 +80,7 @@ import {
   type ProgressionType,
 } from '$lib/theory';
 import { randomInt } from '../rng';
+import { pitchClassSegment, skillIdSegments } from '../skill-id';
 import type {
   Answer,
   ExerciseDefinition,
@@ -173,15 +174,11 @@ export function skillIdFor(
  * never colour. An id this exercise does not recognise comes back unchanged.
  */
 export function progressionSkillLabel(skillId: SkillId): string {
-  const prefix = `${PROGRESSION_RECOGNITION_ID}:`;
-  if (!skillId.startsWith(prefix)) return skillId;
-  const rest = skillId.slice(prefix.length);
-  const split = rest.lastIndexOf(':');
-  if (split < 0) return skillId;
-  const type = rest.slice(0, split);
-  const tonicPc = Number(rest.slice(split + 1));
-  if (!isProgressionType(type)) return skillId;
-  if (!Number.isInteger(tonicPc) || tonicPc < 0 || tonicPc > 11) return skillId;
+  const segments = skillIdSegments(skillId, PROGRESSION_RECOGNITION_ID, 2);
+  if (segments === null) return skillId;
+  const [type, tonic] = segments;
+  const tonicPc = pitchClassSegment(tonic);
+  if (tonicPc === null || !isProgressionType(type)) return skillId;
   return `${pitchClassName(tonicPc, 'flat')} ${progressionShortName(type)}`;
 }
 

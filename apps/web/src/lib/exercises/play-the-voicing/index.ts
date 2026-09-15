@@ -47,6 +47,7 @@ import {
   chordSymbolText,
   hasShell,
   intervalsAboveBass,
+  isChordQuality,
   midiToName,
   pcOf,
   qualityOfIntervals,
@@ -62,6 +63,7 @@ import {
   type PitchClass,
 } from '$lib/theory';
 import { randomInt } from '../rng';
+import { pitchClassSegment, skillIdSegments } from '../skill-id';
 import type {
   Answer,
   ExerciseDefinition,
@@ -152,14 +154,12 @@ export function skillIdFor(quality: ChordQuality, rootPc: PitchClass): SkillId {
  * back unchanged.
  */
 export function voicingSkillLabel(skillId: SkillId): string {
-  const prefix = `${PLAY_THE_VOICING_ID}:`;
-  if (!skillId.startsWith(prefix)) return skillId;
-  const [quality, root] = skillId.slice(prefix.length).split(':');
-  const rootPc = Number(root);
-  if (!Number.isInteger(rootPc) || rootPc < 0 || rootPc > 11) return skillId;
-  return hasShell(quality as ChordQuality)
-    ? chordSymbolText(rootPc, quality as ChordQuality)
-    : skillId;
+  const segments = skillIdSegments(skillId, PLAY_THE_VOICING_ID, 2);
+  if (segments === null) return skillId;
+  const [quality, root] = segments;
+  const rootPc = pitchClassSegment(root);
+  if (rootPc === null || !isChordQuality(quality)) return skillId;
+  return hasShell(quality) ? chordSymbolText(rootPc, quality) : skillId;
 }
 
 /** Flats, like every other spelling in the app (find-the-note's rule). */

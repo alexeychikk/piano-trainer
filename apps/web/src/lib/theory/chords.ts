@@ -166,11 +166,26 @@ const SHORT_BY_QUALITY: Record<ChordQuality, string> = {
   dom7alt: '7alt',
 };
 
+/**
+ * Is this a quality the app has a name for — the own-key check that `value in
+ * NAME_BY_QUALITY` is not. `NAME_BY_QUALITY` is exhaustive, so its own keys
+ * *are* the union; `'constructor'`, `'toString'` and friends are not in it,
+ * which is the whole point (a skill id is user-editable input, and casting one
+ * of those to `ChordQuality` used to walk into the tables below).
+ */
+export function isChordQuality(value: string): value is ChordQuality {
+  return Object.hasOwn(NAME_BY_QUALITY, value);
+}
+
 /** Semitones above the root, or `null` for a quality with no fixed structure. */
 export function chordIntervals(
   quality: ChordQuality,
 ): readonly Semitones[] | null {
-  return INTERVALS_BY_QUALITY[quality] ?? null;
+  // Own keys only: an inherited one answers with a function, which every
+  // caller here would then treat as an interval array.
+  return Object.hasOwn(INTERVALS_BY_QUALITY, quality)
+    ? (INTERVALS_BY_QUALITY[quality] ?? null)
+    : null;
 }
 
 /** Is this a quality the app can build and grade — i.e. has it intervals? */
@@ -188,12 +203,14 @@ export function chordNotes(root: Midi, quality: ChordQuality): Midi[] | null {
 
 /** The spelled-out name, e.g. `Dominant 7th chord` (feedback, reveals). */
 export function chordQualityName(quality: ChordQuality): string {
-  return NAME_BY_QUALITY[quality];
+  // A quality the tables do not own comes back unchanged rather than as
+  // whatever `Object.prototype` holds under that key (`isChordQuality`).
+  return isChordQuality(quality) ? NAME_BY_QUALITY[quality] : quality;
 }
 
 /** The abbreviated name, e.g. `m7b5` — dense grids only, never feedback. */
 export function chordQualityShortName(quality: ChordQuality): string {
-  return SHORT_BY_QUALITY[quality];
+  return isChordQuality(quality) ? SHORT_BY_QUALITY[quality] : quality;
 }
 
 /**
@@ -216,8 +233,9 @@ export function chordSymbolText(
   quality: ChordQuality,
   style: 'sharp' | 'flat' = 'flat',
 ): string {
-  const suffix =
-    SYMBOL_SUFFIX_BY_QUALITY[quality] ?? chordQualityShortName(quality);
+  const suffix = Object.hasOwn(SYMBOL_SUFFIX_BY_QUALITY, quality)
+    ? (SYMBOL_SUFFIX_BY_QUALITY[quality] ?? '')
+    : chordQualityShortName(quality);
   return `${pitchClassName(rootPc, style)}${suffix}`;
 }
 

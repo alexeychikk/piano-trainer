@@ -169,3 +169,28 @@ describe('spellsShell — the slice 8 matching rule', () => {
     expect(spellsShell([48, 51, 57], 0, 'dim7')).toBe(false);
   });
 });
+
+describe('an inherited key is not a quality', () => {
+  // The crash this guard closes: `chordIntervals('constructor')` used to hand
+  // back `Object`, and `shellIntervals()` called `.find()` on it — a
+  // `TypeError` that took `/progress` down whenever a hand-edited or imported
+  // record carried such a skill id.
+  const inherited = [
+    'constructor',
+    'toString',
+    '__proto__',
+    'valueOf',
+    'hasOwnProperty',
+  ] as unknown as ChordQuality[];
+
+  it('has no shell, and asks about one without throwing', () => {
+    for (const quality of inherited) {
+      expect(() => shellIntervals(quality), quality).not.toThrow();
+      expect(shellIntervals(quality), quality).toBeNull();
+      expect(hasShell(quality), quality).toBe(false);
+      expect(shellNotes(C4, quality), quality).toBeNull();
+      expect(shellSpan(quality), quality).toBe(0);
+      expect(spellsShell([48, 52, 58], 0, quality), quality).toBe(false);
+    }
+  });
+});

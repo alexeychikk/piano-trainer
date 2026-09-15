@@ -149,6 +149,20 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
   `generate()` never reads storage), a `label` on `ExpectedAnswer` (the reveal is named in text as
   well as shown, a11y §8.6) and `ExerciseDefinition.skillLabel` (slice 5a — how an exercise names its
   own skills for `/progress`).
+- **A skill id read back is untrusted input** — it comes from IndexedDB or a 5b import file, both
+  hand-editable, so decoding one gets the storage layer's rule: validate, and on anything unexpected
+  **return the raw id**, never throw and never invent a label. Two traps, both closed centrally:
+  - **`value in TABLE` is never a membership test.** It is `true` for `constructor`, `toString`,
+    `__proto__`, `valueOf`, … so a crafted id used to reach the vocabulary tables and come back as a
+    function — which `shellIntervals()` then called `.find()` on, throwing and taking `/progress`
+    down. Every lookup keyed by a union is `Object.hasOwn()`, and the predicates are
+    `isChordQuality()` (`theory/chords.ts`) and `isProgressionType()` (`theory/progressions.ts`).
+    A name register asked about a key it does not own returns the key unchanged.
+  - **`Number()` is never a parser** for a segment: `Number('')` is `0` and `Number(' 3 ')` is `3`.
+    Numeric segments go through `$lib/exercises/skill-id.ts` (`skillIdSegments` — prefix plus an
+    exact segment count; `integerSegment`/`pitchClassSegment` — canonical decimal, bounded), which
+    is what every exercise's `skillLabel()` is built from. New exercises reuse it; `registry.test.ts`
+    asserts the rule for whatever is registered.
 - **The runner** is `$lib/exercises/runner.svelte.ts` (state machine, score, streak) plus
   `$lib/components/exercise/ExerciseRunner.svelte` (the §4 frame). **Every drill-rhythm constant
   lives in the runner module** — `FEEDBACK_CORRECT_MS`, `FEEDBACK_STREAK_MS`, `REVEAL_DELAY_MS`,
@@ -199,12 +213,15 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
   - **The graded quantity is the quality, not the pitches** (slice 6's rule, one dimension up):
     `grade()` compares `intervalsAboveBass(played)` — the semitones above the **lowest note played**,
     folded into one octave and deduped — to the asked quality's interval set. So the chord may be
-    played back from **any root** (no `Question.range`, nothing dims), in **any octave, spacing and
-    doubling**, with **enharmonics equal for free** (integer arithmetic), but **in root position**:
+    played back from **any root** (no `Question.range`, nothing dims), in **any octave and spacing**,
+    with **enharmonics equal for free** (integer arithmetic), but **in root position**:
     a pitch-class set alone does not name one quality (Cm7 and Eb6 are the same four notes, and
     slice 8's 6th chords make that ambiguity real), so the lowest note played is read as the root.
     A right chord over the wrong bass is a *named* miss, never a silent one
-    (`spellsQualityInAnyInversion`). Scoring is **binary** (ADR §10).
+    (`spellsQualityInAnyInversion`). Scoring is **binary** (ADR §10). `grade()` throws a doubling
+    away like any other spacing, but **a doubling still misses**: the runner closes a
+    `note-sequence` answer at the expected length (four), so a doubled note always costs a chord
+    tone — slice 8's and slice 10's rule, and what `chord-quality/index.ts`'s docblock says.
   - The **answer mode is `note-sequence`**, not the UX spec's `chord-sustained`/`chord-released`:
     those two need notes held together, which a mouse on the on-screen keyboard cannot do at all
     (one pointer, one key), and the acceptance rule is that every drill is playable with no MIDI

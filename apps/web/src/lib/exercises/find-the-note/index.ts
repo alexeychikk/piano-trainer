@@ -11,6 +11,7 @@
 
 import { MIDDLE_C, midiToName, pcOf, type Midi } from '$lib/theory';
 import { randomInt } from '../rng';
+import { pitchClassSegment, skillIdSegments } from '../skill-id';
 import type {
   Answer,
   ExerciseDefinition,
@@ -55,13 +56,13 @@ export function spell(midi: Midi): string {
  * any octave. An id this exercise does not recognise comes back unchanged.
  */
 export function pitchClassName(skillId: string): string {
-  const pc = Number(skillId.slice(`${FIND_THE_NOTE_ID}:pc:`.length));
-  if (!skillId.startsWith(`${FIND_THE_NOTE_ID}:pc:`) || !Number.isInteger(pc)) {
-    return skillId;
-  }
+  const segments = skillIdSegments(skillId, FIND_THE_NOTE_ID, 2);
+  if (segments === null || segments[0] !== 'pc') return skillId;
+  const pc = pitchClassSegment(segments[1]);
+  if (pc === null) return skillId;
   // Spelled from C4 and stripped of the octave: one spelling per pitch, the
   // same flats the prompt and the keyboard labels use.
-  return spell(MIDDLE_C + (((pc % 12) + 12) % 12)).replace(/-?\d+$/, '');
+  return spell(MIDDLE_C + pc).replace(/-?\d+$/, '');
 }
 
 function generate(

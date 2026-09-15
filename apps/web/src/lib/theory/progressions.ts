@@ -97,22 +97,28 @@ export function progressionLength(type: ProgressionType): number {
 export function progressionSteps(
   type: ProgressionType,
 ): readonly ProgressionStep[] | null {
-  return STEPS_BY_TYPE[type] ?? null;
+  return isProgressionType(type) ? STEPS_BY_TYPE[type] : null;
 }
 
-/** Is this a progression the app can build and grade? */
+/**
+ * Is this a progression the app can build and grade? **Own keys only**:
+ * `value in STEPS_BY_TYPE` is also true of `constructor` and `toString`, and a
+ * type comes from a skill id, which the user can hand-edit or import.
+ */
 export function isProgressionType(value: string): value is ProgressionType {
-  return value in STEPS_BY_TYPE;
+  return Object.hasOwn(STEPS_BY_TYPE, value);
 }
 
 /** The spelled-out name, e.g. `Major ii-V-I` (feedback, reveals). */
 export function progressionName(type: ProgressionType): string {
-  return NAME_BY_TYPE[type];
+  // A type the tables do not own comes back unchanged rather than as whatever
+  // `Object.prototype` holds under that key.
+  return isProgressionType(type) ? NAME_BY_TYPE[type] : type;
 }
 
 /** The abbreviated name, e.g. `ii-V-i` — dense grids only, never feedback. */
 export function progressionShortName(type: ProgressionType): string {
-  return SHORT_BY_TYPE[type];
+  return isProgressionType(type) ? SHORT_BY_TYPE[type] : type;
 }
 
 /**

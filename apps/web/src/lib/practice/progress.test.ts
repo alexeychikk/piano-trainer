@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import type { StoredAttempt } from '$lib/storage/db';
+import { EXERCISES } from '$lib/exercises/registry';
+import { PRACTICE_SCHEMA_VERSION, type StoredAttempt } from '$lib/storage/db';
+import { buildPlan } from './planner';
+import { parsePracticeFile } from './transfer';
 import { deriveSkills, initialSkill } from './mastery';
 import {
   accuracyOver,
@@ -213,5 +216,79 @@ describe('buildGroups', () => {
     expect(group.cells.map((cell) => cell.skillId)).toContain(
       'find-the-note:pc:11',
     );
+  });
+});
+
+describe('a crafted skill id', () => {
+  /**
+   * Skill ids come out of IndexedDB and out of a 5b import file, both of which
+   * the user can hand-edit, so `/progress` must survive one it never wrote.
+   * This wires the **real** registry the way `routes/progress/+page.svelte`
+   * does: `play-the-voicing:constructor:0` used to throw inside `hasShell()`
+   * and take the whole screen down with it.
+   */
+  const inputs = EXERCISES.map((exercise) => ({
+    id: exercise.id,
+    title: exercise.title,
+    skillIds: exercise.skillsCovered(exercise.defaultSettings),
+    label: (skillId: string) =>
+      exercise.skillLabel?.(skillId, exercise.defaultSettings) ??
+      fallbackSkillLabel(skillId),
+  }));
+
+  const crafted = [
+    ['play-the-voicing:constructor:0', 'play-the-voicing'],
+    ['progression-recognition:constructor:0', 'progression-recognition'],
+    ['chord-quality:constructor', 'chord-quality'],
+    ['interval-recognition:constructor:asc', 'interval-recognition'],
+    ['find-the-note:pc:', 'find-the-note'],
+  ] as const;
+
+  const attempts = crafted.map(([skillId, exerciseId], i) =>
+    attempt({ attemptId: `c${i}`, skillId, exerciseId }),
+  );
+
+  it('builds the grid instead of throwing, and shows the id as text', () => {
+    const groups = buildGroups(inputs, deriveSkills(attempts), attempts, NOW);
+    const cells = groups.flatMap((group) => group.cells);
+    for (const [skillId] of crafted) {
+      const cell = cells.find((candidate) => candidate.skillId === skillId);
+      // The stored skill is kept (it has a history), named by its own id —
+      // never as `function Object() { [native code] }`.
+      expect(cell?.label, skillId).toBe(skillId);
+    }
+    for (const cell of cells) {
+      expect(cell.label).toBeTypeOf('string');
+      expect(cell.label).not.toMatch(/native code|\[object |function /);
+    }
+  });
+
+  it('schedules it like any other skill, without decoding it', () => {
+    const plan = buildPlan(inputs, deriveSkills(attempts), NOW);
+    expect(() => plan.items).not.toThrow();
+    expect(plan.dueCount).toBeGreaterThanOrEqual(0);
+  });
+
+  it('survives the import path that carries one in', () => {
+    const file = JSON.stringify({
+      schemaVersion: PRACTICE_SCHEMA_VERSION,
+      exportedAt: NOW,
+      skills: [...deriveSkills(attempts).values()],
+      attempts,
+    });
+    const result = parsePracticeFile(file);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const skills = new Map(
+      result.file.skills.map((skill) => [skill.skillId, skill]),
+    );
+    const groups = buildGroups(inputs, skills, result.file.attempts, NOW);
+    expect(groups.length).toBe(EXERCISES.length);
+    expect(
+      groups
+        .flatMap((group) => group.cells)
+        .map((cell) => cell.label)
+        .join(' '),
+    ).not.toMatch(/native code/);
   });
 });
