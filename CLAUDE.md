@@ -115,7 +115,9 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
   peak budget**: `headroomScale(voiceGains)` scales them so their peaks sum to at most
   `SUMMED_PEAK_CEILING` (0.85, measured *before* the master gain — and `volumeGain` maxes at 1, so
   respecting it at the ceiling means no slider position can clip). A group already under the ceiling
-  is untouched, so a single note keeps exactly the level it always had; `1 / sqrt(n)` was rejected
+  is untouched, so a single note keeps exactly the level it always had *up to the velocity at which
+  one voice alone reaches the ceiling* (≈113 sampled, ≈117 synth — above that even a group of one is
+  scaled, which is the ceiling doing its job); `1 / sqrt(n)` was rejected
   because it still clips (four voices at 88 reach 1.15). `SUMMED_PEAK_CEILING` is **the one constant
   to tweak** if the owner's listen-through says the app is too loud or too quiet.
   - **A group is one call at one time** — `playChord` (a `PlaybackPlan` event), or `playNote`/
@@ -333,6 +335,43 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
   - The runner's answer slots now **wrap** (`.slots`): twelve slots are wider than the frame on a
     narrow desktop window, and two rows still fit the reserved 88 px, so §4.1's no-scroll rule holds
     in both directions.
+- **Rootless A/B voicings (slice 11)** — `$lib/exercises/rootless-voicing/`, the sixth exercise and
+  the second playing drill: a chord symbol and a form are read, the root sounds underneath, the user
+  plays the voicing.
+  - **The vocabulary is the rootless pair**, in `$lib/theory/voicings.ts` beside the shell (the
+    `intervals.ts`/`chords.ts` rule): `A` = 3-5-7-9, `B` = 7-9-3-5, measured in semitones **above
+    the root the voicing never plays**, so all 12 keys are one piece of arithmetic.
+    `rootlessIntervals`/`hasRootless`/`rootlessNotesFromBass`/`rootlessBassOffset`/`rootlessSpan`/
+    `rootlessPitchClasses` (build), `rootlessOfIntervalsAboveBass`/`spellsRootless`/
+    `spellsRootlessInAnyInversion` (read), the `isRootlessForm` guard and two name registers
+    (`rootlessBassDegree` `3rd`, `rootlessDegrees` `3rd, 5th, 7th, 9th`).
+  - **A and B are the same four pitch classes; the form is which one is underneath.** So
+    `rootlessPitchClasses()` deliberately takes **no form** — only the bass can tell them apart —
+    and `spellsRootless()` is "exactly these four pitch classes, with the form's own degree lowest"
+    (slice 8's rule with the bass moved off the root). Free: register, octave, spacing, order,
+    enharmonics. Rejected: the other form, another key, another quality, a doubling (the answer is
+    four notes, so it always costs a chord tone) and **any answer containing the root** — that is
+    what rootless means, and it is a *named* near-miss, never a bare ✗. Binary scoring (ADR §10).
+  - **An A form is also a seventh chord, and that ambiguity is the music's**: `Cm7`'s A form is
+    `Eb-G-Bb-D`, spelled exactly like `Ebmaj7` (`Cmaj7`'s is `Em7`, `C7`'s is `Em7b5`). No B form is
+    anything else. Both readings are honest, so `rootlessOfIntervalsAboveBass()` names a played
+    shape as a *voicing* and `missDetail` asks it before `qualityOfIntervals()` — a drill about
+    voicings names things in its own vocabulary. The commonest case never reaches either: the whole
+    chord in the *asked* key contains the root, so the root line wins first.
+  - **Only qualities with a 3rd, a perfect 5th and a 7th have a rootless voicing** — `maj7`, `dom7`,
+    `min7`, `minMaj7` (`ROOTLESS_QUALITIES`); the starter set is the ii-V-I's three, as slice 8.
+    `min7b5`'s flat 5th and `dim7`'s diminished 7th make a different shape with a different 9th, so
+    they get `null` rather than a plausible transposition of the wrong thing.
+  - `SkillId` is `rootless-voicing:<quality>:<rootPc>:<form>` — **one skill per chord *and* form**,
+    72 cells. Slice 8 split by key because a colour is not a shape; the form splits it again for the
+    same reason, and averaging the form you reach for with the form you avoid would hide exactly
+    what the drill exists to expose. `skillLabel()` renders `Cmaj7 A`.
+  - **Placement is anchored on the voicing's bass note, not on the root** (which is not played):
+    anchoring on the root would push a B form — whose top is 19 semitones above it — out of a small
+    keyboard for a note nobody plays. The **reference root sounds as the bass**, the highest root
+    below the voicing, and it cannot give the answer away because it is the one note the answer must
+    not contain. `answerGapMs` is 2.5 s: this is a *construction* drill (slice 7's chord is an echo),
+    and the runner's 1200 ms default closes an answer the user is still working out.
 - **Settings** are `localStorage` via the `settings` store (`$lib/storage/settings.svelte.ts`) and
   are read only in `hydrate()`, called from the root layout after mount — module init must not touch
   storage or prerendered HTML and the first client render disagree. Slice 4 added `keyboardLow`/

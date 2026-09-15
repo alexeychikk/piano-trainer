@@ -1,14 +1,29 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ROOTLESS_FORMS,
+  ROOTLESS_QUALITIES,
   SHELL_QUALITIES,
+  hasRootless,
   hasShell,
+  isRootlessForm,
   qualityOfShellIntervals,
   shellIntervals,
   shellNotes,
   shellPitchClasses,
   shellSpan,
   spellsShell,
+  rootlessBassDegree,
+  rootlessBassOffset,
+  rootlessDegrees,
+  rootlessIntervals,
+  rootlessNotesFromBass,
+  rootlessOfIntervalsAboveBass,
+  rootlessPitchClasses,
+  rootlessSpan,
+  spellsRootless,
+  spellsRootlessInAnyInversion,
   spellsShellInAnyInversion,
+  type RootlessForm,
 } from './voicings';
 import type { ChordQuality } from './types';
 
@@ -191,6 +206,220 @@ describe('an inherited key is not a quality', () => {
       expect(shellNotes(C4, quality), quality).toBeNull();
       expect(shellSpan(quality), quality).toBe(0);
       expect(spellsShell([48, 52, 58], 0, quality), quality).toBe(false);
+    }
+  });
+});
+
+// ---- rootless A/B voicings (slice 11) ------------------------------------
+
+describe('rootlessIntervals', () => {
+  it('spells the A form 3-5-7-9 above the root', () => {
+    expect(rootlessIntervals('maj7', 'A')).toEqual([4, 7, 11, 14]);
+    expect(rootlessIntervals('dom7', 'A')).toEqual([4, 7, 10, 14]);
+    expect(rootlessIntervals('min7', 'A')).toEqual([3, 7, 10, 14]);
+  });
+
+  it('spells the B form 7-9-3-5 above the root', () => {
+    expect(rootlessIntervals('maj7', 'B')).toEqual([11, 14, 16, 19]);
+    expect(rootlessIntervals('dom7', 'B')).toEqual([10, 14, 16, 19]);
+    expect(rootlessIntervals('min7', 'B')).toEqual([10, 14, 15, 19]);
+  });
+
+  it('gives both forms the same four pitch classes', () => {
+    for (const quality of ROOTLESS_QUALITIES) {
+      const a = rootlessIntervals(quality, 'A') ?? [];
+      const b = rootlessIntervals(quality, 'B') ?? [];
+      const pcs = (values: readonly number[]) =>
+        [...new Set(values.map((value) => value % 12))].sort((x, y) => x - y);
+      expect(pcs(a), quality).toEqual(pcs(b));
+    }
+  });
+
+  it('has no rootless voicing without a 7th, a 3rd or a perfect 5th', () => {
+    // No 7th to voice; a 6th chord's 6th is not one either.
+    for (const quality of ['maj', 'min', 'sus4', 'maj6', 'min6'] as const)
+      expect(rootlessIntervals(quality, 'A'), quality).toBeNull();
+    // `min7b5`'s flat 5th and `dim7`'s diminished 7th are a different shape
+    // with a different 9th — their own drill, not this one's transposition.
+    for (const quality of ['min7b5', 'dim7', 'dom7alt'] as const)
+      expect(rootlessIntervals(quality, 'A'), quality).toBeNull();
+    expect(hasRootless('min7b5')).toBe(false);
+    expect(hasRootless('maj7')).toBe(true);
+  });
+
+  it('refuses a form that is not one of the two', () => {
+    const crafted = 'constructor' as unknown as RootlessForm;
+    expect(isRootlessForm('A')).toBe(true);
+    expect(isRootlessForm('constructor')).toBe(false);
+    expect(rootlessIntervals('maj7', crafted)).toBeNull();
+    expect(rootlessBassOffset('maj7', crafted)).toBeNull();
+    expect(rootlessSpan('maj7', crafted)).toBe(0);
+    expect(rootlessNotesFromBass(C4, 'maj7', crafted)).toBeNull();
+    expect(spellsRootless([64, 67, 71, 74], 0, 'maj7', crafted)).toBe(false);
+  });
+});
+
+describe('rootlessNotesFromBass', () => {
+  it('builds the voicing up from the note the form puts underneath', () => {
+    // Cmaj7 A from E3: E-G-B-D.
+    expect(rootlessNotesFromBass(52, 'maj7', 'A')).toEqual([52, 55, 59, 62]);
+    // Cmaj7 B from B3: B-D-E-G.
+    expect(rootlessNotesFromBass(59, 'maj7', 'B')).toEqual([59, 62, 64, 67]);
+  });
+
+  it('spans no more than a hand', () => {
+    for (const quality of ROOTLESS_QUALITIES)
+      for (const form of ROOTLESS_FORMS)
+        expect(rootlessSpan(quality, form), `${quality} ${form}`).toBeLessThan(
+          12,
+        );
+  });
+
+  it('places its bass the form’s own degree above the root', () => {
+    expect(rootlessBassOffset('maj7', 'A')).toBe(4);
+    expect(rootlessBassOffset('min7', 'A')).toBe(3);
+    expect(rootlessBassOffset('maj7', 'B')).toBe(11);
+    expect(rootlessBassOffset('min7', 'B')).toBe(10);
+  });
+});
+
+describe('rootlessOfIntervalsAboveBass', () => {
+  it('tells all eight shapes apart', () => {
+    const seen = new Set<string>();
+    for (const quality of ROOTLESS_QUALITIES) {
+      for (const form of ROOTLESS_FORMS) {
+        const notes = rootlessNotesFromBass(C4, quality, form) ?? [];
+        const found = rootlessOfIntervalsAboveBass(
+          notes.map((midi) => midi - C4),
+        );
+        expect(found, `${quality} ${form}`).toEqual({ quality, form });
+        seen.add(`${quality}:${form}`);
+      }
+    }
+    expect(seen.size).toBe(ROOTLESS_QUALITIES.length * ROOTLESS_FORMS.length);
+  });
+
+  it('does not recognise a shell as one', () => {
+    expect(rootlessOfIntervalsAboveBass([0, 4, 11])).toBeNull();
+    expect(rootlessOfIntervalsAboveBass([])).toBeNull();
+  });
+
+  it('reads an A form as what it also is — a seventh chord', () => {
+    // Not a defect, and not a collision we get to resolve: `Cm7`'s A form is
+    // `Eb-G-Bb-D`, which is spelled exactly like `Ebmaj7`. Every A form is a
+    // seventh chord on its own bass (no B form is anything else), so a played
+    // shape can honestly be named either way, and this module names it the way
+    // the drill asking the question does.
+    expect(rootlessOfIntervalsAboveBass([0, 4, 7, 11])).toEqual({
+      quality: 'min7',
+      form: 'A',
+    });
+    expect(rootlessOfIntervalsAboveBass([0, 3, 7, 10])).toEqual({
+      quality: 'maj7',
+      form: 'A',
+    });
+  });
+});
+
+describe('spellsRootless', () => {
+  // Cmaj7 A: E-G-B-D. Cmaj7 B: B-D-E-G.
+  const cmaj7A = [52, 55, 59, 62];
+  const cmaj7B = [59, 62, 64, 67];
+
+  it('accepts the asked form in any octave, order and spacing', () => {
+    expect(spellsRootless(cmaj7A, 0, 'maj7', 'A')).toBe(true);
+    // Two octaves down, and struck in another order: the set and the lowest
+    // note are what is graded.
+    expect(
+      spellsRootless([62 - 24, 55 - 24, 52 - 24, 59 - 24], 0, 'maj7', 'A'),
+    ).toBe(true);
+    // Open spacing: the upper notes an octave up, the 3rd still underneath.
+    expect(spellsRootless([52, 67, 71, 74], 0, 'maj7', 'A')).toBe(true);
+    expect(spellsRootless(cmaj7B, 0, 'maj7', 'B')).toBe(true);
+  });
+
+  it('transposes to all 12 keys', () => {
+    for (let rootPc = 0; rootPc < 12; rootPc += 1)
+      for (const quality of ROOTLESS_QUALITIES)
+        for (const form of ROOTLESS_FORMS) {
+          const bass =
+            C4 + ((rootPc + (rootlessBassOffset(quality, form) ?? 0)) % 12);
+          const notes = rootlessNotesFromBass(bass, quality, form) ?? [];
+          expect(
+            spellsRootless(notes, rootPc, quality, form),
+            `${rootPc} ${quality} ${form}`,
+          ).toBe(true);
+        }
+  });
+
+  it('rejects the other form — the tones are the same, the bass is not', () => {
+    expect(spellsRootless(cmaj7A, 0, 'maj7', 'B')).toBe(false);
+    expect(spellsRootless(cmaj7B, 0, 'maj7', 'A')).toBe(false);
+    // …but both are the right notes over the wrong one.
+    expect(spellsRootlessInAnyInversion(cmaj7A, 0, 'maj7')).toBe(true);
+    expect(spellsRootlessInAnyInversion(cmaj7B, 0, 'maj7')).toBe(true);
+  });
+
+  it('rejects the root, the shell and a doubling', () => {
+    // The root added under the A form: five notes, and one of them is the
+    // note a rootless voicing exists to leave out.
+    expect(spellsRootless([48, ...cmaj7A], 0, 'maj7', 'A')).toBe(false);
+    // The shell.
+    expect(spellsRootless([48, 52, 59], 0, 'maj7', 'A')).toBe(false);
+    // A doubled 3rd costs the 9th.
+    expect(spellsRootless([52, 55, 59, 64], 0, 'maj7', 'A')).toBe(false);
+    expect(spellsRootless([], 0, 'maj7', 'A')).toBe(false);
+  });
+
+  it('rejects another key and another quality', () => {
+    expect(spellsRootless(cmaj7A, 1, 'maj7', 'A')).toBe(false);
+    expect(spellsRootless(cmaj7A, 0, 'dom7', 'A')).toBe(false);
+    expect(spellsRootlessInAnyInversion(cmaj7A, 0, 'min7b5')).toBe(false);
+  });
+
+  it('is enharmonic-blind: it is arithmetic on MIDI numbers', () => {
+    // Db7 A from F3: F-Ab-B(=Cb)-Eb.
+    const db7A = rootlessNotesFromBass(53, 'dom7', 'A') ?? [];
+    expect(db7A).toEqual([53, 56, 59, 63]);
+    expect(spellsRootless(db7A, 1, 'dom7', 'A')).toBe(true);
+  });
+});
+
+describe('rootless form names', () => {
+  it('names the tone each form puts underneath', () => {
+    expect(rootlessBassDegree('A')).toBe('3rd');
+    expect(rootlessBassDegree('B')).toBe('7th');
+    expect(rootlessDegrees('A')).toBe('3rd, 5th, 7th, 9th');
+    expect(rootlessDegrees('B')).toBe('7th, 9th, 3rd, 5th');
+  });
+
+  it('gives a name it does not own back unchanged', () => {
+    const crafted = 'constructor' as unknown as RootlessForm;
+    expect(rootlessBassDegree(crafted)).toBe('constructor');
+    expect(rootlessDegrees(crafted)).toBe('constructor');
+  });
+});
+
+describe('a rootless voicing asked about an inherited key', () => {
+  const inherited = [
+    'constructor',
+    'toString',
+    '__proto__',
+    'valueOf',
+    'hasOwnProperty',
+  ] as unknown as ChordQuality[];
+
+  it('has none, and asks about one without throwing', () => {
+    for (const quality of inherited) {
+      expect(() => rootlessIntervals(quality, 'A'), quality).not.toThrow();
+      expect(rootlessIntervals(quality, 'A'), quality).toBeNull();
+      expect(hasRootless(quality), quality).toBe(false);
+      expect(rootlessNotesFromBass(C4, quality, 'A'), quality).toBeNull();
+      expect(rootlessPitchClasses(0, quality), quality).toBeNull();
+      expect(rootlessSpan(quality, 'A'), quality).toBe(0);
+      expect(spellsRootless([52, 55, 59, 62], 0, quality, 'A'), quality).toBe(
+        false,
+      );
     }
   });
 });
