@@ -30,7 +30,9 @@
  *   which is slice 8's answer and the habit this drill exists to break, so it
  *   is a *named* near-miss rather than a bare ✗.
  * - **the 5th** — likewise: the whole chord and the rootless voicing are named
- *   too, in this drill's own vocabulary (slice 11's rule).
+ *   too, in this drill's own vocabulary (slice 11's rule), and so is one guide
+ *   tone played beside the 5th (`E G` for `Cmaj7` — the triad player's reflex,
+ *   and a pair that is nobody else's guide tones, so nothing else names it).
  * - **doubling** — fails: the answer is two notes long, so a doubled note
  *   always leaves the other guide tone unplayed (slices 7, 8, 10 and 11's
  *   rule), and it gets its own line because it is a *near* miss here, not a
@@ -49,6 +51,7 @@
 import {
   GUIDE_TONE_DEGREES,
   MIDDLE_C,
+  chordFifth,
   chordSymbolText,
   guideToneDegree,
   guideToneNotes,
@@ -66,6 +69,7 @@ import {
   spellsRootlessInAnyInversion,
   spellsShellInAnyInversion,
   type ChordQuality,
+  type GuideToneDegree,
   type Midi,
   type NoteName,
   type PitchClass,
@@ -318,8 +322,12 @@ function generate(
   };
 }
 
-/** The other half of the pair, named. */
-function otherDegree(degree: string): string {
+/**
+ * The other half of the pair, named. Typed as the union `guideToneDegree()`
+ * returns, so neither side of this can drift into a string the drill does not
+ * use — a typo here or there stops compiling instead of waiting for a test.
+ */
+function otherDegree(degree: GuideToneDegree): GuideToneDegree {
   return degree === '3rd' ? '7th' : '3rd';
 }
 
@@ -394,6 +402,32 @@ export function missDetail(
   // guide tones (slice 11's answer, named in its own vocabulary).
   if (spellsRootlessInAnyInversion(played, rootPc, quality))
     return `That is the rootless voicing — the guide tones are the ${GUIDE_TONE_DEGREES}`;
+
+  // **A guide tone plus the 5th** — one right note and the note a hand that
+  // learned triads first reaches for instead of the other one (`Cmaj7` played
+  // as `E G`). It is two chord tones *of the asked chord*, so it is named in
+  // the asked key and in this drill's own vocabulary, exactly as slice 8 names
+  // "a shell leaves the 5th out".
+  //
+  // It is narrow on purpose (slice 8's precedent): **exactly two pitch
+  // classes**, one of them the asked chord's own guide tone and the other its
+  // own 5th. So it cannot reach the shell, the rootless voicing, the whole
+  // chord or another key — those have more notes or no guide tone of this
+  // chord in them, and all of them keep the lines they already had. It sits
+  // ahead of `nameOfPair()` because the only readings that pair can have are
+  // `minMaj7` ones in a distant key (a guide tone and a 5th are 3 or 4
+  // semitones apart, and only `minMaj7`'s pair spans that) — a chord this
+  // drill never asks for, while both notes belong to the chord on screen.
+  // `nameOfPair()`'s *asked-key* reading can never be lost here: a chord's own
+  // pair is the 3rd and the 7th, never its 5th.
+  const fifth = chordFifth(quality);
+  const fifthPc = fifth === null ? null : pcOf(rootPc + fifth);
+  const besideTheFifth = pcs.filter((pc) => pc !== fifthPc);
+  if (pcs.length === 2 && fifthPc !== null && besideTheFifth.length === 1) {
+    const degree = guideToneDegree(rootPc, quality, besideTheFifth[0]);
+    if (degree !== null)
+      return `That is the ${degree} and the 5th — the ${otherDegree(degree)} is the other guide tone`;
+  }
 
   // Another chord's pair: the neighbouring key, or the other quality's 3rd
   // played over the right 7th. Naming it makes the mistake visible as a chord

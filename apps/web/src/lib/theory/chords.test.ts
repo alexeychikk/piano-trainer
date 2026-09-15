@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  chordFifth,
   chordIntervals,
   chordNotes,
   chordQualityName,
@@ -72,6 +73,18 @@ describe('chord-quality vocabulary', () => {
     expect(isBuildableQuality('dom7alt')).toBe(false);
     expect(isBuildableQuality('dim7')).toBe(true);
     expect(chordNotes(60, 'dom7alt')).toBeNull();
+  });
+
+  it('knows which interval of a quality is its 5th', () => {
+    // Perfect, diminished and augmented are all 5ths, so a drill that names
+    // the note a hand reached for instead of the 7th must ask for this rather
+    // than assume `+7` (slice 8 could: a shell only ever drops a perfect 5th).
+    expect(chordFifth('maj7')).toBe(7);
+    expect(chordFifth('min7b5')).toBe(6);
+    expect(chordFifth('aug')).toBe(8);
+    expect(chordFifth('dim7')).toBe(6);
+    // A quality with no interval set has no 5th to name either.
+    expect(chordFifth('dom7alt')).toBeNull();
   });
 
   it('names a quality three ways, and never as an interval', () => {
@@ -147,6 +160,7 @@ describe('a quality that is not one', () => {
       expect(chordIntervals(quality), quality).toBeNull();
       expect(isBuildableQuality(quality), quality).toBe(false);
       expect(chordNotes(60, quality), quality).toBeNull();
+      expect(chordFifth(quality), quality).toBeNull();
       expect(spellsQuality([60, 64, 67, 71], quality), quality).toBe(false);
     }
   });
