@@ -14,6 +14,12 @@ export interface NotePlan {
   time?: number;
   /** Seconds; omitted means "until `stop` is called" (a held note). */
   duration?: number;
+  /**
+   * Linear scale on the voice's peak, 0..1; omitted means 1 (untouched). The
+   * engine's summed-gain headroom — see `headroomScale` — and the only reason
+   * a source ever plays below its velocity.
+   */
+  gainScale?: number;
 }
 
 /** Stops the voices a `start()` call produced. */
@@ -24,4 +30,11 @@ export interface NoteSourceApi {
   /** Stop one note, or everything when no note is given. */
   stop(midi?: Midi): void;
   dispose(): void;
+  /**
+   * The peak gain one unscaled voice at this velocity reaches on this source.
+   * The two paths answer differently (`smplr` squares the velocity, the synth
+   * raises it to 1.5), which is how the engine budgets a chord's headroom
+   * without ever learning which source it got.
+   */
+  voiceGain(velocity: number): number;
 }

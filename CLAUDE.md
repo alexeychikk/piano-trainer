@@ -110,6 +110,30 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
   `requestAnimationFrame` — the light may lag, the click may not. All audio wording lives in
   `$lib/audio/status.ts`. `audio` and `midi` are sibling layers: neither imports the other (which is
   why the played-back `DEFAULT_VELOCITY` is deliberately restated in `audio/gain.ts`).
+- **Level policy lives in `$lib/audio/gain.ts`, never in an exercise.** Voices mix by addition and
+  there is no limiter on the master, so **every group the engine starts in one call shares a summed
+  peak budget**: `headroomScale(voiceGains)` scales them so their peaks sum to at most
+  `SUMMED_PEAK_CEILING` (0.85, measured *before* the master gain — and `volumeGain` maxes at 1, so
+  respecting it at the ceiling means no slider position can clip). A group already under the ceiling
+  is untouched, so a single note keeps exactly the level it always had; `1 / sqrt(n)` was rejected
+  because it still clips (four voices at 88 reach 1.15). `SUMMED_PEAK_CEILING` is **the one constant
+  to tweak** if the owner's listen-through says the app is too loud or too quiet.
+  - **A group is one call at one time** — `playChord` (a `PlaybackPlan` event), or `playNote`/
+    `noteOn` as the group of one. Held keys are *not* a group: they arrive one `noteOn` at a time and
+    a sounding voice cannot be turned down without a shared node that would duck it audibly. Each
+    step of `playSequence` is its own group, because a line is not a chord.
+  - The two paths price a voice differently, and `NoteSourceApi.voiceGain(velocity)` is how the
+    engine budgets without learning which source it has: the synth is `velocityGain` (`^1.5`), the
+    sampled path `sampledVoiceGain` (`smplr`'s `midiVelToGain`, `^2`). `smplr`'s `NoteEvent` carries
+    no gain, so headroom reaches it as a **lowered velocity** (`sampledVelocity`, rounded *down* —
+    rounding to nearest would put the sum back over the ceiling). The synth takes `NotePlan.gainScale`
+    straight onto its envelope peak.
+  - Consequence: **an exercise never sets a velocity for headroom reasons** — a velocity is a
+    musical choice (play-the-voicing's root reference sits under its shell on purpose) and nothing
+    else. Slice 10's velocity-80 stop-gap is gone: both chord drills are on slice 7's 88 again.
+  - Still outside the budget, deliberately: the metronome click (`scheduleClick`, peak 0.5, ~50 ms)
+    goes straight to the master, so a click landing exactly on a chord attack can sum past unity for
+    a transient. It is a single short voice and lowering it would defeat "audible under playing".
 - **Sound settings** (`instrument`, `volume`, `soundEnabled`, `tempoBpm`, `beatsPerBar`) live in the
   same `settings` store, but UI changes them through `audio.setVolume/setMuted/setInstrument` and
   `metronome.setTempo/setBeatsPerBar` — never by patching `settings` directly, because the engine

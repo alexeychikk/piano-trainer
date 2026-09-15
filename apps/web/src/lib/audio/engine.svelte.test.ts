@@ -1,11 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AudioEngine } from './engine.svelte';
 import { DEFAULT_SETTINGS, settings } from '$lib/storage/settings.svelte';
+import { SUMMED_PEAK_CEILING, sampledVoiceGain, velocityGain } from './gain';
 import { installFakeAudioContext, type FakeAudioContext } from './testing';
 
 const ready = vi.hoisted(() => ({ fails: false }));
+// The engine always supplies a velocity — `velocity` is required here so the
+// headroom assertions can read it without a fallback.
 const sampled = vi.hoisted(() => ({
-  started: [] as { note: number; velocity?: number }[],
+  started: [] as { note: number; velocity: number }[],
   stopped: [] as (number | undefined)[],
 }));
 
@@ -14,7 +17,7 @@ vi.mock('smplr', () => ({
     ready: ready.fails
       ? Promise.reject(new Error('offline'))
       : Promise.resolve(),
-    start: (event: { note: number; velocity?: number }) => {
+    start: (event: { note: number; velocity: number }) => {
       sampled.started.push(event);
       return () => sampled.stopped.push(event.note);
     },
@@ -104,7 +107,18 @@ describe('notes', () => {
     const engine = new AudioEngine();
     await engine.ensureStarted();
     engine.noteOn(60, 999);
-    expect(sampled.started[0].velocity).toBe(127);
+    engine.noteOn(62, 127);
+    engine.noteOn(64, 100);
+
+    const [tooLoud, loudest, normal] = sampled.started.map(
+      (event) => event.velocity,
+    );
+    // Junk in, the loudest MIDI velocity out — the clamp is what makes the
+    // first two identical. What reaches `smplr` is that velocity *minus the
+    // summed-gain headroom*, which is why neither of them is literally 127: a
+    // voice at full scale is already the whole budget.
+    expect(tooLoud).toBe(loudest);
+    expect(normal).toBeLessThan(loudest);
   });
 
   it('schedules a sequence on the audio clock, all at once', async () => {
@@ -232,5 +246,94 @@ describe('settings', () => {
     engine.setInstrument('moon-harp');
     expect(settings.value.instrument).toBe('acoustic_grand_piano');
     expect(fake.contexts).toHaveLength(0);
+  });
+});
+
+describe('summed-gain headroom', () => {
+  /** Voice counts that matter: a note, a shell, a seventh chord, two hands. */
+  const GROUPS = [1, 3, 4, 12];
+
+  function notes(count: number): number[] {
+    return Array.from({ length: count }, (_, index) => 48 + index);
+  }
+
+  /**
+   * What the sampled path will actually peak at: `smplr` has no gain field, so
+   * the headroom arrives as a lowered velocity and the gain is read back off
+   * its own curve.
+   */
+  function sampledPeak(): number {
+    return sampled.started.reduce(
+      (total, event) => total + sampledVoiceGain(event.velocity),
+      0,
+    );
+  }
+
+  /**
+   * What the synth path will peak at: every voice ramps linearly to its peak
+   * during the attack, and that is the only linear automation the synth
+   * schedules (the release is exponential, the click is a step).
+   */
+  function synthPeak(ctx: FakeAudioContext): number {
+    return ctx.gains
+      .flatMap((gain) => gain.gain.events)
+      .filter((event) => event.kind === 'linear')
+      .reduce((total, event) => total + event.value, 0);
+  }
+
+  describe.each([
+    ['the soundfont', false],
+    ['the fallback synth', true],
+  ])('%s path', (_label, fails) => {
+    it.each(GROUPS)(
+      'keeps %i simultaneous voices under the ceiling',
+      async (count) => {
+        ready.fails = fails;
+        const engine = new AudioEngine();
+        await engine.ensureStarted();
+
+        // Worst case: the loudest velocity the app can ask for.
+        engine.playChord(notes(count), { velocity: 127 });
+
+        const peak = fails ? synthPeak(context()) : sampledPeak();
+        expect(peak).toBeGreaterThan(0);
+        expect(peak).toBeLessThanOrEqual(SUMMED_PEAK_CEILING);
+      },
+    );
+
+    it('leaves a single note at exactly the level it always had', async () => {
+      ready.fails = fails;
+      const engine = new AudioEngine();
+      await engine.ensureStarted();
+
+      engine.playNote(60, { velocity: 90 });
+
+      const expected = fails ? velocityGain(90) : sampledVoiceGain(90);
+      const peak = fails ? synthPeak(context()) : sampledPeak();
+      expect(peak).toBeCloseTo(expected, 10);
+    });
+
+    it('budgets each chord of a cadence on its own', async () => {
+      ready.fails = fails;
+      const engine = new AudioEngine();
+      await engine.ensureStarted();
+
+      // Slice 10 plays three four-note chords in a row, 1.25 s apart. They are
+      // three groups, not one, so each gets the whole budget — and none of them
+      // needs a velocity of its own any more.
+      for (const at of [0, 1.25, 2.5]) {
+        engine.playChord([60, 64, 67, 70], { velocity: 88, time: at });
+      }
+
+      const peak = fails ? synthPeak(context()) : sampledPeak();
+      expect(peak).toBeLessThanOrEqual(SUMMED_PEAK_CEILING * 3);
+      expect(peak / 3).toBeCloseTo(SUMMED_PEAK_CEILING, 1);
+    });
+  });
+
+  it('cannot clip at any volume: the master gain is never above unity', () => {
+    // The ceiling is measured *before* the master, and `volumeGain` maxes at 1,
+    // so a group that respects it respects it at every slider position.
+    expect(SUMMED_PEAK_CEILING).toBeLessThanOrEqual(1);
   });
 });
