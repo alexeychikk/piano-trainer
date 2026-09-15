@@ -395,6 +395,85 @@ describe('missDetail', () => {
     );
   });
 
+  it('names a guide tone played beside the 5th — the triad player’s reflex', () => {
+    // Asked Cmaj7 (E, B); played E and G. Right 3rd, and then the note a hand
+    // that learned triads first reaches for. No chord anywhere has this pair
+    // for its guide tones (3 semitones apart), so before this branch it was a
+    // bare ✗ — the one plausible miss in the drill nothing named.
+    expect(missDetail(0, 'maj7', [64, 67])).toBe(
+      'That is the 3rd and the 5th — the 7th is the other guide tone',
+    );
+    // The mirror, asked C7: the 7th kept, the 5th reached for instead of the
+    // 3rd — the note that makes the chord a colour at all.
+    expect(missDetail(0, 'dom7', [67, 70])).toBe(
+      'That is the 7th and the 5th — the 3rd is the other guide tone',
+    );
+    // Register, octave, spacing and order are as free here as they are in the
+    // answer itself: it is a pitch-class rule.
+    expect(missDetail(0, 'maj7', [79, 52])).toBe(
+      'That is the 3rd and the 5th — the 7th is the other guide tone',
+    );
+  });
+
+  it('prefers the asked chord’s own tones to a distant minMaj7 reading', () => {
+    // Asked Cm7 (Eb, Bb); played Eb and G — the same mistake as above, except
+    // that those two notes *are* Em(maj7)'s guide tones, a chord this drill
+    // never asks for. Two tones of the chord on screen, named in the asked key,
+    // beat a transposition into a quality the user has never seen.
+    expect(missDetail(0, 'min7', [63, 67])).toBe(
+      'That is the 3rd and the 5th — the 7th is the other guide tone',
+    );
+  });
+
+  it('leaves every answer another branch names better alone', () => {
+    // The shell, the rootless voicing, another chord's whole pair and a larger
+    // voicing in another key all keep the lines they had: the new branch is
+    // exactly two pitch classes, one of them this chord's guide tone and the
+    // other this chord's own 5th.
+    expect(missDetail(0, 'maj7', shellNotes(60, 'maj7') ?? [])).toBe(
+      'That is the shell — guide tones are the 3rd and 7th alone',
+    );
+    expect(
+      missDetail(0, 'maj7', rootlessNotesFromBass(64, 'maj7', 'A') ?? []),
+    ).toBe(
+      'That is the rootless voicing — the guide tones are the 3rd and 7th',
+    );
+    expect(missDetail(0, 'maj7', [65, 72])).toBe(
+      'You played the Dbmaj7 guide tones',
+    );
+    expect(missDetail(0, 'maj7', [62, 65, 69, 72])).toBe(
+      'You played Dm7 in full',
+    );
+    // The root beside the 5th is not a guide tone beside the 5th: C and G stay
+    // the Abmaj7 reading they always had (a true sentence, and out of scope).
+    expect(missDetail(0, 'maj7', [60, 67])).toBe(
+      'You played the Abmaj7 guide tones',
+    );
+    // Half the pair still reads as half the pair, at one note and at two.
+    expect(missDetail(0, 'maj7', [64])).toBe(
+      'That is the 3rd — the 7th is the other guide tone',
+    );
+    expect(missDetail(0, 'maj7', [64, 76])).toBe(
+      'You played the 3rd twice — the 7th is missing',
+    );
+  });
+
+  it('changes no grade — a named miss is still a miss', () => {
+    // The whole point of the branch is a better sentence, never a better mark
+    // (ADR §10 is binary, and `spellsGuideTones()` is untouched).
+    const question = ask(0);
+    const { rootPc, quality, rootMidi } = question.payload;
+    // The starter qualities all have a perfect 5th.
+    const fifth = rootMidi + 7;
+    const third = (guideToneNotes(rootMidi, quality) ?? [])[0];
+    const grade = guideTones.grade(question, played([third, fifth]));
+    expect(grade.correct).toBe(false);
+    expect(grade.score).toBe(0);
+    expect(missDetail(rootPc, quality, [third, fifth])).toBe(
+      'That is the 3rd and the 5th — the 7th is the other guide tone',
+    );
+  });
+
   it('names a larger voicing in another key', () => {
     // Asked Cmaj7; played the Ab7 shell (Ab, C, Gb).
     expect(missDetail(0, 'maj7', [56, 60, 66])).toBe(

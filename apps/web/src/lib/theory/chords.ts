@@ -201,6 +201,27 @@ export function chordNotes(root: Midi, quality: ChordQuality): Midi[] | null {
     : intervals.map((semitones) => Math.round(root) + semitones);
 }
 
+/** A 5th is perfect, diminished or augmented; nothing else is a 5th. */
+const FIFTHS: readonly Semitones[] = [6, 7, 8];
+
+/**
+ * How far this quality's 5th sits above its root — perfect (7), diminished (6)
+ * or augmented (8) — or `null` when the quality has no 5th at all (`sus4` has
+ * one, `dom7alt` has no interval set to look in).
+ *
+ * It lives here, beside `chordIntervals()`, for the reason a 3rd and a 7th live
+ * in `voicings.ts`'s `THIRDS`/`SEVENTHS`: "which interval is the 5th" is
+ * vocabulary the app shares, and an exercise that wants to say *you played the
+ * 5th* must never spell the chord itself to find out. Slice 8 inlined
+ * `(rootPc + 7) % 12` because a shell only ever drops a perfect 5th; a drill
+ * that names the 5th of any quality needs the real one.
+ */
+export function chordFifth(quality: ChordQuality): Semitones | null {
+  const intervals = chordIntervals(quality);
+  if (intervals === null) return null;
+  return intervals.find((semitones) => FIFTHS.includes(semitones)) ?? null;
+}
+
 /** The spelled-out name, e.g. `Dominant 7th chord` (feedback, reveals). */
 export function chordQualityName(quality: ChordQuality): string {
   // A quality the tables do not own comes back unchanged rather than as

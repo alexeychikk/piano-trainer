@@ -380,9 +380,11 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
     taken away** — derived from `shellIntervals()`, so "a 3rd" and "a 7th" are defined once —
     returned **3rd first, 7th second, unsorted**, because which is which is the whole vocabulary.
     Plus `hasGuideTones`/`guideToneNotes`/`guideToneSpan`/`guideTonePitchClasses` (build),
-    `spellsGuideTones`/`guideToneReadings`/`guideToneDegree` (read), `GUIDE_TONE_QUALITIES` (the
-    pairs that are a quality's alone — the same four as `SHELL_QUALITIES`) and the copy constant
-    `GUIDE_TONE_DEGREES`.
+    `spellsGuideTones`/`guideToneReadings`/`guideToneDegree` (read, and its degree is the typed
+    union `GuideToneDegree`, so a half named in a miss cannot drift into a string the drill does not
+    use), `GUIDE_TONE_QUALITIES` (the same four as `SHELL_QUALITIES` — **over one fixed root** each
+    of their pairs is theirs alone; across roots a pair still reads as two chords, which is exactly
+    what `guideToneReadings()` returns a *list* for) and the copy constant `GUIDE_TONE_DEGREES`.
   - **The graded quantity is the pair in the asked key**, and this drill's one difference from
     slices 8 and 11 is that **the bass is free too**: `spellsGuideTones()` is "exactly these two
     pitch classes", nothing more. A shell has the root underneath and a rootless form *is* its bass
@@ -401,7 +403,15 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
     commonest miss here, so it is named (`That is the 3rd — the 7th is the other guide tone`). And
     the root line requires the asked pair to be **present as well as** the root — another chord's
     pair often contains the asked root by coincidence, and "you played the root" would be false for
-    it.
+    it. **A guide tone beside the 5th** (`E G` for `Cmaj7` — the triad player's reflex) is named too,
+    from `chordFifth()` in `theory/chords.ts` (the 5th of *this* quality, perfect/diminished/
+    augmented — slice 8 could inline `+7` because a shell only ever drops a perfect one). The branch
+    is narrow, slice 8's way: **exactly two pitch classes**, one the asked chord's guide tone and the
+    other its own 5th, so the shell/rootless/whole-chord/other-key lines all keep their answers. It
+    sits *ahead* of `guideToneReadings()` because such a pair is 3–4 semitones wide and only
+    `minMaj7`'s pair spans that — i.e. the only reading it can pre-empt is a chord the drill never
+    asks for, while both notes are the chord on screen. It can never take the **asked key's** reading,
+    since a chord's own pair is its 3rd and 7th, never its 5th.
   - `SkillId` is `guide-tones:<quality>:<rootPc>` — slice 8's shape and slice 8's reason (what is
     weak in a playing drill is a *key*); there is no second dimension to split on, so `/progress`
     gains one group of 36 cells labelled `Cmaj7`. The label repeats the shell drill's; the group

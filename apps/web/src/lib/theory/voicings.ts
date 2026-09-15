@@ -456,6 +456,13 @@ export const GUIDE_TONE_QUALITIES: readonly ChordQuality[] = SHELL_QUALITIES;
 export const GUIDE_TONE_DEGREES = '3rd and 7th';
 
 /**
+ * The two degrees a guide tone can be, as a type: a caller that names one (or
+ * flips to the other half of the pair) is then checked by the compiler instead
+ * of by a test, since a mistyped `'3d'` is not assignable.
+ */
+export type GuideToneDegree = '3rd' | '7th';
+
+/**
  * Which guide tone this pitch class is for this chord — `3rd`, `7th`, or
  * `null` when it is neither. One short word, so a miss can name the half that
  * was played instead of the half that was not.
@@ -464,7 +471,7 @@ export function guideToneDegree(
   rootPc: PitchClass,
   quality: ChordQuality,
   pc: PitchClass,
-): string | null {
+): GuideToneDegree | null {
   const intervals = guideToneIntervals(quality);
   if (intervals === null) return null;
   const wanted = normalise([pc])[0];
