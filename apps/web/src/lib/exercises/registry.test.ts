@@ -31,7 +31,13 @@ const CRAFTED = [
   'bogus',
 ];
 
-/** Every shape a crafted segment can be smuggled into an id in. */
+/**
+ * Every shape a crafted segment can be smuggled into an id in — **at every
+ * length an exercise uses**, so the net keeps its "whatever is registered
+ * next" promise. It grew a third segment for slice 11 (`rootless-voicing`'s
+ * ids are `<quality>:<rootPc>:<form>`), which the two-segment shapes could
+ * only reach as an id of the wrong length.
+ */
 function craftedIds(exerciseId: string): string[] {
   return CRAFTED.flatMap((segment) => [
     `${exerciseId}:${segment}`,
@@ -41,6 +47,10 @@ function craftedIds(exerciseId: string): string[] {
     `${exerciseId}:maj7:${segment}`,
     `${exerciseId}:${segment}:${segment}`,
     `${exerciseId}:major-ii-V-I:${segment}`,
+    `${exerciseId}:maj7:0:${segment}`,
+    `${exerciseId}:maj7:${segment}:A`,
+    `${exerciseId}:${segment}:0:A`,
+    `${exerciseId}:${segment}:${segment}:${segment}`,
   ]);
 }
 

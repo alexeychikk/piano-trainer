@@ -6,6 +6,7 @@
 
 import { chordQuality } from './chord-quality';
 import { findTheNote } from './find-the-note';
+import { guideTones } from './guide-tones';
 import { intervalRecognition } from './interval-recognition';
 import { playTheVoicing } from './play-the-voicing';
 import { progressionRecognition } from './progression-recognition';
@@ -19,6 +20,7 @@ export const EXERCISES: readonly AnyExercise[] = [
   chordQuality,
   playTheVoicing,
   rootlessVoicing,
+  guideTones,
   progressionRecognition,
 ];
 

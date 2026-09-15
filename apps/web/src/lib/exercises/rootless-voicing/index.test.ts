@@ -432,7 +432,7 @@ describe('missDetail', () => {
     // Cmaj7 A without its D: E-G-B with the 3rd doubled — four notes, three
     // tones, and the missing one is the 9th.
     expect(missDetail(0, 'maj7', 'A', [52, 55, 59, 64])).toBe(
-      'The 9th replaces the root — it is the fourth note of both forms',
+      'Both forms need the 9th — it is the note that replaces the root',
     );
   });
 

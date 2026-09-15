@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
+  GUIDE_TONE_QUALITIES,
+  guideToneDegree,
+  guideToneIntervals,
+  guideToneNotes,
+  guideTonePitchClasses,
+  guideToneReadings,
+  guideToneSpan,
+  hasGuideTones,
+  spellsGuideTones,
   ROOTLESS_FORMS,
   ROOTLESS_QUALITIES,
   SHELL_QUALITIES,
@@ -25,7 +34,7 @@ import {
   spellsShellInAnyInversion,
   type RootlessForm,
 } from './voicings';
-import type { ChordQuality } from './types';
+import type { ChordQuality, PitchClass } from './types';
 
 const C3 = 48;
 const C4 = 60;
@@ -420,6 +429,178 @@ describe('a rootless voicing asked about an inherited key', () => {
       expect(spellsRootless([52, 55, 59, 62], 0, quality, 'A'), quality).toBe(
         false,
       );
+    }
+  });
+});
+
+describe('guideToneIntervals', () => {
+  it('keeps the 3rd and the 7th, in that order', () => {
+    // Not sorted: which one is the 3rd and which the 7th is the vocabulary.
+    expect(guideToneIntervals('maj7')).toEqual([4, 11]);
+    expect(guideToneIntervals('dom7')).toEqual([4, 10]);
+    expect(guideToneIntervals('min7')).toEqual([3, 10]);
+    expect(guideToneIntervals('minMaj7')).toEqual([3, 11]);
+  });
+
+  it('is the shell with the root taken away', () => {
+    for (const quality of SHELL_QUALITIES)
+      expect(guideToneIntervals(quality), quality).toEqual(
+        (shellIntervals(quality) ?? []).slice(1),
+      );
+  });
+
+  it('has no pair without a 7th, or with a diminished one', () => {
+    for (const quality of [
+      'maj',
+      'min',
+      'sus4',
+      'maj6',
+      'min6',
+      'dim7',
+    ] as const) {
+      expect(guideToneIntervals(quality), quality).toBeNull();
+      expect(hasGuideTones(quality), quality).toBe(false);
+    }
+    expect(guideToneIntervals('dom7alt')).toBeNull();
+  });
+
+  it('measures the span from the root to the 7th', () => {
+    expect(guideToneSpan('maj7')).toBe(11);
+    expect(guideToneSpan('min7')).toBe(10);
+    expect(guideToneSpan('dim7')).toBe(0);
+  });
+});
+
+describe('GUIDE_TONE_QUALITIES', () => {
+  it('all have a pair, and no two share one', () => {
+    const shapes = new Set<string>();
+    for (const quality of GUIDE_TONE_QUALITIES) {
+      expect(hasGuideTones(quality), quality).toBe(true);
+      shapes.add((guideTonePitchClasses(0, quality) ?? []).join(','));
+    }
+    expect(shapes.size).toBe(GUIDE_TONE_QUALITIES.length);
+  });
+
+  it('leaves out min7b5, whose pair is min7’s', () => {
+    // The flat 5th is not a guide tone, so a half-diminished chord and a minor
+    // seventh chord are the same two notes — it cannot be drilled this way.
+    expect(guideTonePitchClasses(0, 'min7b5')).toEqual(
+      guideTonePitchClasses(0, 'min7'),
+    );
+    expect(GUIDE_TONE_QUALITIES).not.toContain('min7b5');
+  });
+});
+
+describe('guideToneNotes', () => {
+  it('builds the pair above a root, without the root', () => {
+    // Cmaj7 from C4: E4 and B4.
+    expect(guideToneNotes(C4, 'maj7')).toEqual([64, 71]);
+    // C7 from C3: E3 and Bb3.
+    expect(guideToneNotes(C3, 'dom7')).toEqual([52, 58]);
+    expect(guideToneNotes(C4, 'dim7')).toBeNull();
+  });
+
+  it('names which tone a pitch class is', () => {
+    expect(guideToneDegree(0, 'dom7', 4)).toBe('3rd');
+    expect(guideToneDegree(0, 'dom7', 10)).toBe('7th');
+    // The root and the 5th are not guide tones.
+    expect(guideToneDegree(0, 'dom7', 0)).toBeNull();
+    expect(guideToneDegree(0, 'dom7', 7)).toBeNull();
+    expect(guideToneDegree(0, 'dim7', 3)).toBeNull();
+  });
+});
+
+describe('spellsGuideTones — the slice 12 matching rule', () => {
+  // Cmaj7's guide tones: E and B.
+  it('accepts the pair in any octave, order and spacing', () => {
+    expect(spellsGuideTones([64, 71], 0, 'maj7')).toBe(true);
+    // 7th underneath: a guide-tone pair has no bass rule, unlike a shell.
+    expect(spellsGuideTones([59, 76], 0, 'maj7')).toBe(true);
+    // Two octaves apart, and played high the other way round.
+    expect(spellsGuideTones([83, 52], 0, 'maj7')).toBe(true);
+  });
+
+  it('is enharmonic-blind: it is arithmetic on MIDI numbers', () => {
+    // Db7: F and Cb(=B).
+    expect(spellsGuideTones([53, 59], 1, 'dom7')).toBe(true);
+    expect(spellsGuideTones([59, 65], 1, 'dom7')).toBe(true);
+  });
+
+  it('rejects the root, the 5th and every larger voicing', () => {
+    // The shell — slice 8's answer, one note too many here.
+    expect(spellsGuideTones([60, 64, 71], 0, 'maj7')).toBe(false);
+    // The whole chord, and a rootless A form.
+    expect(spellsGuideTones([60, 64, 67, 71], 0, 'maj7')).toBe(false);
+    expect(spellsGuideTones([64, 67, 71, 74], 0, 'maj7')).toBe(false);
+  });
+
+  it('rejects a fragment, a doubling and the wrong colour', () => {
+    expect(spellsGuideTones([64], 0, 'maj7')).toBe(false);
+    expect(spellsGuideTones([], 0, 'maj7')).toBe(false);
+    // A doubled 3rd costs the 7th: two notes, one pitch class.
+    expect(spellsGuideTones([64, 76], 0, 'maj7')).toBe(false);
+    // C7's pair, asked for Cmaj7: the 7th is the difference.
+    expect(spellsGuideTones([64, 70], 0, 'maj7')).toBe(false);
+    // Cm7's pair, asked for C7: the 3rd is.
+    expect(spellsGuideTones([63, 70], 0, 'dom7')).toBe(false);
+  });
+
+  it('has nothing to match for a quality with no pair', () => {
+    expect(spellsGuideTones([63, 69], 0, 'dim7')).toBe(false);
+  });
+});
+
+describe('guideToneReadings', () => {
+  it('reads a tritone as both dominants — that is tritone substitution', () => {
+    // E and Bb: C7 and Gb7.
+    const readings = guideToneReadings([4, 10]);
+    expect(readings).toEqual([
+      { rootPc: 0, quality: 'dom7' },
+      { rootPc: 6, quality: 'dom7' },
+    ]);
+  });
+
+  it('reads a fifth as a maj7 and the min7 a semitone above it', () => {
+    // E and B: Cmaj7, and C#m7 (C# + 3 = E, C# + 10 = B).
+    expect(guideToneReadings([4, 11])).toEqual([
+      { rootPc: 0, quality: 'maj7' },
+      { rootPc: 1, quality: 'min7' },
+    ]);
+  });
+
+  it('names every chord in the set, and nothing else', () => {
+    for (const quality of GUIDE_TONE_QUALITIES) {
+      for (let rootPc = 0; rootPc < 12; rootPc += 1) {
+        const pcs = guideTonePitchClasses(rootPc as PitchClass, quality) ?? [];
+        expect(guideToneReadings(pcs), `${quality}:${rootPc}`).toContainEqual({
+          rootPc,
+          quality,
+        });
+      }
+    }
+    // A pair of semitones is nobody's 3rd and 7th.
+    expect(guideToneReadings([0, 1])).toEqual([]);
+    expect(guideToneReadings([0])).toEqual([]);
+  });
+});
+
+describe('guide tones asked about an inherited key', () => {
+  const inherited = [
+    'constructor',
+    'toString',
+    '__proto__',
+  ] as unknown as ChordQuality[];
+
+  it('has none, and asks about one without throwing', () => {
+    for (const quality of inherited) {
+      expect(() => guideToneIntervals(quality), quality).not.toThrow();
+      expect(guideToneIntervals(quality), quality).toBeNull();
+      expect(hasGuideTones(quality), quality).toBe(false);
+      expect(guideToneNotes(C4, quality), quality).toBeNull();
+      expect(guideTonePitchClasses(0, quality), quality).toBeNull();
+      expect(guideToneSpan(quality), quality).toBe(0);
+      expect(guideToneDegree(0, quality, 4), quality).toBeNull();
+      expect(spellsGuideTones([64, 71], 0, quality), quality).toBe(false);
     }
   });
 });

@@ -404,7 +404,7 @@ export function missDetail(
   const ninthPc = ((rootPc + 2) % 12) as PitchClass;
   const wanted = rootlessPitchClasses(rootPc, quality) ?? [];
   if (!pcs.has(ninthPc) && [...pcs].every((pc) => wanted.includes(pc)))
-    return 'The 9th replaces the root — it is the fourth note of both forms';
+    return 'Both forms need the 9th — it is the note that replaces the root';
 
   // The right shape in the wrong key, or another quality's voicing: name what
   // it was, so the mistake is visible as a transposition and not as noise.
