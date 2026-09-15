@@ -372,6 +372,44 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
     below the voicing, and it cannot give the answer away because it is the one note the answer must
     not contain. `answerGapMs` is 2.5 s: this is a *construction* drill (slice 7's chord is an echo),
     and the runner's 1200 ms default closes an answer the user is still working out.
+- **Guide tones (slice 12)** — `$lib/exercises/guide-tones/`, the seventh exercise and the third
+  playing drill, closing pillar 2's ladder (shells → rootless → guide tones): a chord symbol is
+  read, the root sounds underneath, the user plays the **3rd and the 7th**.
+  - **The vocabulary is the pair**, in `$lib/theory/voicings.ts` beside the shell and the rootless
+    forms (the `intervals.ts`/`chords.ts` rule): `guideToneIntervals` is **the shell with the root
+    taken away** — derived from `shellIntervals()`, so "a 3rd" and "a 7th" are defined once —
+    returned **3rd first, 7th second, unsorted**, because which is which is the whole vocabulary.
+    Plus `hasGuideTones`/`guideToneNotes`/`guideToneSpan`/`guideTonePitchClasses` (build),
+    `spellsGuideTones`/`guideToneReadings`/`guideToneDegree` (read), `GUIDE_TONE_QUALITIES` (the
+    pairs that are a quality's alone — the same four as `SHELL_QUALITIES`) and the copy constant
+    `GUIDE_TONE_DEGREES`.
+  - **The graded quantity is the pair in the asked key**, and this drill's one difference from
+    slices 8 and 11 is that **the bass is free too**: `spellsGuideTones()` is "exactly these two
+    pitch classes", nothing more. A shell has the root underneath and a rootless form *is* its bass
+    note, but `3-7` and `7-3` are both the pair every method teaches — which one a hand reaches for
+    is voice leading, not correctness. Free: register, octave, spacing, order, which tone is lowest,
+    enharmonics. Rejected: the root (that is the shell — slice 8's answer and the habit this drill
+    breaks), the 5th/9th (that is slice 11's), another key, the other colour, half the pair and a
+    doubling (the answer is two notes, so a doubled note always costs the other tone). Binary
+    scoring (ADR §10).
+  - **A dominant and its tritone substitute share their pair** (`C7` and `Gb7` are both `E`+`Bb`), so
+    playing one for the other is *correct* — the ambiguity is the music's and grading may not call
+    it a miss. `guideToneReadings()` therefore returns a **list**, and `missDetail` picks the reading
+    in the **asked key** first (asked `Am7`, played `C#`+`G#` → "the Amaj7 guide tones": both notes
+    raised), then the asked quality (a transposition), then the first.
+  - **`missDetail` starts at one note**, not two as slices 8/11 do: half of a two-note answer is the
+    commonest miss here, so it is named (`That is the 3rd — the 7th is the other guide tone`). And
+    the root line requires the asked pair to be **present as well as** the root — another chord's
+    pair often contains the asked root by coincidence, and "you played the root" would be false for
+    it.
+  - `SkillId` is `guide-tones:<quality>:<rootPc>` — slice 8's shape and slice 8's reason (what is
+    weak in a playing drill is a *key*); there is no second dimension to split on, so `/progress`
+    gains one group of 36 cells labelled `Cmaj7`. The label repeats the shell drill's; the group
+    title is what tells them apart.
+  - The starter set is `maj7 · 7 · m7`. `min7b5` is out because its pair *is* `m7`'s (the flat 5th
+    is not a guide tone) and `dim7` because it has no 3rd-and-7th pair at all.
+  - `registry.test.ts`'s `craftedIds()` net now also builds **three-segment** ids, so it reaches
+    slice 11's shape as well as this one's — it grows with the longest id any exercise registers.
 - **Settings** are `localStorage` via the `settings` store (`$lib/storage/settings.svelte.ts`) and
   are read only in `hydrate()`, called from the root layout after mount — module init must not touch
   storage or prerendered HTML and the first client render disagree. Slice 4 added `keyboardLow`/
