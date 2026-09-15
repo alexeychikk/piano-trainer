@@ -61,7 +61,8 @@ export function velocityGain(velocity: number): number {
  * Voices mix by addition, so a block chord's worst case is the sum of its
  * voices' peaks — and their attacks are aligned, which is exactly that case.
  * Four voices at velocity 88 summed to 2.31 on the synth path, and there is no
- * limiter on the master: at any volume above ~0.62 that clipped. Keeping the
+ * limiter on the master: at any slider position above ~0.66 that clipped — and
+ * the slider sits at 0.72 by default (`DEFAULT_VOLUME`). Keeping the
  * *sum* below 1 makes clipping impossible at every volume, because the master
  * gain is itself ≤ 1 (`volumeGain`).
  *
@@ -81,8 +82,8 @@ export const SUMMED_PEAK_CEILING = 0.85;
  *
  * Deliberately *not* the power-preserving `1 / sqrt(n)`: that is kinder to
  * perceived loudness but still clips (four voices at 88 would reach 1.15), and
- * a guarantee that survives twelve voices is worth ~2 dB on a chord. The rule
- * is one line so a later level policy is a one-line change.
+ * a guarantee that survives twelve voices is worth the ~3 dB it costs a chord.
+ * The rule is one line so a later level policy is a one-line change.
  */
 export function headroomScale(voiceGains: readonly number[]): number {
   let sum = 0;
