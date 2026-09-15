@@ -465,6 +465,44 @@ describe('ExerciseRunner · note-sequence answers', () => {
     expect(h.runner.phase).toBe('awaiting');
   });
 
+  it('honours a question that asks for a longer silence window', async () => {
+    // `Question.answerGapMs` (slice 10): a twelve-note cadence may not have
+    // the answer taken away while the user hunts for the next chord. The
+    // runner reads the number off the question and knows nothing else about
+    // it — the default still applies to every question that asks for nothing.
+    const longAnswer: ExerciseDefinition<{ semitones: number }> = {
+      ...sequenceStub,
+      generate: (ctx) => ({
+        ...sequenceStub.generate(ctx),
+        answerGapMs: SEQUENCE_GAP_MS * 3,
+      }),
+    };
+    const h = await started(harness(longAnswer as AnyExercise));
+    h.runner.noteOn(62, 'midi');
+
+    h.tick(SEQUENCE_GAP_MS * 3 - 1);
+    expect(h.runner.phase).toBe('awaiting');
+    expect(h.runner.answerNotes).toEqual([62]);
+
+    h.tick(1);
+    expect(h.runner.phase).toBe('feedback');
+    expect(h.runner.outcome).toBe('wrong');
+  });
+
+  it('falls back to the default window for a nonsense one', async () => {
+    const broken: ExerciseDefinition<{ semitones: number }> = {
+      ...sequenceStub,
+      generate: (ctx) => ({
+        ...sequenceStub.generate(ctx),
+        answerGapMs: Number.NaN,
+      }),
+    };
+    const h = await started(harness(broken as AnyExercise));
+    h.runner.noteOn(62, 'midi');
+    h.tick(SEQUENCE_GAP_MS);
+    expect(h.runner.phase).toBe('feedback');
+  });
+
   it('drops a half-played answer when the drill pauses', async () => {
     const h = await started(harness(sequenceStub));
     h.runner.noteOn(62, 'midi');

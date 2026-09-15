@@ -10,6 +10,7 @@ import {
   isBuildableQuality,
   qualityOfIntervals,
   spellsQuality,
+  spellsQualityFromRoot,
   spellsQualityInAnyInversion,
   spokenChordQuality,
   toChordSymbol,
@@ -136,5 +137,34 @@ describe('chordSymbolText', () => {
     // The grid still needs the word, and the other qualities are unchanged.
     expect(chordQualityShortName('maj')).toBe('maj');
     expect(chordSymbolText(0, 'min')).toBe('Cm');
+  });
+});
+
+describe('spellsQualityFromRoot', () => {
+  it('pins the key: the same colour from another root is not the chord', () => {
+    // Cmaj7 in any register, spacing or doubling, but rooted on C.
+    expect(spellsQualityFromRoot([60, 64, 67, 71], 0, 'maj7')).toBe(true);
+    expect(spellsQualityFromRoot([48, 64, 79, 83], 0, 'maj7')).toBe(true);
+    // Dbmaj7 is the same quality and a different chord.
+    expect(spellsQualityFromRoot([61, 65, 68, 72], 0, 'maj7')).toBe(false);
+    expect(spellsQualityFromRoot([61, 65, 68, 72], 1, 'maj7')).toBe(true);
+  });
+
+  it('tolerates a doubling — the fixed answer length is what rejects one', () => {
+    // This primitive only compares pitch classes above the bass, so a doubled
+    // root is fine here. In the drill it is a miss: an answer is exactly twelve
+    // notes and a chord exactly four, so a doubling always costs a chord tone
+    // and leaves its chunk a pitch class short (see `spellsProgression`).
+    expect(spellsQualityFromRoot([60, 64, 67, 71, 72], 0, 'maj7')).toBe(true);
+  });
+
+  it('is root position: the lowest note played is the root', () => {
+    expect(spellsQualityFromRoot([64, 67, 71, 72], 0, 'maj7')).toBe(false);
+    expect(spellsQualityFromRoot([], 0, 'maj7')).toBe(false);
+  });
+
+  it('is enharmonic-blind, like every other comparison here', () => {
+    // D#m7 spelled as Ebm7: the same integers, the same pitch class.
+    expect(spellsQualityFromRoot([63, 66, 70, 73], 3, 'min7')).toBe(true);
   });
 });

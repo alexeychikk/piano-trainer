@@ -55,6 +55,10 @@ export const ADVANCE_LOCKOUT_MS = 500;
 /**
  * `note-sequence` (ADR §3, UX §4.3): the answer closes after this much silence
  * — or as soon as it is the expected length, which is the usual way it ends.
+ *
+ * The default, sized for the two- and three-note answers slices 6–8 ask for. A
+ * question whose answer is longer says so with `Question.answerGapMs`; the
+ * number still lives here, and that one lives with the exercise that needs it.
  */
 export const SEQUENCE_GAP_MS = 1200;
 
@@ -436,12 +440,26 @@ export class ExerciseRunner {
     );
   }
 
+  /**
+   * The silence window of the answer in progress: the question's own
+   * (`Question.answerGapMs` — a long answer needs longer, slice 10) or the
+   * drill's default. A question that asks for a shorter window than none at
+   * all would close every answer instantly, so anything below zero is the
+   * default too.
+   */
+  #gapMs(): number {
+    const asked = this.question?.answerGapMs;
+    return asked !== undefined && Number.isFinite(asked) && asked >= 0
+      ? asked
+      : SEQUENCE_GAP_MS;
+  }
+
   #armSequenceTimer(): void {
     this.#clearSequenceTimer();
     this.#sequenceTimer = setTimeout(() => {
       this.#sequenceTimer = null;
       this.#closeSequence();
-    }, SEQUENCE_GAP_MS);
+    }, this.#gapMs());
   }
 
   #clearSequenceTimer(): void {

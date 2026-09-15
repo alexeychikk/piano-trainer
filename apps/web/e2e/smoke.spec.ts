@@ -82,7 +82,10 @@ test('the shell renders and the nav reaches every v1 screen', async ({
     page.getByRole('heading', { name: 'Ready to practise' }),
   ).toBeVisible();
 
-  await page.getByRole('link', { name: 'Progress' }).click();
+  // `exact`, because home's drill cards are links too and an accessible name
+  // match is a *substring* one by default: `ii-V-I progressions …` contains
+  // `Progress`. The nav item is the link whose whole name is the word.
+  await page.getByRole('link', { name: 'Progress', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Progress' })).toBeVisible();
 
   await page.getByRole('link', { name: 'Free play' }).click();
@@ -457,6 +460,61 @@ test('the voicing drill reads a chord symbol and takes a three-note answer', asy
   await expect(page.getByRole('dialog')).toHaveCount(0);
 
   // The runner never scrolls, note slots and all (§4.1).
+  const scrolls = await page.evaluate(
+    () => document.documentElement.scrollHeight > window.innerHeight + 1,
+  );
+  expect(scrolls).toBe(false);
+
+  expect(consoleErrors).toEqual([]);
+});
+
+test('the progression drill takes a twelve-note cadence from the computer keys', async ({
+  page,
+}) => {
+  const consoleErrors = watchConsole(page);
+
+  await page.goto('/practice/progression-recognition/');
+  const prompt = page.getByTestId('prompt');
+  const replay = page.getByTestId('replay');
+  await expect(prompt).toHaveText('Ready?');
+
+  await page.keyboard.press('Space');
+  await expect(prompt).toHaveText('Which cadence did you hear?');
+  await expect(page.getByTestId('prompt-sub')).toHaveText(
+    'Play the chords back in order, in root position',
+  );
+  // Three chords a beat and a bit apart, so `presenting` lasts a few seconds:
+  // wait for the drill to be listening — the replay control says when.
+  await expect(replay).toBeEnabled();
+
+  // The cadence is three four-note chords, so the answer has twelve slots —
+  // the count comes from the question, never from the runner (slice 6's rule).
+  const slots = page.getByTestId('slots');
+  await expect(slots.locator('.slot')).toHaveCount(12);
+
+  // Twelve presses of the computer keys are a whole answer: the drill is
+  // playable with no MIDI device, which is the acceptance rule for every
+  // slice. `A W S E D F T G Y H U J` are C4 upwards — almost certainly not the
+  // cadence asked for, but a miss never blocks the drill.
+  for (const key of [
+    'a',
+    'w',
+    's',
+    'e',
+    'd',
+    'f',
+    't',
+    'g',
+    'y',
+    'h',
+    'u',
+    'j',
+  ])
+    await page.keyboard.press(key);
+  await expect(page.getByTestId('answered')).toContainText('/1');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+
+  // The runner never scrolls, twelve note slots and all (§4.1).
   const scrolls = await page.evaluate(
     () => document.documentElement.scrollHeight > window.innerHeight + 1,
   );

@@ -289,6 +289,24 @@ export function spellsQuality(
 }
 
 /**
+ * Do these notes spell `quality` **rooted on `rootPc`** — root position, and
+ * in the asked key? `spellsQuality` grades a colour from any root (slice 7,
+ * where the key was deliberately free); this is the same rule with the key
+ * pinned, which is what a drill needs the moment the key is half of the answer
+ * (`spellsShell`'s rule, one voicing up: slices 8 and 10).
+ */
+export function spellsQualityFromRoot(
+  notes: readonly Midi[],
+  rootPc: PitchClass,
+  quality: ChordQuality,
+): boolean {
+  if (notes.length === 0) return false;
+  const bass = Math.min(...notes.map((midi) => Math.round(midi)));
+  if (pcOf(bass) !== ((Math.round(rootPc) % 12) + 12) % 12) return false;
+  return spellsQuality(notes, quality);
+}
+
+/**
  * Do these notes spell `quality` from *some* root — i.e. is this the chord,
  * possibly inverted? Used to tell "wrong chord" from "right chord, wrong note
  * at the bottom", which are different mistakes and deserve different words.
