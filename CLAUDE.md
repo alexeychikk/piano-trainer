@@ -128,8 +128,9 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
     no gain, so headroom reaches it as a **lowered velocity** (`sampledVelocity`, rounded *down* —
     rounding to nearest would put the sum back over the ceiling). The synth takes `NotePlan.gainScale`
     straight onto its envelope peak.
-  - Consequence: **an exercise never sets a velocity for headroom reasons.** Slice 10's velocity-80
-    stop-gap is gone; all four chord drills are back on slice 7's 88.
+  - Consequence: **an exercise never sets a velocity for headroom reasons** — a velocity is a
+    musical choice (play-the-voicing's root reference sits under its shell on purpose) and nothing
+    else. Slice 10's velocity-80 stop-gap is gone: both chord drills are on slice 7's 88 again.
   - Still outside the budget, deliberately: the metronome click (`scheduleClick`, peak 0.5, ~50 ms)
     goes straight to the master, so a click landing exactly on a chord attack can sum past unity for
     a transient. It is a single short voice and lowering it would defeat "audible under playing".
