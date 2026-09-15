@@ -129,11 +129,12 @@ const MAX_REDRAWS = 4;
 const CHORD_MS = 1150;
 const CHORD_STEP_MS = 1250;
 /**
- * Deliberately below slice 7's 88: four voices already peak near full scale
- * with no per-voice scaling in `playChord` (a known engine issue, product's
- * list), and this drill plays three such chords in a row.
+ * Slice 7's chord velocity, shared again: the engine now applies summed-gain
+ * headroom to every chord it starts (`headroomScale`), so this drill's three
+ * chords in a row need no velocity of their own. The stop-gap 80 that stood
+ * here while `playChord` had no per-voice scaling is gone with it.
  */
-const CHORD_VELOCITY = 80;
+const CHORD_VELOCITY = 88;
 
 /**
  * How long the answer may go silent before it closes itself

@@ -8,7 +8,7 @@
  */
 
 import { midiToFrequency, type Midi } from '$lib/theory';
-import { velocityGain } from './gain';
+import { clampGainScale, velocityGain } from './gain';
 import type { NotePlan, NoteSourceApi, StopVoice } from './source';
 
 /** Envelope of a synth note, in seconds. Short attack, piano-ish decay. */
@@ -66,10 +66,12 @@ interface Voice {
 function startVoice(
   ctx: BaseAudioContext,
   destination: AudioNode,
-  { midi, velocity, time, duration }: NotePlan,
+  { midi, velocity, time, duration, gainScale }: NotePlan,
 ): Voice {
   const start = time ?? ctx.currentTime;
-  const peak = velocityGain(velocity);
+  // The whole envelope is a multiple of `peak`, so the engine's summed-gain
+  // headroom is one factor here and nothing else in the synth changes.
+  const peak = velocityGain(velocity) * clampGainScale(gainScale);
 
   const osc = ctx.createOscillator();
   osc.type = 'triangle';
@@ -158,6 +160,9 @@ export function createSynthSource(
     },
     dispose(): void {
       this.stop();
+    },
+    voiceGain(velocity: number): number {
+      return velocityGain(velocity);
     },
     voiceCount(): number {
       prune();

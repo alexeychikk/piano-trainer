@@ -17,7 +17,14 @@
 
 import { settings } from '$lib/storage/settings.svelte';
 import type { Midi } from '$lib/theory';
-import { DEFAULT_VELOCITY, clampVelocity, volumeGain } from './gain';
+import {
+  DEFAULT_VELOCITY,
+  clampVelocity,
+  headroomScale,
+  sampledVelocity,
+  sampledVoiceGain,
+  volumeGain,
+} from './gain';
 import { DEFAULT_INSTRUMENT, isInstrumentId } from './instruments';
 import type { NotePlan, NoteSourceApi, StopVoice } from './source';
 import { soundChip, type AudioStatus } from './status';
@@ -144,16 +151,19 @@ export class AudioEngine {
       if (this.#loading !== id) return; // A newer choice won the race.
 
       const source: NoteSourceApi = {
-        start: ({ midi, velocity, time, duration }: NotePlan) =>
+        start: ({ midi, velocity, time, duration, gainScale }: NotePlan) =>
           instrument.start({
             note: midi,
-            velocity,
+            // `smplr`'s `NoteEvent` has no gain field, so the headroom is
+            // applied by lowering the velocity to the one that reaches it.
+            velocity: sampledVelocity(velocity, gainScale),
             time,
             duration,
           }),
         stop: (midi?: Midi) =>
           midi === undefined ? instrument.stop() : instrument.stop(midi),
         dispose: () => instrument.dispose(),
+        voiceGain: sampledVoiceGain,
       };
       this.#cache.set(id, source);
       this.#sampled = source;
@@ -235,11 +245,35 @@ export class AudioEngine {
     return this.#sampled ?? this.#synth;
   }
 
+  /**
+   * Start several voices as one group, with the summed-gain headroom applied
+   * (`headroomScale`): their peaks together cannot exceed `SUMMED_PEAK_CEILING`,
+   * whatever the source and however many voices there are.
+   *
+   * A group is what one call starts *at one time* — a chord, or a single note.
+   * Voices that merely overlap because the user is holding keys are not a
+   * group: they arrive one `noteOn` at a time, and a voice already sounding
+   * cannot be turned down without a shared node that would duck it audibly.
+   * The engine's own playback — every exercise, every reveal — always starts a
+   * chord in one call, which is the path the headroom exists for.
+   */
+  #startGroup(
+    source: NoteSourceApi,
+    plans: readonly Omit<NotePlan, 'gainScale'>[],
+  ): StopVoice[] {
+    const gainScale = headroomScale(
+      plans.map((plan) => source.voiceGain(plan.velocity)),
+    );
+    return plans.map((plan) => source.start({ ...plan, gainScale }));
+  }
+
   /** Press a note. Silent (and harmless) before `ensureStarted()`. */
   noteOn(midi: Midi, velocity: number = DEFAULT_VELOCITY): void {
     const source = this.#source;
     if (!source) return;
-    const stop = source.start({ midi, velocity: clampVelocity(velocity) });
+    const [stop] = this.#startGroup(source, [
+      { midi, velocity: clampVelocity(velocity) },
+    ]);
     const held = this.#held.get(midi) ?? [];
     held.push(stop);
     this.#held.set(midi, held);
@@ -260,28 +294,35 @@ export class AudioEngine {
     midi: Midi,
     options: { duration?: number; velocity?: number; time?: number } = {},
   ): void {
-    const source = this.#source;
-    if (!source) return;
-    source.start({
-      midi,
-      velocity: clampVelocity(options.velocity ?? DEFAULT_VELOCITY),
-      time: options.time ?? this.now(),
-      duration: options.duration ?? DEFAULT_NOTE_S,
-    });
+    this.playChord([midi], options);
   }
 
-  /** All notes together (slice 7 chord playback). */
+  /**
+   * All notes together (slice 7 chord playback) — one start group, so the
+   * chord's voices share the headroom budget. `playNote` is the group of one.
+   */
   playChord(
     notes: readonly Midi[],
     options: { duration?: number; velocity?: number; time?: number } = {},
   ): void {
+    const source = this.#source;
+    if (!source) return;
     const time = options.time ?? this.now();
-    for (const midi of notes) this.playNote(midi, { ...options, time });
+    const velocity = clampVelocity(options.velocity ?? DEFAULT_VELOCITY);
+    const duration = options.duration ?? DEFAULT_NOTE_S;
+    this.#startGroup(
+      source,
+      notes.map((midi) => ({ midi, velocity, time, duration })),
+    );
   }
 
   /**
    * A melodic line: each step's `at` is an offset in seconds from the start,
    * scheduled on the audio clock in one go (ADR §2 — no `setTimeout` chains).
+   *
+   * One step is one start group: the steps are a line, not a chord. Anything
+   * that wants several notes to share a headroom budget is a `playChord`, which
+   * is what a `PlaybackPlan` event becomes.
    */
   playSequence(
     steps: readonly { midi: Midi; at: number; duration?: number }[],
