@@ -53,6 +53,7 @@ import {
   type Midi,
   type NoteName,
 } from '$lib/theory';
+import { NothingToAskError, buildableTarget } from '../coverage';
 import { randomInt } from '../rng';
 import { skillIdSegments } from '../skill-id';
 import type {
@@ -60,6 +61,7 @@ import type {
   ExerciseDefinition,
   GenerateContext,
   Grade,
+  KeyRange,
   Question,
   SkillId,
 } from '../types';
@@ -126,15 +128,22 @@ export function skillIdFor(quality: ChordQuality): SkillId {
  * recognise comes back unchanged.
  */
 export function chordSkillLabel(skillId: SkillId): string {
+  const quality = parseSkillId(skillId);
+  return quality === null ? skillId : chordQualityShortName(quality);
+}
+
+/**
+ * The quality a skill id names, or `null` for anything else — an id read back
+ * is untrusted input, so it is validated, never assumed.
+ */
+export function parseSkillId(skillId: SkillId): ChordQuality | null {
   const segments = skillIdSegments(skillId, CHORD_QUALITY_ID, 1);
-  if (segments === null) return skillId;
+  if (segments === null) return null;
   const [quality] = segments;
   // A quality the app cannot build (`dom7alt`) has no colour to drill and no
   // grid cell to name; one it does not know at all never was a skill.
-  if (!isChordQuality(quality) || chordIntervals(quality) === null) {
-    return skillId;
-  }
-  return chordQualityShortName(quality);
+  if (!isChordQuality(quality) || chordIntervals(quality) === null) return null;
+  return quality;
 }
 
 /** Flats, like every other spelling in the app (find-the-note's rule). */
@@ -153,17 +162,20 @@ function spanOf(quality: ChordQuality): number {
   return intervals === null ? 0 : Math.max(...intervals);
 }
 
-/** The qualities this set can actually fit inside `range`. */
-function playableQualities(
+/**
+ * The qualities of this set that `generate()` can build on `range`: the theory
+ * module has an interval set for them and the whole chord fits the keyboard.
+ * No fallback — an empty set means nothing to ask (`coverage.ts`).
+ */
+export function buildableQualities(
   settings: ChordQualitySettings,
-  span: number,
-): readonly ChordQuality[] {
-  const playable = settings.qualities.filter(
-    (quality) => chordIntervals(quality) !== null && spanOf(quality) <= span,
+  range: KeyRange,
+): ChordQuality[] {
+  return settings.qualities.filter(
+    (quality) =>
+      chordIntervals(quality) !== null &&
+      spanOf(quality) <= range.high - range.low,
   );
-  // A range under an octave is not a piano (the settings store guards that),
-  // so this only ever falls back on a hand-built test range.
-  return playable.length > 0 ? playable : ['maj'];
 }
 
 function pickRoot(
@@ -187,15 +199,22 @@ function generate(
   ctx: GenerateContext<ChordQualitySettings>,
 ): Question<ChordQualityPayload> {
   const { low, high } = ctx.range;
-  const choices = playableQualities(ctx.settings, high - low);
+  const choices = buildableQualities(ctx.settings, ctx.range);
+  if (choices.length === 0) throw new NothingToAskError(CHORD_QUALITY_ID);
   const recent = ctx.history.recentSkillIds;
 
-  let quality = choices[randomInt(ctx.rng, 0, choices.length - 1)];
+  // The planner's target, asked exactly when this drill can build it.
+  const target = buildableTarget(ctx.targetSkillId, parseSkillId, (quality) =>
+    choices.includes(quality),
+  );
+  let quality = target ?? choices[randomInt(ctx.rng, 0, choices.length - 1)];
   // Redraw a few times rather than looping until different: asking the same
   // quality twice in a row is dull, but forcing a change would bias the draw
-  // (and could not terminate at all on a one-quality set).
+  // (and could not terminate at all on a one-quality set). A target is never
+  // redrawn — the planner asked for it.
   for (
     let redraw = 0;
+    target === null &&
     redraw < MAX_REDRAWS &&
     choices.length > 1 &&
     recent[0] === skillIdFor(quality);
@@ -295,7 +314,8 @@ export const chordQuality: ExerciseDefinition<
     qualities: STARTER_QUALITIES,
   },
   requiresMidi: false,
-  skillsCovered: (settings) => settings.qualities.map(skillIdFor),
+  skillsCovered: (settings, range) =>
+    buildableQualities(settings, range).map(skillIdFor),
   skillLabel: (skillId) => chordSkillLabel(skillId),
   generate,
   grade,

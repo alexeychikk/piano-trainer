@@ -62,6 +62,11 @@ import {
   type NoteName,
   type PitchClass,
 } from '$lib/theory';
+import {
+  NothingToAskError,
+  buildableTarget,
+  pitchClassesIn,
+} from '../coverage';
 import { randomInt } from '../rng';
 import { pitchClassSegment, skillIdSegments } from '../skill-id';
 import type {
@@ -69,6 +74,7 @@ import type {
   ExerciseDefinition,
   GenerateContext,
   Grade,
+  KeyRange,
   Question,
   SkillId,
 } from '../types';
@@ -114,10 +120,6 @@ export const STARTER_QUALITIES: readonly ChordQuality[] = [
   'min7',
 ];
 
-const PITCH_CLASSES: readonly PitchClass[] = [
-  0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
-];
-
 /** How hard we try to avoid asking the same chord twice in a row. */
 const MAX_REDRAWS = 4;
 
@@ -154,12 +156,25 @@ export function skillIdFor(quality: ChordQuality, rootPc: PitchClass): SkillId {
  * back unchanged.
  */
 export function voicingSkillLabel(skillId: SkillId): string {
+  const skill = parseSkillId(skillId);
+  return skill === null
+    ? skillId
+    : chordSymbolText(skill.rootPc, skill.quality);
+}
+
+/**
+ * The chord a skill id names, or `null` for anything else — an id read back
+ * is untrusted input, and a quality with no shell was never a skill here.
+ */
+export function parseSkillId(
+  skillId: SkillId,
+): { quality: ChordQuality; rootPc: PitchClass } | null {
   const segments = skillIdSegments(skillId, PLAY_THE_VOICING_ID, 2);
-  if (segments === null) return skillId;
+  if (segments === null) return null;
   const [quality, root] = segments;
   const rootPc = pitchClassSegment(root);
-  if (rootPc === null || !isChordQuality(quality)) return skillId;
-  return hasShell(quality) ? chordSymbolText(rootPc, quality) : skillId;
+  if (rootPc === null || !isChordQuality(quality)) return null;
+  return hasShell(quality) ? { quality, rootPc } : null;
 }
 
 /** Flats, like every other spelling in the app (find-the-note's rule). */
@@ -167,17 +182,28 @@ function spell(midi: Midi): NoteName {
   return midiToName(midi, 'flat');
 }
 
-/** The qualities of this set that have a shell and fit inside `span`. */
-function playableQualities(
+/**
+ * The keys a `quality` shell can be asked in on `range`: those with an octave
+ * of the root low enough for the 7th to fit too. All twelve on any keyboard
+ * that spans the shell plus an octave; none for a quality with no shell.
+ */
+function buildableRoots(quality: ChordQuality, range: KeyRange): PitchClass[] {
+  if (!hasShell(quality)) return [];
+  return pitchClassesIn(range.low, range.high - shellSpan(quality));
+}
+
+/**
+ * The qualities of this set that `generate()` can ask on `range` — a shell of
+ * their own, in at least one key that fits. No fallback: an empty set means
+ * nothing to ask (`coverage.ts`).
+ */
+export function buildableQualities(
   settings: PlayTheVoicingSettings,
-  span: number,
-): readonly ChordQuality[] {
-  const playable = settings.qualities.filter(
-    (quality) => hasShell(quality) && shellSpan(quality) <= span,
+  range: KeyRange,
+): ChordQuality[] {
+  return settings.qualities.filter(
+    (quality) => buildableRoots(quality, range).length > 0,
   );
-  // A range under an octave is not a piano (the settings store guards that),
-  // so this only ever falls back on a hand-built test range.
-  return playable.length > 0 ? playable : ['dom7'];
 }
 
 /**
@@ -220,21 +246,35 @@ function generate(
   ctx: GenerateContext<PlayTheVoicingSettings>,
 ): Question<PlayTheVoicingPayload> {
   const { low, high } = ctx.range;
-  const choices = playableQualities(ctx.settings, high - low);
+  const choices = buildableQualities(ctx.settings, ctx.range);
+  if (choices.length === 0) throw new NothingToAskError(PLAY_THE_VOICING_ID);
   const recent = ctx.history.recentSkillIds;
 
-  let quality = choices[randomInt(ctx.rng, 0, choices.length - 1)];
-  let rootPc = PITCH_CLASSES[randomInt(ctx.rng, 0, PITCH_CLASSES.length - 1)];
+  const draw = (): [ChordQuality, PitchClass] => {
+    const quality = choices[randomInt(ctx.rng, 0, choices.length - 1)];
+    const roots = buildableRoots(quality, ctx.range);
+    return [quality, roots[randomInt(ctx.rng, 0, roots.length - 1)]];
+  };
+  // The planner's target, asked exactly when this drill can build it.
+  const target = buildableTarget(
+    ctx.targetSkillId,
+    parseSkillId,
+    (skill) =>
+      choices.includes(skill.quality) &&
+      buildableRoots(skill.quality, ctx.range).includes(skill.rootPc),
+  );
+  let [quality, rootPc] = target ? [target.quality, target.rootPc] : draw();
   // Redraw a few times rather than looping until different: the same chord
-  // twice in a row is dull, but forcing a change would bias the draw.
+  // twice in a row is dull, but forcing a change would bias the draw. A target
+  // is never redrawn — the planner asked for it.
   for (
     let redraw = 0;
-    redraw < MAX_REDRAWS && recent[0] === skillIdFor(quality, rootPc);
+    target === null &&
+    redraw < MAX_REDRAWS &&
+    recent[0] === skillIdFor(quality, rootPc);
     redraw += 1
-  ) {
-    quality = choices[randomInt(ctx.rng, 0, choices.length - 1)];
-    rootPc = PITCH_CLASSES[randomInt(ctx.rng, 0, PITCH_CLASSES.length - 1)];
-  }
+  )
+    [quality, rootPc] = draw();
 
   const rootMidi = pickRoot(ctx.rng, low, high, rootPc, quality);
   const payload: PlayTheVoicingPayload = { rootPc, rootMidi, quality };
@@ -382,14 +422,14 @@ export const playTheVoicing: ExerciseDefinition<
     qualities: STARTER_QUALITIES,
   },
   requiresMidi: false,
-  skillsCovered: (settings) =>
-    settings.qualities
-      // A quality with no shell has nothing to ask, so it puts no unanswerable
-      // cell on `/progress`.
-      .filter((quality) => hasShell(quality))
-      .flatMap((quality) =>
-        PITCH_CLASSES.map((rootPc) => skillIdFor(quality, rootPc)),
+  // A quality with no shell, or a key whose shell does not fit the keyboard,
+  // has nothing to ask, so it puts no unanswerable cell on `/progress`.
+  skillsCovered: (settings, range) =>
+    buildableQualities(settings, range).flatMap((quality) =>
+      buildableRoots(quality, range).map((rootPc) =>
+        skillIdFor(quality, rootPc),
       ),
+    ),
   skillLabel: (skillId) => voicingSkillLabel(skillId),
   generate,
   grade,

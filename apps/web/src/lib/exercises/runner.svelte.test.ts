@@ -8,6 +8,7 @@ import {
   REVEAL_DELAY_MS,
   SEQUENCE_GAP_MS,
 } from './runner.svelte';
+import { NothingToAskError } from './coverage';
 import type { PlaybackApi } from './playback';
 import type {
   AnyExercise,
@@ -616,11 +617,51 @@ describe('ExerciseRunner · a targeted run (slice 9a)', () => {
     expect(seen.length).toBe(16);
   });
 
+  it('hands every target to `generate()` in turn, not only the first', async () => {
+    const { runner, seen } = targeted(['stub:pc:nothing', 'stub:pc:nope']);
+    await runner.start();
+    expect(seen.slice(0, 4)).toEqual([
+      'stub:pc:nothing',
+      'stub:pc:nope',
+      'stub:pc:nothing',
+      'stub:pc:nope',
+    ]);
+  });
+
   it('is an ordinary drill with no targets', async () => {
     const h = harness();
     await h.runner.start();
     expect(h.runner.question?.skillId).toBe('stub:pc:0');
     expect(h.plays).toHaveLength(1);
+  });
+});
+
+describe('ExerciseRunner · nothing to ask', () => {
+  it('ends the run instead of asking when the exercise can build nothing', async () => {
+    const empty: ExerciseDefinition<{ midi: number }> = {
+      ...stub,
+      skillsCovered: () => [],
+      generate: () => {
+        throw new NothingToAskError('stub');
+      },
+    };
+    const h = harness(empty as AnyExercise);
+    await h.runner.start();
+    expect(h.runner.phase).toBe('summary');
+    expect(h.runner.question).toBeNull();
+    expect(h.plays).toHaveLength(0);
+  });
+
+  it('still lets any other error through', async () => {
+    const broken: ExerciseDefinition<{ midi: number }> = {
+      ...stub,
+      generate: () => {
+        throw new Error('bug');
+      },
+    };
+    await expect(harness(broken as AnyExercise).runner.start()).rejects.toThrow(
+      'bug',
+    );
   });
 });
 

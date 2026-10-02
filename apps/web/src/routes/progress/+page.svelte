@@ -30,6 +30,7 @@
   import Ring from '$lib/components/hud/Ring.svelte';
   import IconPlay from '$lib/components/icons/IconPlay.svelte';
   import { banners } from '$lib/components/shell/banners.svelte';
+  import { coveredSkills } from '$lib/exercises/coverage';
   import { DEFAULT_EXERCISE_ID, EXERCISES } from '$lib/exercises/registry';
   import {
     dueBadge,
@@ -46,6 +47,7 @@
     summarise,
   } from '$lib/practice/progress';
   import { practice } from '$lib/practice/store.svelte';
+  import { settings } from '$lib/storage/settings.svelte';
 
   /**
    * One clock for the screen, read when it opens: every "last seen" line and
@@ -60,7 +62,11 @@
     EXERCISES.map((exercise) => ({
       id: exercise.id,
       title: exercise.title,
-      skillIds: exercise.skillsCovered(exercise.defaultSettings),
+      // Only what this drill can build on the user's keyboard (`coverage.ts`).
+      skillIds: coveredSkills(exercise, {
+        low: settings.value.keyboardLow,
+        high: settings.value.keyboardHigh,
+      }),
       // The screen never decodes a skill id: the exercise names its own
       // skills (`skillLabel`), or the id's last segment stands in.
       label: (skillId: string) =>

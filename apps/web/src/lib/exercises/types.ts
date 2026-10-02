@@ -136,7 +136,12 @@ export interface GenerateContext<S> {
   seed: number;
   /** The user's instrument range. */
   range: KeyRange;
-  /** SR-selected target, once the planner exists (slice 9). */
+  /**
+   * The planner's most urgent skill (slice 9a). An exercise that can build it
+   * under these settings and range **asks exactly it**; one it cannot build
+   * (another exercise's, undecodable, or outside the buildable set) is
+   * ignored and the question is drawn as usual — `coverage.ts`.
+   */
   targetSkillId?: SkillId;
   history: { recentSkillIds: SkillId[] };
 }
@@ -154,8 +159,14 @@ export interface ExerciseDefinition<P = unknown, S = Record<string, never>> {
   id: ExerciseId;
   title: string;
   description: string;
-  /** Enumerable, for the progress screen (slice 5). */
-  skillsCovered(settings: S): SkillId[];
+  /**
+   * Every skill `generate()` can ask under `settings` on `range` — and nothing
+   * else: the planner, `/progress` and `/session` read this, so a skill the
+   * drill cannot build would surface as due or new and never come up.
+   * Empty when nothing is buildable; `generate()` then throws
+   * `NothingToAskError` (`coverage.ts`).
+   */
+  skillsCovered(settings: S, range: KeyRange): SkillId[];
   /**
    * How this exercise names one of its skills — a fifth display extension to
    * ADR §5, as generic as the other four. `/progress` shows a cell per skill

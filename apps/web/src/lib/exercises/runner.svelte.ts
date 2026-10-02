@@ -24,6 +24,7 @@ import {
   type FeedbackLines,
   type Outcome,
 } from './feedback';
+import { NothingToAskError } from './coverage';
 import { createAudioPlayback, type PlaybackApi } from './playback';
 import { mulberry32, randomSeed } from './rng';
 import type {
@@ -70,8 +71,10 @@ const HISTORY_LENGTH = 8;
  * towards the planner's skills **without learning anything about the
  * exercise**: it only compares `Question.skillId` with the list it was handed,
  * and `generate()` stays the only thing that knows how to build a question.
- * An exercise that reads `GenerateContext.targetSkillId` (none does yet) hits
- * the target on the first try and the loop costs nothing.
+ * Every registered exercise honours `GenerateContext.targetSkillId` when it
+ * can build it, so the first try lands and the loop costs nothing; the loop
+ * is what still biases a run when the most urgent skill cannot be built and
+ * a later target could.
  */
 const TARGET_SAMPLE_TRIES = 16;
 
@@ -491,7 +494,17 @@ export class ExerciseRunner {
     // A mixed session picks the exercise first; everything below — the
     // question, the grading, the attempt it emits — is that exercise's.
     this.definition = this.#pickExercise() ?? this.definition;
-    const question = this.#generate();
+    let question: Question;
+    try {
+      question = this.#generate();
+    } catch (error) {
+      // Nothing this exercise can build on this keyboard (`coverage.ts`): end
+      // the run rather than ask a question from outside its settings. A
+      // session never gets here — it only mixes exercises that can ask.
+      if (!(error instanceof NothingToAskError)) throw error;
+      this.#end();
+      return;
+    }
     this.#recent = [question.skillId, ...this.#recent].slice(0, HISTORY_LENGTH);
     this.question = question;
     this.outcome = null;
@@ -510,7 +523,9 @@ export class ExerciseRunner {
    * Ask for a question — and, on a targeted run, keep asking until one of the
    * planner's skills comes up (`TARGET_SAMPLE_TRIES` seeds at most, so a
    * target the exercise cannot currently generate degrades to a normal
-   * question instead of hanging the drill).
+   * question instead of hanging the drill). Each try hands the exercise the
+   * next target in turn, so a most-urgent skill it cannot build does not stop
+   * it asking the second one exactly.
    */
   #generate(): Question {
     const targets = this.#targetSkills();
@@ -522,7 +537,7 @@ export class ExerciseRunner {
       !wanted.has(question.skillId) && i < TARGET_SAMPLE_TRIES;
       i += 1
     ) {
-      question = this.#generateOnce(targets[0]);
+      question = this.#generateOnce(targets[i % targets.length]);
     }
     return question;
   }

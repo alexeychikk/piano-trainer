@@ -5,7 +5,42 @@
  */
 
 import { describe, expect, it } from 'vitest';
+import { NothingToAskError } from './coverage';
 import { EXERCISES, DEFAULT_EXERCISE_ID, getExercise } from './registry';
+import { mulberry32 } from './rng';
+import type { AnyExercise, KeyRange, SkillId } from './types';
+
+/** The settings store’s default instrument range (36–96). */
+const RANGE = { low: 36, high: 96 };
+
+/**
+ * The default range, then narrower and narrower keyboards: a range is what
+ * decides which voicings fit, so the contract is checked on several. Every one
+ * is at least the settings store's twelve-semitone floor.
+ */
+const RANGES: readonly KeyRange[] = [
+  RANGE,
+  { low: 48, high: 72 },
+  { low: 60, high: 79 },
+  { low: 60, high: 76 },
+  { low: 60, high: 72 },
+];
+
+function ask(
+  exercise: AnyExercise,
+  seed: number,
+  range: KeyRange,
+  targetSkillId?: SkillId,
+) {
+  return exercise.generate({
+    settings: exercise.defaultSettings,
+    rng: mulberry32(seed),
+    seed,
+    range,
+    history: { recentSkillIds: [] },
+    targetSkillId,
+  });
+}
 
 /**
  * Segments that come from a hand-edited IndexedDB record or an imported file,
@@ -66,8 +101,56 @@ describe('the registry', () => {
   describe.each(EXERCISES.map((exercise) => [exercise.id, exercise] as const))(
     '%s',
     (_id, exercise) => {
+      it.each(RANGES.map((range) => [`${range.low}–${range.high}`, range]))(
+        'asks only skills it covers on %s',
+        (_label, range) => {
+          const covered = new Set(
+            exercise.skillsCovered(exercise.defaultSettings, range),
+          );
+          for (let seed = 1; seed <= 200; seed += 1) {
+            if (covered.size === 0) {
+              expect(() => ask(exercise, seed, range)).toThrow(
+                NothingToAskError,
+              );
+              continue;
+            }
+            expect(covered).toContain(ask(exercise, seed, range).skillId);
+          }
+        },
+      );
+
+      it.each(RANGES.map((range) => [`${range.low}–${range.high}`, range]))(
+        'asks exactly the skill it is targeted at on %s',
+        (_label, range) => {
+          const covered = exercise.skillsCovered(
+            exercise.defaultSettings,
+            range,
+          );
+          covered.forEach((skillId, i) => {
+            expect(ask(exercise, i + 1, range, skillId).skillId).toBe(skillId);
+          });
+        },
+      );
+
+      it('draws as usual for a target it cannot build', () => {
+        const covered = new Set(
+          exercise.skillsCovered(exercise.defaultSettings, RANGE),
+        );
+        const foreign = EXERCISES.filter((other) => other.id !== exercise.id)
+          .flatMap((other) => other.skillsCovered(other.defaultSettings, RANGE))
+          .concat(craftedIds(exercise.id));
+        foreign.forEach((target, i) => {
+          expect(covered).toContain(
+            ask(exercise, i + 1, RANGE, target).skillId,
+          );
+        });
+      });
+
       it('names every skill it covers', () => {
-        const skillIds = exercise.skillsCovered(exercise.defaultSettings);
+        const skillIds = exercise.skillsCovered(
+          exercise.defaultSettings,
+          RANGE,
+        );
         expect(skillIds.length).toBeGreaterThan(0);
         for (const skillId of skillIds) {
           const label = exercise.skillLabel?.(
@@ -104,7 +187,10 @@ describe('the registry', () => {
       it('leaves another exercise’s id alone', () => {
         for (const other of EXERCISES) {
           if (other.id === exercise.id) continue;
-          for (const skillId of other.skillsCovered(other.defaultSettings)) {
+          for (const skillId of other.skillsCovered(
+            other.defaultSettings,
+            RANGE,
+          )) {
             expect(
               exercise.skillLabel?.(skillId, exercise.defaultSettings),
               skillId,

@@ -26,6 +26,7 @@
   import NoMidiStrip from '$lib/components/midi/NoMidiStrip.svelte';
   import PianoKeyboard from '$lib/components/piano/PianoKeyboard.svelte';
   import { BED_CHROME_H } from '$lib/components/piano/geometry';
+  import { planInputs } from '$lib/exercises/coverage';
   import { phaseLabel } from '$lib/exercises/phases';
   import { ExerciseRunner, expectedLength } from '$lib/exercises/runner.svelte';
   import { STREAK_CALLOUT } from '$lib/exercises/feedback';
@@ -84,14 +85,11 @@
         : dueFirst
           ? targetSkillsFor(
               buildPlan(
-                [
-                  {
-                    id: definition.id,
-                    skillIds: definition.skillsCovered(
-                      definition.defaultSettings,
-                    ),
-                  },
-                ],
+                // Only what this drill can build on the user's keyboard.
+                planInputs([definition], {
+                  low: settings.value.keyboardLow,
+                  high: settings.value.keyboardHigh,
+                }),
                 practice.byId,
                 Date.now(),
               ),

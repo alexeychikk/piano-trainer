@@ -22,6 +22,7 @@
   import ExerciseRunner from '$lib/components/exercise/ExerciseRunner.svelte';
   import SessionSummary from '$lib/components/session/SessionSummary.svelte';
   import Placeholder from '$lib/components/shell/Placeholder.svelte';
+  import { askableExercises, planInputs } from '$lib/exercises/coverage';
   import { EXERCISES } from '$lib/exercises/registry';
   import { buildPlan } from '$lib/practice/planner';
   import { fallbackSkillLabel } from '$lib/practice/progress';
@@ -49,16 +50,19 @@
   }
 
   function openSession() {
+    // Only what can be asked on the user's keyboard: a drill with nothing
+    // buildable is left out of the mix, and no skill it cannot build is due.
+    const range = {
+      low: settings.value.keyboardLow,
+      high: settings.value.keyboardHigh,
+    };
     const plan = buildPlan(
-      EXERCISES.map((exercise) => ({
-        id: exercise.id,
-        skillIds: exercise.skillsCovered(exercise.defaultSettings),
-      })),
+      planInputs(EXERCISES, range),
       practice.byId,
       Date.now(),
     );
     run = new SessionRun({
-      exercises: EXERCISES,
+      exercises: askableExercises(EXERCISES, range),
       plan,
       lengthMin: chosenLength(),
     });

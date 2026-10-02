@@ -17,6 +17,9 @@ import {
   tallyBySkill,
 } from './progress';
 
+/** The settings store’s default instrument range (36–96). */
+const RANGE = { low: 36, high: 96 };
+
 /** Midday, so a ±hours test never crosses a local midnight by accident. */
 const NOW = new Date('2026-09-14T12:00:00').getTime();
 
@@ -230,7 +233,7 @@ describe('a crafted skill id', () => {
   const inputs = EXERCISES.map((exercise) => ({
     id: exercise.id,
     title: exercise.title,
-    skillIds: exercise.skillsCovered(exercise.defaultSettings),
+    skillIds: exercise.skillsCovered(exercise.defaultSettings, RANGE),
     label: (skillId: string) =>
       exercise.skillLabel?.(skillId, exercise.defaultSettings) ??
       fallbackSkillLabel(skillId),

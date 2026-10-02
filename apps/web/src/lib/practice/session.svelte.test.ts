@@ -10,12 +10,15 @@ import { buildPlan } from './planner';
 import { summariseSession } from './session';
 import { SessionRun } from './session.svelte';
 
+/** The settings store’s default instrument range (36–96). */
+const RANGE = { low: 36, high: 96 };
+
 /** The engine is never touched here: the runner takes a stub `PlaybackApi`. */
 vi.mock('smplr', () => ({ Soundfont: () => ({ ready: Promise.resolve() }) }));
 
 const REGISTRY = EXERCISES.map((exercise) => ({
   id: exercise.id,
-  skillIds: exercise.skillsCovered(exercise.defaultSettings),
+  skillIds: exercise.skillsCovered(exercise.defaultSettings, RANGE),
 }));
 
 function freshRun(lengthMin: number, clock: () => number) {

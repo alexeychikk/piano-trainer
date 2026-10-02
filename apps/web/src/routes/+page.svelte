@@ -12,6 +12,7 @@
   import { goto } from '$app/navigation';
   import { base } from '$app/paths';
   import { onMount } from 'svelte';
+  import { coveredSkills, planInputs } from '$lib/exercises/coverage';
   import { EXERCISES } from '$lib/exercises/registry';
   import { midiInput } from '$lib/midi/input.svelte';
   import { isTypingTarget } from '$lib/midi/keymap';
@@ -41,15 +42,14 @@
   const now = Date.now();
   const SESSION_HREF = `${base}/session/`;
 
+  /** The user's keyboard: only what can be asked on it counts (`coverage.ts`). */
+  const range = $derived({
+    low: settings.value.keyboardLow,
+    high: settings.value.keyboardHigh,
+  });
+
   const plan = $derived(
-    buildPlan(
-      EXERCISES.map((exercise) => ({
-        id: exercise.id,
-        skillIds: exercise.skillsCovered(exercise.defaultSettings),
-      })),
-      practice.byId,
-      now,
-    ),
+    buildPlan(planInputs(EXERCISES, range), practice.byId, now),
   );
 
   /**
@@ -217,9 +217,7 @@
               <!-- Real mastery from the practice log (slice 5a); an exercise
                    nothing has been practised in is honestly `new`. -->
               <MasteryPips
-                mastery={practice.masteryFor(
-                  exercise.skillsCovered(exercise.defaultSettings),
-                )}
+                mastery={practice.masteryFor(coveredSkills(exercise, range))}
                 skill={exercise.title}
               />
               <!-- UX §3: pips plus `NN%`, `N due` or `new`. The pips carry the
