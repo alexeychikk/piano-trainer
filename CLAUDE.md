@@ -7,7 +7,7 @@ backend, static hosting. Desktop browser first.
 — it fixes the stack, the internal music vocabulary, the exercise contract and the slice order.
 Anything below is the short version; the ADR wins on detail.
 
-**Before building any UI**, read all three, in this order:
+**Before building any UI**, read these, in this order:
 
 1. [`docs/design/core-practice-ux.md`](docs/design/core-practice-ux.md) — routes, app shell,
    exercise-runner states and timing, piano-keyboard spec, a11y rules and the copy deck. Authoritative
@@ -23,6 +23,10 @@ Anything below is the short version; the ADR wins on detail.
    invisible on a white key), the `ProgressBar` ramp, the dropped light theme, 16 px key glyphs, no
    emoji — and closes the four Settings §6.3 gaps. It amends `core-practice-ux.md` §6.3 and §11 and
    corrects two numbers in part 1's §9 contrast table.
+4. [`docs/design/refinement-pass.md`](docs/design/refinement-pass.md) — the post-slice-12 audit
+   (2026-10-02), R1–R10 in priority order. It owns the **home-card decision**: a panel repeated
+   once per exercise (home cards, `/progress` groups) wears **no glow at rest**, only when hot — so
+   the ≤ 12 glow budget no longer scales with the registry. Land R1 before the next exercise slice.
 
 ## Repository layout
 
