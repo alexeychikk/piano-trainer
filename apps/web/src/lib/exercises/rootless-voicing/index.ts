@@ -66,6 +66,12 @@ import {
   type PitchClass,
   type RootlessForm,
 } from '$lib/theory';
+import {
+  NothingToAskError,
+  PITCH_CLASSES,
+  buildableTarget,
+  pitchClassesIn,
+} from '../coverage';
 import { randomInt } from '../rng';
 import { pitchClassSegment, skillIdSegments } from '../skill-id';
 import type {
@@ -73,6 +79,7 @@ import type {
   ExerciseDefinition,
   GenerateContext,
   Grade,
+  KeyRange,
   Question,
   SkillId,
 } from '../types';
@@ -110,10 +117,6 @@ export const STARTER_QUALITIES: readonly ChordQuality[] = [
   'maj7',
   'dom7',
   'min7',
-];
-
-const PITCH_CLASSES: readonly PitchClass[] = [
-  0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
 ];
 
 /** How hard we try to avoid asking the same chord twice in a row. */
@@ -174,14 +177,26 @@ export function skillIdFor(
  * untrusted input).
  */
 export function rootlessSkillLabel(skillId: SkillId): string {
+  const skill = parseSkillId(skillId);
+  if (skill === null) return skillId;
+  return `${chordSymbolText(skill.rootPc, skill.quality)} ${skill.form}`;
+}
+
+/**
+ * The chord and form a skill id names, or `null` for anything else — an id
+ * read back is untrusted input, and a quality with no rootless voicing was
+ * never a skill here.
+ */
+export function parseSkillId(
+  skillId: SkillId,
+): { quality: ChordQuality; rootPc: PitchClass; form: RootlessForm } | null {
   const segments = skillIdSegments(skillId, ROOTLESS_VOICING_ID, 3);
-  if (segments === null) return skillId;
+  if (segments === null) return null;
   const [quality, root, form] = segments;
   const rootPc = pitchClassSegment(root);
   if (rootPc === null || !isChordQuality(quality) || !isRootlessForm(form))
-    return skillId;
-  if (!hasRootless(quality)) return skillId;
-  return `${chordSymbolText(rootPc, quality)} ${form}`;
+    return null;
+  return hasRootless(quality) ? { quality, rootPc, form } : null;
 }
 
 /** Flats, like every other spelling in the app (find-the-note's rule). */
@@ -189,19 +204,45 @@ function spell(midi: Midi): NoteName {
   return midiToName(midi, 'flat');
 }
 
-/** The qualities of this set that have a rootless voicing and fit in `span`. */
-function playableQualities(
-  settings: RootlessVoicingSettings,
-  span: number,
-): readonly ChordQuality[] {
-  const playable = settings.qualities.filter(
-    (quality) =>
-      hasRootless(quality) &&
-      ROOTLESS_FORMS.every((form) => rootlessSpan(quality, form) <= span),
+/**
+ * Whether the `form` voicing of `quality` in `rootPc` fits `range`: some
+ * octave of its **bass note** (placement is anchored there, not on the root —
+ * `pickBass`) leaves the whole shape inside the keyboard.
+ */
+function fits(
+  quality: ChordQuality,
+  rootPc: PitchClass,
+  form: RootlessForm,
+  range: KeyRange,
+): boolean {
+  const offset = rootlessBassOffset(quality, form);
+  if (offset === null) return false;
+  return pitchClassesIn(
+    range.low,
+    range.high - rootlessSpan(quality, form),
+  ).includes((rootPc + offset) % 12);
+}
+
+/** The keys `quality` can be asked in on `range`, in at least one form. */
+function buildableRoots(quality: ChordQuality, range: KeyRange): PitchClass[] {
+  if (!hasRootless(quality)) return [];
+  return PITCH_CLASSES.filter((rootPc) =>
+    ROOTLESS_FORMS.some((form) => fits(quality, rootPc, form, range)),
   );
-  // A range under an octave is not a piano (the settings store guards that),
-  // so this only ever falls back on a hand-built test range.
-  return playable.length > 0 ? playable : ['dom7'];
+}
+
+/**
+ * The qualities of this set that `generate()` can ask on `range` — a rootless
+ * voicing of their own, in at least one key and form that fits. No fallback:
+ * an empty set means nothing to ask (`coverage.ts`).
+ */
+export function buildableQualities(
+  settings: RootlessVoicingSettings,
+  range: KeyRange,
+): ChordQuality[] {
+  return settings.qualities.filter(
+    (quality) => buildableRoots(quality, range).length > 0,
+  );
 }
 
 /** Every occurrence of `pc` in `[from, to]`, low to high. */
@@ -267,21 +308,38 @@ function generate(
   ctx: GenerateContext<RootlessVoicingSettings>,
 ): Question<RootlessVoicingPayload> {
   const { low, high } = ctx.range;
-  const choices = playableQualities(ctx.settings, high - low);
+  const choices = buildableQualities(ctx.settings, ctx.range);
+  if (choices.length === 0) throw new NothingToAskError(ROOTLESS_VOICING_ID);
   const recent = ctx.history.recentSkillIds;
 
-  const draw = (): [ChordQuality, PitchClass, RootlessForm] => [
-    choices[randomInt(ctx.rng, 0, choices.length - 1)],
-    PITCH_CLASSES[randomInt(ctx.rng, 0, PITCH_CLASSES.length - 1)],
-    ROOTLESS_FORMS[randomInt(ctx.rng, 0, ROOTLESS_FORMS.length - 1)],
-  ];
-
-  let [quality, rootPc, form] = draw();
+  const draw = (): [ChordQuality, PitchClass, RootlessForm] => {
+    const quality = choices[randomInt(ctx.rng, 0, choices.length - 1)];
+    const roots = buildableRoots(quality, ctx.range);
+    const rootPc = roots[randomInt(ctx.rng, 0, roots.length - 1)];
+    const forms = ROOTLESS_FORMS.filter((form) =>
+      fits(quality, rootPc, form, ctx.range),
+    );
+    return [quality, rootPc, forms[randomInt(ctx.rng, 0, forms.length - 1)]];
+  };
+  // The planner's target, asked exactly when this drill can build it.
+  const target = buildableTarget(
+    ctx.targetSkillId,
+    parseSkillId,
+    (skill) =>
+      choices.includes(skill.quality) &&
+      fits(skill.quality, skill.rootPc, skill.form, ctx.range),
+  );
+  let [quality, rootPc, form] = target
+    ? [target.quality, target.rootPc, target.form]
+    : draw();
   // Redraw a few times rather than looping until different: the same chord
-  // twice in a row is dull, but forcing a change would bias the draw.
+  // twice in a row is dull, but forcing a change would bias the draw. A target
+  // is never redrawn — the planner asked for it.
   for (
     let redraw = 0;
-    redraw < MAX_REDRAWS && recent[0] === skillIdFor(quality, rootPc, form);
+    target === null &&
+    redraw < MAX_REDRAWS &&
+    recent[0] === skillIdFor(quality, rootPc, form);
     redraw += 1
   )
     [quality, rootPc, form] = draw();
@@ -460,16 +518,17 @@ export const rootlessVoicing: ExerciseDefinition<
     qualities: STARTER_QUALITIES,
   },
   requiresMidi: false,
-  skillsCovered: (settings) =>
-    settings.qualities
-      // A quality with no rootless voicing has nothing to ask, so it puts no
-      // unanswerable cell on `/progress`.
-      .filter((quality) => hasRootless(quality))
-      .flatMap((quality) =>
-        PITCH_CLASSES.flatMap((rootPc) =>
-          ROOTLESS_FORMS.map((form) => skillIdFor(quality, rootPc, form)),
+  // A quality with no rootless voicing, or a key and form that does not fit
+  // the keyboard, has nothing to ask, so it puts no unanswerable cell on
+  // `/progress`.
+  skillsCovered: (settings, range) =>
+    buildableQualities(settings, range).flatMap((quality) =>
+      PITCH_CLASSES.flatMap((rootPc) =>
+        ROOTLESS_FORMS.filter((form) => fits(quality, rootPc, form, range)).map(
+          (form) => skillIdFor(quality, rootPc, form),
         ),
       ),
+    ),
   skillLabel: (skillId) => rootlessSkillLabel(skillId),
   generate,
   grade,

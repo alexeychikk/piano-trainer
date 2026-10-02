@@ -10,6 +10,7 @@ import {
   type ChordQuality,
   type PitchClass,
 } from '$lib/theory';
+import { NothingToAskError } from '../coverage';
 import { mulberry32 } from '../rng';
 import type { Answer, GenerateContext, Question } from '../types';
 import {
@@ -22,6 +23,9 @@ import {
   type GuideTonesPayload,
   type GuideTonesSettings,
 } from './index';
+
+/** The settings store’s default instrument range (36–96). */
+const RANGE = { low: 36, high: 96 };
 
 const DEFAULTS = guideTones.defaultSettings as GuideTonesSettings;
 
@@ -516,7 +520,7 @@ describe('guideTonesSkillLabel', () => {
 
 describe('guide-tones skillsCovered', () => {
   it('is one cell per chord: 12 keys × the starter qualities', () => {
-    const skillIds = guideTones.skillsCovered(DEFAULTS);
+    const skillIds = guideTones.skillsCovered(DEFAULTS, RANGE);
     expect(skillIds).toHaveLength(12 * STARTER_QUALITIES.length);
     expect(new Set(skillIds).size).toBe(skillIds.length);
     for (const skillId of skillIds)
@@ -524,7 +528,7 @@ describe('guide-tones skillsCovered', () => {
   });
 
   it('covers every skill the generator can ask', () => {
-    const covered = new Set(guideTones.skillsCovered(DEFAULTS));
+    const covered = new Set(guideTones.skillsCovered(DEFAULTS, RANGE));
     for (let seed = 0; seed < 200; seed += 1)
       expect(covered.has(ask(seed).skillId)).toBe(true);
   });
@@ -533,7 +537,7 @@ describe('guide-tones skillsCovered', () => {
     const settings: GuideTonesSettings = {
       qualities: ['maj7', 'dim7', 'dom7alt'] as ChordQuality[],
     };
-    const skillIds = guideTones.skillsCovered(settings);
+    const skillIds = guideTones.skillsCovered(settings, RANGE);
     expect(skillIds).toHaveLength(12);
     for (const skillId of skillIds) expect(skillId).toContain('maj7');
   });
@@ -546,5 +550,27 @@ describe('guide-tones skillsCovered', () => {
         expect(
           guideTonePitchClasses(rootPc as PitchClass, quality),
         ).toHaveLength(2);
+  });
+});
+
+describe('guide-tones · what it can build', () => {
+  it('covers fewer keys on a tight keyboard, and asks only those', () => {
+    const range = { low: 60, high: 72 };
+    const skills = guideTones.skillsCovered(DEFAULTS, range);
+    expect(skills.length).toBeGreaterThan(0);
+    expect(skills.length).toBeLessThan(
+      guideTones.skillsCovered(DEFAULTS, RANGE).length,
+    );
+    for (let seed = 1; seed <= 100; seed += 1) {
+      expect(skills).toContain(ask(seed, range).skillId);
+    }
+  });
+
+  it('reports nothing and asks nothing with no quality that has a guide-tone pair', () => {
+    const settings: GuideTonesSettings = {
+      qualities: ['dim7', 'dom7alt'] as ChordQuality[],
+    };
+    expect(guideTones.skillsCovered(settings, RANGE)).toEqual([]);
+    expect(() => ask(1, RANGE, [], settings)).toThrow(NothingToAskError);
   });
 });

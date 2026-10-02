@@ -6,6 +6,7 @@ import {
   shellPitchClasses,
   type ChordQuality,
 } from '$lib/theory';
+import { NothingToAskError } from '../coverage';
 import { mulberry32 } from '../rng';
 import type { Answer, GenerateContext, Question } from '../types';
 import {
@@ -18,6 +19,9 @@ import {
   type PlayTheVoicingPayload,
   type PlayTheVoicingSettings,
 } from './index';
+
+/** The settings store’s default instrument range (36–96). */
+const RANGE = { low: 36, high: 96 };
 
 const DEFAULTS = playTheVoicing.defaultSettings as PlayTheVoicingSettings;
 
@@ -269,7 +273,7 @@ describe('play-the-voicing grade', () => {
 
 describe('play-the-voicing skills', () => {
   it('covers one skill per chord: every quality in all 12 keys', () => {
-    const skills = playTheVoicing.skillsCovered(DEFAULTS);
+    const skills = playTheVoicing.skillsCovered(DEFAULTS, RANGE);
     expect(skills).toHaveLength(STARTER_QUALITIES.length * 12);
     expect(new Set(skills).size).toBe(skills.length);
     expect(skills).toContain(skillIdFor('maj7', 0));
@@ -277,9 +281,12 @@ describe('play-the-voicing skills', () => {
 
   it('leaves out a quality it cannot shell', () => {
     expect(
-      playTheVoicing.skillsCovered({
-        qualities: ['dim7', 'min7'] as ChordQuality[],
-      }),
+      playTheVoicing.skillsCovered(
+        {
+          qualities: ['dim7', 'min7'] as ChordQuality[],
+        },
+        RANGE,
+      ),
     ).toHaveLength(12);
   });
 
@@ -364,5 +371,28 @@ describe('missDetail', () => {
   it('has nothing to say about a handful of notes', () => {
     expect(missDetail(0, 'dom7', [48])).toBeUndefined();
     expect(missDetail(0, 'dom7', [60, 61, 62])).toBeUndefined();
+  });
+});
+
+describe('play-the-voicing · what it can build', () => {
+  it('leaves out the keys whose shell does not fit a narrow keyboard', () => {
+    // C4–E5: a maj7 shell spans 11 semitones, so only roots C4–F4 fit.
+    const range = { low: 60, high: 76 };
+    const settings: PlayTheVoicingSettings = { qualities: ['maj7'] };
+    const skills = playTheVoicing.skillsCovered(settings, range);
+    expect(skills).toEqual(
+      [0, 1, 2, 3, 4, 5].map((pc) => skillIdFor('maj7', pc)),
+    );
+    for (let seed = 1; seed <= 100; seed += 1) {
+      expect(skills).toContain(ask(seed, range, [], settings).skillId);
+    }
+  });
+
+  it('reports nothing and asks nothing with no quality that has a shell', () => {
+    const settings: PlayTheVoicingSettings = {
+      qualities: ['dom7alt'] as ChordQuality[],
+    };
+    expect(playTheVoicing.skillsCovered(settings, RANGE)).toEqual([]);
+    expect(() => ask(1, RANGE, [], settings)).toThrow(NothingToAskError);
   });
 });

@@ -10,6 +10,9 @@ import {
   type FindTheNoteSettings,
 } from './index';
 
+/** The settings store’s default instrument range (36–96). */
+const RANGE = { low: 36, high: 96 };
+
 function context(
   seed: number,
   range = { low: 48, high: 72 },
@@ -88,8 +91,8 @@ describe('find-the-note · generate', () => {
   });
 
   it('covers every pitch class as a skill', () => {
-    expect(findTheNote.skillsCovered({})).toHaveLength(12);
-    expect(findTheNote.skillsCovered({})).toContain(skillIdFor(63));
+    expect(findTheNote.skillsCovered({}, RANGE)).toHaveLength(12);
+    expect(findTheNote.skillsCovered({}, RANGE)).toContain(skillIdFor(63));
   });
 });
 
@@ -161,7 +164,7 @@ describe('pitchClassName', () => {
   });
 
   it('labels every skill it claims to cover', () => {
-    for (const skillId of findTheNote.skillsCovered({})) {
+    for (const skillId of findTheNote.skillsCovered({}, RANGE)) {
       const label = findTheNote.skillLabel?.(skillId, {}) ?? skillId;
       expect(label).not.toContain(':');
       expect(label.length).toBeLessThanOrEqual(2);

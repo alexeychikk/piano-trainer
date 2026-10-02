@@ -27,6 +27,7 @@ import {
   type NoteName,
   type Semitones,
 } from '$lib/theory';
+import { NothingToAskError, buildableTarget } from '../coverage';
 import { randomInt } from '../rng';
 import {
   MAX_SEMITONE_SEGMENT,
@@ -38,6 +39,7 @@ import type {
   ExerciseDefinition,
   GenerateContext,
   Grade,
+  KeyRange,
   Question,
   SkillId,
 } from '../types';
@@ -106,13 +108,26 @@ export function skillIdFor(
  * An id this exercise does not recognise comes back unchanged.
  */
 export function intervalSkillLabel(skillId: SkillId): string {
+  const skill = parseSkillId(skillId);
+  if (skill === null) return skillId;
+  const { size, direction } = skill;
+  return `${intervalShortName(size)} ${direction === 'desc' ? '↓' : '↑'}`;
+}
+
+/**
+ * The interval a skill id names — its unsigned size and direction — or `null`
+ * for anything else: an id read back is untrusted input.
+ */
+export function parseSkillId(
+  skillId: SkillId,
+): { size: Semitones; direction: IntervalDirection } | null {
   const segments = skillIdSegments(skillId, INTERVAL_RECOGNITION_ID, 2);
-  if (segments === null) return skillId;
-  const [size, direction] = segments;
-  const semitones = integerSegment(size, MAX_SEMITONE_SEGMENT);
-  if (semitones === null) return skillId;
-  if (direction !== 'asc' && direction !== 'desc') return skillId;
-  return `${intervalShortName(semitones)} ${direction === 'desc' ? '↓' : '↑'}`;
+  if (segments === null) return null;
+  const [sizeSegment, direction] = segments;
+  const size = integerSegment(sizeSegment, MAX_SEMITONE_SEGMENT);
+  if (size === null) return null;
+  if (direction !== 'asc' && direction !== 'desc') return null;
+  return { size, direction };
 }
 
 /** Flats, like every other spelling in the app (find-the-note's rule). */
@@ -144,17 +159,19 @@ function pickRoot(
     : randomInt(rng, floor, ceiling);
 }
 
-/** The intervals this question set can actually ask inside `range`. */
-function playableIntervals(
+/**
+ * The interval sizes of this set that `generate()` can ask on `range`: both
+ * notes have to fit the keyboard. No fallback — an empty set means nothing to
+ * ask (`coverage.ts`). Sizes, unsigned: the direction is a setting.
+ */
+export function buildableIntervals(
   settings: IntervalSettings,
-  span: number,
-): readonly Semitones[] {
-  const playable = settings.semitones.filter(
-    (semitones) => Math.abs(semitones) <= span,
-  );
-  // A range under an octave is not a piano (the settings store guards that),
-  // so this only ever falls back on a hand-built test range.
-  return playable.length > 0 ? playable : [Math.min(span, 1)];
+  range: KeyRange,
+): Semitones[] {
+  const sizes = settings.semitones
+    .map((semitones) => Math.abs(semitones))
+    .filter((size) => size > 0 && size <= range.high - range.low);
+  return [...new Set(sizes)];
 }
 
 function generate(
@@ -163,15 +180,26 @@ function generate(
   const { low, high } = ctx.range;
   const direction = ctx.settings.direction;
   const sign = direction === 'desc' ? -1 : 1;
-  const choices = playableIntervals(ctx.settings, high - low);
+  const choices = buildableIntervals(ctx.settings, ctx.range);
+  if (choices.length === 0)
+    throw new NothingToAskError(INTERVAL_RECOGNITION_ID);
   const recent = ctx.history.recentSkillIds;
 
-  let size = choices[randomInt(ctx.rng, 0, choices.length - 1)];
+  // The planner's target, asked exactly when this drill can build it: its
+  // size is in the set and its direction is the one in play.
+  const target = buildableTarget(
+    ctx.targetSkillId,
+    parseSkillId,
+    (skill) => skill.direction === direction && choices.includes(skill.size),
+  );
+  let size = target?.size ?? choices[randomInt(ctx.rng, 0, choices.length - 1)];
   // Redraw a few times rather than looping until different: asking the same
   // interval twice in a row is dull, but forcing a change would bias the draw
-  // (and could not terminate at all on a one-interval set).
+  // (and could not terminate at all on a one-interval set). A target is never
+  // redrawn — the planner asked for it.
   for (
     let redraw = 0;
+    target === null &&
     redraw < MAX_REDRAWS &&
     choices.length > 1 &&
     recent[0] === skillIdFor(size, direction);
@@ -276,9 +304,9 @@ export const intervalRecognition: ExerciseDefinition<
     direction: 'asc',
   },
   requiresMidi: false,
-  skillsCovered: (settings) =>
-    settings.semitones.map((semitones) =>
-      skillIdFor(semitones, settings.direction),
+  skillsCovered: (settings, range) =>
+    buildableIntervals(settings, range).map((size) =>
+      skillIdFor(size, settings.direction),
     ),
   skillLabel: (skillId) => intervalSkillLabel(skillId),
   generate,

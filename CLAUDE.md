@@ -424,6 +424,23 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
     is not a guide tone) and `dim7` because it has no 3rd-and-7th pair at all.
   - `registry.test.ts`'s `craftedIds()` net now also builds **three-segment** ids, so it reaches
     slice 11's shape as well as this one's — it grows with the longest id any exercise registers.
+- **What an exercise can ask (`$lib/exercises/coverage.ts`)** — `skillsCovered(settings, range)`
+  returns **only skills `generate()` can build** under those settings on that range (theory can
+  build it *and* it fits the keyboard), and `generate()` draws from the same set, so `/progress`,
+  home and the planner never show a skill the drill will not ask. **No fallback**: nothing
+  buildable is `[]` plus `generate()` throwing `NothingToAskError` (the old `['maj']` fallback drilled
+  a chord nobody enabled). `/session` mixes only `askableExercises(EXERCISES, range)`; a plain drill
+  opened anyway ends (`#end()` → `summary`). Reachable today only for the ii-V-I on a 12–16 semitone
+  keyboard; a "needs a wider keyboard" line is a design follow-up. Screens go through
+  `coveredSkills`/`planInputs`, never call `skillsCovered` without a range.
+  - **`targetSkillId` is honoured exactly** when buildable: every exercise exports a validating
+    `parseSkillId()` (also what its `skillLabel` decodes with) and uses
+    `buildableTarget(target, parseSkillId, isBuildable)`; a target it cannot build (foreign,
+    crafted, off the keyboard) is a normal draw. A target is never redrawn for variety. The runner
+    rotates through the planner's targets across its `TARGET_SAMPLE_TRIES` draws.
+  - Keyed drills draw quality, then a root from that quality's buildable roots (`pitchClassesIn`),
+    so a full range consumes the rng exactly as before. `registry.test.ts` asserts both halves for
+    every registered exercise on several ranges.
 - **Settings** are `localStorage` via the `settings` store (`$lib/storage/settings.svelte.ts`) and
   are read only in `hydrate()`, called from the root layout after mount — module init must not touch
   storage or prerendered HTML and the first client render disagree. Slice 4 added `keyboardLow`/

@@ -74,6 +74,11 @@ import {
   type NoteName,
   type PitchClass,
 } from '$lib/theory';
+import {
+  NothingToAskError,
+  buildableTarget,
+  pitchClassesIn,
+} from '../coverage';
 import { randomInt } from '../rng';
 import { pitchClassSegment, skillIdSegments } from '../skill-id';
 import type {
@@ -81,6 +86,7 @@ import type {
   ExerciseDefinition,
   GenerateContext,
   Grade,
+  KeyRange,
   Question,
   SkillId,
 } from '../types';
@@ -120,10 +126,6 @@ export const STARTER_QUALITIES: readonly ChordQuality[] = [
   'maj7',
   'dom7',
   'min7',
-];
-
-const PITCH_CLASSES: readonly PitchClass[] = [
-  0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
 ];
 
 /** How hard we try to avoid asking the same chord twice in a row. */
@@ -178,12 +180,26 @@ export function skillIdFor(quality: ChordQuality, rootPc: PitchClass): SkillId {
  * unchanged (`skill-id.ts`: a skill id read back is untrusted input).
  */
 export function guideTonesSkillLabel(skillId: SkillId): string {
+  const skill = parseSkillId(skillId);
+  return skill === null
+    ? skillId
+    : chordSymbolText(skill.rootPc, skill.quality);
+}
+
+/**
+ * The chord a skill id names, or `null` for anything else — an id read back
+ * is untrusted input, and a quality with no guide-tone pair was never a skill
+ * here.
+ */
+export function parseSkillId(
+  skillId: SkillId,
+): { quality: ChordQuality; rootPc: PitchClass } | null {
   const segments = skillIdSegments(skillId, GUIDE_TONES_ID, 2);
-  if (segments === null) return skillId;
+  if (segments === null) return null;
   const [quality, root] = segments;
   const rootPc = pitchClassSegment(root);
-  if (rootPc === null || !isChordQuality(quality)) return skillId;
-  return hasGuideTones(quality) ? chordSymbolText(rootPc, quality) : skillId;
+  if (rootPc === null || !isChordQuality(quality)) return null;
+  return hasGuideTones(quality) ? { quality, rootPc } : null;
 }
 
 /** Flats, like every other spelling in the app (find-the-note's rule). */
@@ -191,17 +207,29 @@ function spell(midi: Midi): NoteName {
   return midiToName(midi, 'flat');
 }
 
-/** The qualities of this set that have guide tones and fit inside `span`. */
-function playableQualities(
+/**
+ * The keys a `quality` pair can be asked in on `range`: those with an octave
+ * of the reference root low enough for the 7th to fit above it. All twelve on
+ * any keyboard that spans the pair plus an octave; none for a quality with no
+ * 3rd-and-7th pair.
+ */
+function buildableRoots(quality: ChordQuality, range: KeyRange): PitchClass[] {
+  if (!hasGuideTones(quality)) return [];
+  return pitchClassesIn(range.low, range.high - guideToneSpan(quality));
+}
+
+/**
+ * The qualities of this set that `generate()` can ask on `range` — a pair of
+ * their own, in at least one key that fits. No fallback: an empty set means
+ * nothing to ask (`coverage.ts`).
+ */
+export function buildableQualities(
   settings: GuideTonesSettings,
-  span: number,
-): readonly ChordQuality[] {
-  const playable = settings.qualities.filter(
-    (quality) => hasGuideTones(quality) && guideToneSpan(quality) <= span,
+  range: KeyRange,
+): ChordQuality[] {
+  return settings.qualities.filter(
+    (quality) => buildableRoots(quality, range).length > 0,
   );
-  // A range under an octave is not a piano (the settings store guards that),
-  // so this only ever falls back on a hand-built test range.
-  return playable.length > 0 ? playable : ['dom7'];
 }
 
 /** Every occurrence of `pc` in `[from, to]`, low to high. */
@@ -247,20 +275,32 @@ function generate(
   ctx: GenerateContext<GuideTonesSettings>,
 ): Question<GuideTonesPayload> {
   const { low, high } = ctx.range;
-  const choices = playableQualities(ctx.settings, high - low);
+  const choices = buildableQualities(ctx.settings, ctx.range);
+  if (choices.length === 0) throw new NothingToAskError(GUIDE_TONES_ID);
   const recent = ctx.history.recentSkillIds;
 
-  const draw = (): [ChordQuality, PitchClass] => [
-    choices[randomInt(ctx.rng, 0, choices.length - 1)],
-    PITCH_CLASSES[randomInt(ctx.rng, 0, PITCH_CLASSES.length - 1)],
-  ];
-
-  let [quality, rootPc] = draw();
+  const draw = (): [ChordQuality, PitchClass] => {
+    const quality = choices[randomInt(ctx.rng, 0, choices.length - 1)];
+    const roots = buildableRoots(quality, ctx.range);
+    return [quality, roots[randomInt(ctx.rng, 0, roots.length - 1)]];
+  };
+  // The planner's target, asked exactly when this drill can build it.
+  const target = buildableTarget(
+    ctx.targetSkillId,
+    parseSkillId,
+    (skill) =>
+      choices.includes(skill.quality) &&
+      buildableRoots(skill.quality, ctx.range).includes(skill.rootPc),
+  );
+  let [quality, rootPc] = target ? [target.quality, target.rootPc] : draw();
   // Redraw a few times rather than looping until different: the same chord
-  // twice in a row is dull, but forcing a change would bias the draw.
+  // twice in a row is dull, but forcing a change would bias the draw. A target
+  // is never redrawn — the planner asked for it.
   for (
     let redraw = 0;
-    redraw < MAX_REDRAWS && recent[0] === skillIdFor(quality, rootPc);
+    target === null &&
+    redraw < MAX_REDRAWS &&
+    recent[0] === skillIdFor(quality, rootPc);
     redraw += 1
   )
     [quality, rootPc] = draw();
@@ -488,14 +528,15 @@ export const guideTones: ExerciseDefinition<
     qualities: STARTER_QUALITIES,
   },
   requiresMidi: false,
-  skillsCovered: (settings) =>
-    settings.qualities
-      // A quality with no 3rd-and-7th pair has nothing to ask, so it puts no
-      // unanswerable cell on `/progress`.
-      .filter((quality) => hasGuideTones(quality))
-      .flatMap((quality) =>
-        PITCH_CLASSES.map((rootPc) => skillIdFor(quality, rootPc)),
+  // A quality with no 3rd-and-7th pair, or a key whose pair does not fit the
+  // keyboard, has nothing to ask, so it puts no unanswerable cell on
+  // `/progress`.
+  skillsCovered: (settings, range) =>
+    buildableQualities(settings, range).flatMap((quality) =>
+      buildableRoots(quality, range).map((rootPc) =>
+        skillIdFor(quality, rootPc),
       ),
+    ),
   skillLabel: (skillId) => guideTonesSkillLabel(skillId),
   generate,
   grade,

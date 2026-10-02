@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { NothingToAskError } from '../coverage';
 import { mulberry32 } from '../rng';
 import type { Answer, GenerateContext, Question } from '../types';
 import {
@@ -11,6 +12,9 @@ import {
   type IntervalPayload,
   type IntervalSettings,
 } from './index';
+
+/** The settings store’s default instrument range (36–96). */
+const RANGE = { low: 36, high: 96 };
 
 const DEFAULTS = intervalRecognition.defaultSettings as IntervalSettings;
 
@@ -232,7 +236,7 @@ describe('interval-recognition · labels', () => {
   });
 
   it('covers one skill per configured interval', () => {
-    const skills = intervalRecognition.skillsCovered(DEFAULTS);
+    const skills = intervalRecognition.skillsCovered(DEFAULTS, RANGE);
     expect(skills).toHaveLength(STARTER_INTERVALS.length);
     expect(skills).toContain(`${INTERVAL_RECOGNITION_ID}:7:asc`);
     expect(new Set(skills).size).toBe(skills.length);
@@ -250,5 +254,38 @@ describe('missDetail', () => {
 
   it('calls out a direction slip rather than renaming the interval', () => {
     expect(missDetail(-5, 5)).toBe('You played it upwards');
+  });
+});
+
+describe('interval-recognition · what it can build', () => {
+  it('leaves out an interval wider than the keyboard', () => {
+    const settings: IntervalSettings = {
+      semitones: [7, 12, 19],
+      direction: 'asc',
+    };
+    const range = { low: 60, high: 72 };
+    expect(intervalRecognition.skillsCovered(settings, range)).toEqual([
+      skillIdFor(7, 'asc'),
+      skillIdFor(12, 'asc'),
+    ]);
+    for (let seed = 1; seed <= 50; seed += 1) {
+      expect(ask(seed, range, [], settings).skillId).not.toBe(
+        skillIdFor(19, 'asc'),
+      );
+    }
+  });
+
+  it('reports nothing and asks nothing when no interval fits', () => {
+    const settings: IntervalSettings = { semitones: [], direction: 'asc' };
+    expect(intervalRecognition.skillsCovered(settings, RANGE)).toEqual([]);
+    expect(() => ask(1, RANGE, [], settings)).toThrow(NothingToAskError);
+  });
+
+  it('ignores a target in the other direction', () => {
+    const question = intervalRecognition.generate({
+      ...context(3, RANGE),
+      targetSkillId: skillIdFor(7, 'desc'),
+    });
+    expect(question.skillId).toMatch(/:asc$/);
   });
 });

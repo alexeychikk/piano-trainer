@@ -79,6 +79,11 @@ import {
   type PitchClass,
   type ProgressionType,
 } from '$lib/theory';
+import {
+  NothingToAskError,
+  buildableTarget,
+  pitchClassesIn,
+} from '../coverage';
 import { randomInt } from '../rng';
 import { pitchClassSegment, skillIdSegments } from '../skill-id';
 import type {
@@ -86,6 +91,7 @@ import type {
   ExerciseDefinition,
   GenerateContext,
   Grade,
+  KeyRange,
   Question,
   SkillId,
 } from '../types';
@@ -117,10 +123,6 @@ export type ProgressionSettings = {
  * beginner meets on the first page of every tune.
  */
 export const STARTER_TYPES: readonly ProgressionType[] = PROGRESSION_TYPES;
-
-const PITCH_CLASSES: readonly PitchClass[] = [
-  0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
-];
 
 /** How hard we try to avoid asking the same cadence in the same key twice. */
 const MAX_REDRAWS = 4;
@@ -175,12 +177,24 @@ export function skillIdFor(
  * never colour. An id this exercise does not recognise comes back unchanged.
  */
 export function progressionSkillLabel(skillId: SkillId): string {
+  const skill = parseSkillId(skillId);
+  if (skill === null) return skillId;
+  return `${pitchClassName(skill.tonicPc, 'flat')} ${progressionShortName(skill.type)}`;
+}
+
+/**
+ * The cadence and key a skill id names, or `null` for anything else — an id
+ * read back is untrusted input.
+ */
+export function parseSkillId(
+  skillId: SkillId,
+): { type: ProgressionType; tonicPc: PitchClass } | null {
   const segments = skillIdSegments(skillId, PROGRESSION_RECOGNITION_ID, 2);
-  if (segments === null) return skillId;
+  if (segments === null) return null;
   const [type, tonic] = segments;
   const tonicPc = pitchClassSegment(tonic);
-  if (tonicPc === null || !isProgressionType(type)) return skillId;
-  return `${pitchClassName(tonicPc, 'flat')} ${progressionShortName(type)}`;
+  if (tonicPc === null || !isProgressionType(type)) return null;
+  return { type, tonicPc };
 }
 
 /** Flats, like every other spelling in the app (find-the-note's rule). */
@@ -200,18 +214,33 @@ function notesOf(payload: ProgressionPayload): Midi[] {
   return chordsOf(payload).flat();
 }
 
-/** The cadences of this set that fit inside `span` semitones. */
-function playableTypes(
+/**
+ * The keys a `type` cadence can be asked in on `range`: those with an octave
+ * of the tonic far enough above the bottom for the V's root and far enough
+ * below the top for the ii's 7th (`pickTonicMidi`'s window). All twelve on a
+ * keyboard of the cadence's reach plus an octave; none on one narrower than
+ * the reach itself (an octave and a half), or for a type the theory module
+ * cannot build.
+ */
+function buildableTonics(type: ProgressionType, range: KeyRange): PitchClass[] {
+  if (progressionSteps(type) === null) return [];
+  const reach = progressionSpan(type);
+  return pitchClassesIn(range.low - reach.low, range.high - reach.high);
+}
+
+/**
+ * The cadences of this set that `generate()` can ask on `range`, in at least
+ * one key. No fallback: an empty set — a keyboard under an octave and a half,
+ * which the settings store allows (it only guards an octave) — means nothing
+ * to ask (`coverage.ts`).
+ */
+export function buildableTypes(
   settings: ProgressionSettings,
-  span: number,
-): readonly ProgressionType[] {
-  const playable = settings.types.filter((type) => {
-    const reach = progressionSpan(type);
-    return progressionSteps(type) !== null && reach.high - reach.low <= span;
-  });
-  // A range under an octave and a half is not a piano (the settings store
-  // guards an octave), so this only ever falls back on a hand-built test range.
-  return playable.length > 0 ? playable : [PROGRESSION_TYPES[0]];
+  range: KeyRange,
+): ProgressionType[] {
+  return settings.types.filter(
+    (type) => buildableTonics(type, range).length > 0,
+  );
 }
 
 /** The octaves of `pc` between `from` and `to`, low to high. */
@@ -250,11 +279,9 @@ function pickTonicMidi(
   if (anywhere.length > 0)
     return anywhere[randomInt(rng, 0, anywhere.length - 1)];
 
-  // A range under an octave and a half has no octave of *this* tonic that the
-  // cadence fits inside (the settings store only guards an octave). Something
-  // has to poke out; pick the octave that pokes out least, and deterministically
-  // — a question that cannot be voiced properly should at least be the same one
-  // every time its seed comes round.
+  // Defensive only: `generate()` asks a tonic from `buildableTonics()`, which
+  // always has an octave that fits. Should one ever not, pick the octave that
+  // pokes out least, deterministically, rather than throw mid-drill.
   const overflow = (tonic: Midi): number =>
     Math.max(0, low - (tonic + reach.low)) +
     Math.max(0, tonic + reach.high - high);
@@ -267,22 +294,37 @@ function generate(
   ctx: GenerateContext<ProgressionSettings>,
 ): Question<ProgressionPayload> {
   const { low, high } = ctx.range;
-  const choices = playableTypes(ctx.settings, high - low);
+  const choices = buildableTypes(ctx.settings, ctx.range);
+  if (choices.length === 0)
+    throw new NothingToAskError(PROGRESSION_RECOGNITION_ID);
   const recent = ctx.history.recentSkillIds;
 
-  let type = choices[randomInt(ctx.rng, 0, choices.length - 1)];
-  let tonicPc = PITCH_CLASSES[randomInt(ctx.rng, 0, PITCH_CLASSES.length - 1)];
+  const draw = (): [ProgressionType, PitchClass] => {
+    const type = choices[randomInt(ctx.rng, 0, choices.length - 1)];
+    const tonics = buildableTonics(type, ctx.range);
+    return [type, tonics[randomInt(ctx.rng, 0, tonics.length - 1)]];
+  };
+  // The planner's target, asked exactly when this drill can build it.
+  const target = buildableTarget(
+    ctx.targetSkillId,
+    parseSkillId,
+    (skill) =>
+      choices.includes(skill.type) &&
+      buildableTonics(skill.type, ctx.range).includes(skill.tonicPc),
+  );
+  let [type, tonicPc] = target ? [target.type, target.tonicPc] : draw();
   // Redraw a few times rather than looping until different: the same cadence
   // in the same key twice running is dull, but forcing a change would bias the
-  // draw (and could not terminate at all on a one-key set).
+  // draw (and could not terminate at all on a one-key set). A target is never
+  // redrawn — the planner asked for it.
   for (
     let redraw = 0;
-    redraw < MAX_REDRAWS && recent[0] === skillIdFor(type, tonicPc);
+    target === null &&
+    redraw < MAX_REDRAWS &&
+    recent[0] === skillIdFor(type, tonicPc);
     redraw += 1
-  ) {
-    type = choices[randomInt(ctx.rng, 0, choices.length - 1)];
-    tonicPc = PITCH_CLASSES[randomInt(ctx.rng, 0, PITCH_CLASSES.length - 1)];
-  }
+  )
+    [type, tonicPc] = draw();
 
   const tonicMidi = pickTonicMidi(ctx.rng, low, high, tonicPc, type);
   const payload: ProgressionPayload = { tonicPc, tonicMidi, type };
@@ -442,14 +484,13 @@ export const progressionRecognition: ExerciseDefinition<
     types: STARTER_TYPES,
   },
   requiresMidi: false,
-  skillsCovered: (settings) =>
-    settings.types
-      // A type the theory module cannot build has nothing to ask, so it puts
-      // no unanswerable cell on `/progress`.
-      .filter((type) => progressionSteps(type) !== null)
-      .flatMap((type) =>
-        PITCH_CLASSES.map((tonicPc) => skillIdFor(type, tonicPc)),
-      ),
+  // A type the theory module cannot build, or a key whose cadence does not
+  // fit the keyboard, has nothing to ask, so it puts no unanswerable cell on
+  // `/progress`.
+  skillsCovered: (settings, range) =>
+    buildableTypes(settings, range).flatMap((type) =>
+      buildableTonics(type, range).map((tonicPc) => skillIdFor(type, tonicPc)),
+    ),
   skillLabel: (skillId) => progressionSkillLabel(skillId),
   generate,
   grade,

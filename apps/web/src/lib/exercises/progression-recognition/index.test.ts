@@ -6,6 +6,7 @@ import {
   progressionSpan,
   type ProgressionType,
 } from '$lib/theory';
+import { NothingToAskError } from '../coverage';
 import { mulberry32 } from '../rng';
 import { SEQUENCE_GAP_MS } from '../runner.svelte';
 import type { Answer, GenerateContext, Question } from '../types';
@@ -19,6 +20,9 @@ import {
   type ProgressionPayload,
   type ProgressionSettings,
 } from './index';
+
+/** The settings store’s default instrument range (36–96). */
+const RANGE = { low: 36, high: 96 };
 
 const DEFAULTS = progressionRecognition.defaultSettings as ProgressionSettings;
 
@@ -334,7 +338,7 @@ describe('missDetail', () => {
 
 describe('skills and labels', () => {
   it('is one skill per cadence per key — 24 in all', () => {
-    const skills = progressionRecognition.skillsCovered(DEFAULTS);
+    const skills = progressionRecognition.skillsCovered(DEFAULTS, RANGE);
     expect(skills).toHaveLength(24);
     expect(new Set(skills).size).toBe(24);
     expect(skills).toContain(`${PROGRESSION_RECOGNITION_ID}:major-ii-V-I:0`);
@@ -367,5 +371,28 @@ describe('skills and labels', () => {
 
   it('is playable with no MIDI device, like every other drill', () => {
     expect(progressionRecognition.requiresMidi).toBe(false);
+  });
+});
+
+describe('progression-recognition · what it can build', () => {
+  it('reports nothing and asks nothing on a one-octave keyboard', () => {
+    const range = { low: 60, high: 72 };
+    expect(progressionRecognition.skillsCovered(DEFAULTS, range)).toEqual([]);
+    expect(() => ask(1, range)).toThrow(NothingToAskError);
+  });
+
+  it('covers only the keys a cadence fits in on a tight keyboard', () => {
+    const range = { low: 60, high: 79 };
+    const skills = progressionRecognition.skillsCovered(DEFAULTS, range);
+    expect(skills.length).toBeGreaterThan(0);
+    expect(skills.length).toBeLessThan(24);
+    for (let seed = 1; seed <= 100; seed += 1) {
+      const question = ask(seed, range);
+      expect(skills).toContain(question.skillId);
+      for (const note of question.playback.events.flatMap((e) => e.notes)) {
+        expect(note).toBeGreaterThanOrEqual(range.low);
+        expect(note).toBeLessThanOrEqual(range.high);
+      }
+    }
   });
 });

@@ -9,7 +9,18 @@
  * without a browser (ADR §5).
  */
 
-import { MIDDLE_C, midiToName, pcOf, type Midi } from '$lib/theory';
+import {
+  MIDDLE_C,
+  midiToName,
+  pcOf,
+  type Midi,
+  type PitchClass,
+} from '$lib/theory';
+import {
+  NothingToAskError,
+  buildableTarget,
+  pitchClassesIn,
+} from '../coverage';
 import { randomInt } from '../rng';
 import { pitchClassSegment, skillIdSegments } from '../skill-id';
 import type {
@@ -17,7 +28,9 @@ import type {
   ExerciseDefinition,
   GenerateContext,
   Grade,
+  KeyRange,
   Question,
+  SkillId,
 } from '../types';
 
 export const FIND_THE_NOTE_ID = 'find-the-note';
@@ -56,27 +69,61 @@ export function spell(midi: Midi): string {
  * any octave. An id this exercise does not recognise comes back unchanged.
  */
 export function pitchClassName(skillId: string): string {
-  const segments = skillIdSegments(skillId, FIND_THE_NOTE_ID, 2);
-  if (segments === null || segments[0] !== 'pc') return skillId;
-  const pc = pitchClassSegment(segments[1]);
+  const pc = parseSkillId(skillId);
   if (pc === null) return skillId;
   // Spelled from C4 and stripped of the octave: one spelling per pitch, the
   // same flats the prompt and the keyboard labels use.
   return spell(MIDDLE_C + pc).replace(/-?\d+$/, '');
 }
 
+/**
+ * The pitch class a skill id names, or `null` for anything else — an id read
+ * back is untrusted input.
+ */
+export function parseSkillId(skillId: SkillId): PitchClass | null {
+  const segments = skillIdSegments(skillId, FIND_THE_NOTE_ID, 2);
+  if (segments === null || segments[0] !== 'pc') return null;
+  return pitchClassSegment(segments[1]);
+}
+
+/** The keys of `pc` on `range`, low to high. */
+function occurrences(pc: PitchClass, range: KeyRange): Midi[] {
+  const notes: Midi[] = [];
+  for (
+    let midi = range.low + ((pc - pcOf(range.low) + 12) % 12);
+    midi <= range.high;
+    midi += 12
+  )
+    notes.push(midi);
+  return notes;
+}
+
 function generate(
   ctx: GenerateContext<FindTheNoteSettings>,
 ): Question<FindTheNotePayload> {
   const { low, high } = ctx.range;
+  if (high < low) throw new NothingToAskError(FIND_THE_NOTE_ID);
   const recent = ctx.history.recentSkillIds;
-  let midi = randomInt(ctx.rng, low, high);
+  // The planner's target, asked exactly when the keyboard has that note: one
+  // of its octaves, drawn like any other note.
+  const target = buildableTarget(ctx.targetSkillId, parseSkillId, (pc) =>
+    pitchClassesIn(low, high).includes(pc),
+  );
+  const targetNotes = target === null ? [] : occurrences(target, ctx.range);
+  let midi =
+    target === null
+      ? randomInt(ctx.rng, low, high)
+      : targetNotes[randomInt(ctx.rng, 0, targetNotes.length - 1)];
   // Redraw a few times rather than looping until different: asking the same
   // note twice in a row is dull, but forcing a change would bias the draw on a
-  // narrow range (and could not terminate at all on a one-note one).
+  // narrow range (and could not terminate at all on a one-note one). A target
+  // is never redrawn — the planner asked for it.
   for (
     let redraw = 0;
-    redraw < MAX_REDRAWS && high > low && recent[0] === skillIdFor(midi);
+    target === null &&
+    redraw < MAX_REDRAWS &&
+    high > low &&
+    recent[0] === skillIdFor(midi);
     redraw += 1
   ) {
     midi = randomInt(ctx.rng, low, high);
@@ -156,8 +203,11 @@ export const findTheNote: ExerciseDefinition<
     'A single note sounds somewhere on your piano. Play it back to say where it lives.',
   defaultSettings: {},
   requiresMidi: false,
-  skillsCovered: () =>
-    Array.from({ length: 12 }, (_, pc) => `${FIND_THE_NOTE_ID}:pc:${pc}`),
+  // Every pitch class the keyboard has — all twelve on anything an octave wide.
+  skillsCovered: (_settings, range) =>
+    pitchClassesIn(range.low, range.high).map(
+      (pc) => `${FIND_THE_NOTE_ID}:pc:${pc}`,
+    ),
   skillLabel: (skillId) => pitchClassName(skillId),
   generate,
   grade,

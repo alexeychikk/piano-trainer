@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { chordNotes, intervalsAboveBass, type ChordQuality } from '$lib/theory';
+import { NothingToAskError } from '../coverage';
 import { mulberry32 } from '../rng';
 import type { Answer, GenerateContext, Question } from '../types';
 import {
@@ -12,6 +13,9 @@ import {
   type ChordQualityPayload,
   type ChordQualitySettings,
 } from './index';
+
+/** The settings store’s default instrument range (36–96). */
+const RANGE = { low: 36, high: 96 };
 
 const DEFAULTS = chordQuality.defaultSettings as ChordQualitySettings;
 
@@ -199,7 +203,7 @@ describe('chord-quality grade', () => {
 
 describe('chord-quality skills', () => {
   it('covers one skill per quality in the set', () => {
-    expect(chordQuality.skillsCovered(DEFAULTS)).toEqual(
+    expect(chordQuality.skillsCovered(DEFAULTS, RANGE)).toEqual(
       STARTER_QUALITIES.map((item) => `${CHORD_QUALITY_ID}:${item}`),
     );
   });
@@ -242,5 +246,39 @@ describe('missDetail', () => {
 
   it('reads the structure the same way grading does', () => {
     expect(intervalsAboveBass([60, 64, 67, 71])).toEqual([0, 4, 7, 11]);
+  });
+});
+
+describe('chord-quality · what it can build', () => {
+  it('reports nothing — and asks nothing — when no quality is buildable', () => {
+    // The old `['maj']` fallback drilled a triad nobody had enabled.
+    for (const qualities of [[], ['dom7alt']] as ChordQuality[][]) {
+      const settings: ChordQualitySettings = { qualities };
+      expect(chordQuality.skillsCovered(settings, RANGE)).toEqual([]);
+      expect(() => ask(1, RANGE, [], settings)).toThrow(NothingToAskError);
+    }
+  });
+
+  it('drops an unbuildable quality and keeps the rest', () => {
+    const settings: ChordQualitySettings = {
+      qualities: ['dom7alt', 'min7'] as ChordQuality[],
+    };
+    expect(chordQuality.skillsCovered(settings, RANGE)).toEqual([
+      skillIdFor('min7'),
+    ]);
+    for (let seed = 1; seed <= 50; seed += 1) {
+      expect(ask(seed, RANGE, [], settings).payload.quality).toBe('min7');
+    }
+  });
+
+  it('asks the planner’s target even straight after the same quality', () => {
+    const target = skillIdFor('dim7');
+    for (let seed = 1; seed <= 50; seed += 1) {
+      const question = chordQuality.generate({
+        ...context(seed, RANGE, [target]),
+        targetSkillId: target,
+      });
+      expect(question.skillId).toBe(target);
+    }
   });
 });

@@ -10,6 +10,7 @@ import {
   type ChordQuality,
   type RootlessForm,
 } from '$lib/theory';
+import { NothingToAskError } from '../coverage';
 import { mulberry32 } from '../rng';
 import type { Answer, GenerateContext, Question } from '../types';
 import {
@@ -22,6 +23,9 @@ import {
   type RootlessVoicingPayload,
   type RootlessVoicingSettings,
 } from './index';
+
+/** The settings store’s default instrument range (36–96). */
+const RANGE = { low: 36, high: 96 };
 
 const DEFAULTS = rootlessVoicing.defaultSettings as RootlessVoicingSettings;
 
@@ -350,7 +354,7 @@ describe('rootless-voicing grade', () => {
 
 describe('rootless-voicing skills', () => {
   it('covers one skill per chord and form: 12 keys × 2 forms', () => {
-    const skills = rootlessVoicing.skillsCovered(DEFAULTS);
+    const skills = rootlessVoicing.skillsCovered(DEFAULTS, RANGE);
     expect(skills).toHaveLength(STARTER_QUALITIES.length * 12 * 2);
     expect(new Set(skills).size).toBe(skills.length);
     expect(skills).toContain(skillIdFor('maj7', 0, 'A'));
@@ -359,9 +363,12 @@ describe('rootless-voicing skills', () => {
 
   it('leaves out a quality it cannot voice', () => {
     expect(
-      rootlessVoicing.skillsCovered({
-        qualities: ['min7b5', 'min7'] as ChordQuality[],
-      }),
+      rootlessVoicing.skillsCovered(
+        {
+          qualities: ['min7b5', 'min7'] as ChordQuality[],
+        },
+        RANGE,
+      ),
     ).toHaveLength(24);
   });
 
@@ -456,5 +463,27 @@ describe('missDetail', () => {
   it('has nothing to say about a handful of notes', () => {
     expect(missDetail(0, 'maj7', 'A', [52])).toBeUndefined();
     expect(missDetail(0, 'maj7', 'A', [61, 62, 66])).toBeUndefined();
+  });
+});
+
+describe('rootless-voicing · what it can build', () => {
+  it('covers fewer keys on a tight keyboard, and asks only those', () => {
+    const range = { low: 60, high: 72 };
+    const skills = rootlessVoicing.skillsCovered(DEFAULTS, range);
+    expect(skills.length).toBeGreaterThan(0);
+    expect(skills.length).toBeLessThan(
+      rootlessVoicing.skillsCovered(DEFAULTS, RANGE).length,
+    );
+    for (let seed = 1; seed <= 100; seed += 1) {
+      expect(skills).toContain(ask(seed, range).skillId);
+    }
+  });
+
+  it('reports nothing and asks nothing with no quality that has a rootless form', () => {
+    const settings: RootlessVoicingSettings = {
+      qualities: ['min7b5', 'dim7'] as ChordQuality[],
+    };
+    expect(rootlessVoicing.skillsCovered(settings, RANGE)).toEqual([]);
+    expect(() => ask(1, RANGE, [], settings)).toThrow(NothingToAskError);
   });
 });
