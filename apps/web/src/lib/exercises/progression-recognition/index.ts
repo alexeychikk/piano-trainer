@@ -57,7 +57,6 @@ import {
   chunkIntoChords,
   intervalsAboveBass,
   isProgressionType,
-  midiToName,
   pcOf,
   pitchClassName,
   progressionChordSizes,
@@ -75,16 +74,11 @@ import {
   spellsQualityInAnyInversion,
   PROGRESSION_TYPES,
   type Midi,
-  type NoteName,
   type PitchClass,
   type ProgressionType,
 } from '$lib/theory';
-import {
-  NothingToAskError,
-  buildableTarget,
-  pitchClassesIn,
-} from '../coverage';
-import { randomInt } from '../rng';
+import { NothingToAskError, pitchClassesIn } from '../coverage';
+import { drawKey, occurrences, pickOccurrence, spellings } from '../draw';
 import { pitchClassSegment, skillIdSegments } from '../skill-id';
 import type {
   Answer,
@@ -124,9 +118,6 @@ export type ProgressionSettings = {
  */
 export const STARTER_TYPES: readonly ProgressionType[] = PROGRESSION_TYPES;
 
-/** How hard we try to avoid asking the same cadence in the same key twice. */
-const MAX_REDRAWS = 4;
-
 /** How long each chord rings, and how far apart the chords start. */
 const CHORD_MS = 1150;
 const CHORD_STEP_MS = 1250;
@@ -153,8 +144,7 @@ const ANSWER_GAP_MS = 3000;
  * under one hand. A narrower instrument range wins over this (it is the real
  * one).
  */
-const COMFORT_LOW: Midi = MIDDLE_C - 17;
-const COMFORT_HIGH: Midi = MIDDLE_C - 5;
+const COMFORT = { low: MIDDLE_C - 17, high: MIDDLE_C - 5 };
 
 /**
  * The mastery unit is **the cadence in a key**, like slice 8's chord and for
@@ -195,11 +185,6 @@ export function parseSkillId(
   const tonicPc = pitchClassSegment(tonic);
   if (tonicPc === null || !isProgressionType(type)) return null;
   return { type, tonicPc };
-}
-
-/** Flats, like every other spelling in the app (find-the-note's rule). */
-function spell(midi: Midi): NoteName {
-  return midiToName(midi, 'flat');
 }
 
 /** The notes of a question, chord by chord. */
@@ -244,13 +229,6 @@ export function buildableTypes(
 }
 
 /** The octaves of `pc` between `from` and `to`, low to high. */
-function octavesOf(pc: PitchClass, from: Midi, to: Midi): Midi[] {
-  const notes: Midi[] = [];
-  for (let midi = from + ((pc - pcOf(from) + 12) % 12); midi <= to; midi += 12)
-    notes.push(midi);
-  return notes;
-}
-
 /**
  * Where to voice the tonic: an octave of `tonicPc` that keeps the whole
  * cadence — the V's root below it and the ii's 7th above it — inside the
@@ -269,15 +247,13 @@ function pickTonicMidi(
   const floor = low - reach.low;
   const ceiling = Math.max(floor, high - reach.high);
 
-  const comfortable = octavesOf(
+  const tonic = pickOccurrence(
+    rng,
     tonicPc,
-    Math.max(floor, COMFORT_LOW),
-    Math.min(ceiling, COMFORT_HIGH),
+    { low: floor, high: ceiling },
+    COMFORT,
   );
-  const anywhere =
-    comfortable.length > 0 ? comfortable : octavesOf(tonicPc, floor, ceiling);
-  if (anywhere.length > 0)
-    return anywhere[randomInt(rng, 0, anywhere.length - 1)];
+  if (tonic !== null) return tonic;
 
   // Defensive only: `generate()` asks a tonic from `buildableTonics()`, which
   // always has an octave that fits. Should one ever not, pick the octave that
@@ -285,7 +261,7 @@ function pickTonicMidi(
   const overflow = (tonic: Midi): number =>
     Math.max(0, low - (tonic + reach.low)) +
     Math.max(0, tonic + reach.high - high);
-  return octavesOf(tonicPc, 0, 127).reduce((best, tonic) =>
+  return occurrences(tonicPc, 0, 127).reduce((best, tonic) =>
     overflow(tonic) < overflow(best) ? tonic : best,
   );
 }
@@ -297,34 +273,21 @@ function generate(
   const choices = buildableTypes(ctx.settings, ctx.range);
   if (choices.length === 0)
     throw new NothingToAskError(PROGRESSION_RECOGNITION_ID);
-  const recent = ctx.history.recentSkillIds;
 
-  const draw = (): [ProgressionType, PitchClass] => {
-    const type = choices[randomInt(ctx.rng, 0, choices.length - 1)];
-    const tonics = buildableTonics(type, ctx.range);
-    return [type, tonics[randomInt(ctx.rng, 0, tonics.length - 1)]];
-  };
-  // The planner's target, asked exactly when this drill can build it.
-  const target = buildableTarget(
-    ctx.targetSkillId,
-    parseSkillId,
-    (skill) =>
-      choices.includes(skill.type) &&
-      buildableTonics(skill.type, ctx.range).includes(skill.tonicPc),
-  );
-  let [type, tonicPc] = target ? [target.type, target.tonicPc] : draw();
-  // Redraw a few times rather than looping until different: the same cadence
-  // in the same key twice running is dull, but forcing a change would bias the
-  // draw (and could not terminate at all on a one-key set). A target is never
-  // redrawn — the planner asked for it.
-  for (
-    let redraw = 0;
-    target === null &&
-    redraw < MAX_REDRAWS &&
-    recent[0] === skillIdFor(type, tonicPc);
-    redraw += 1
-  )
-    [type, tonicPc] = draw();
+  // The planner's target, asked exactly when this drill can build it; else a
+  // cadence, then a key it fits in, not the last one asked (`draw.ts`).
+  const { quality: type, rootPc: tonicPc } = drawKey({
+    rng: ctx.rng,
+    targetSkillId: ctx.targetSkillId,
+    recentSkillIds: ctx.history.recentSkillIds,
+    choices,
+    rootsOf: (type) => buildableTonics(type, ctx.range),
+    parseSkillId: (skillId) => {
+      const skill = parseSkillId(skillId);
+      return skill && { quality: skill.type, rootPc: skill.tonicPc };
+    },
+    skillIdFor,
+  });
 
   const tonicMidi = pickTonicMidi(ctx.rng, low, high, tonicPc, type);
   const payload: ProgressionPayload = { tonicPc, tonicMidi, type };
@@ -372,7 +335,7 @@ function generate(
       label: progressionText(tonicPc, type),
     },
     // No `range`: the cadence may be played in any register, so nothing dims.
-    spellings: new Map(notes.map((midi) => [midi, spell(midi)])),
+    spellings: spellings(notes),
   };
 }
 

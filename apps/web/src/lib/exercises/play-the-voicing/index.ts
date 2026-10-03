@@ -48,7 +48,6 @@ import {
   hasShell,
   intervalsAboveBass,
   isChordQuality,
-  midiToName,
   pcOf,
   qualityOfIntervals,
   qualityOfShellIntervals,
@@ -59,15 +58,16 @@ import {
   spellsShellInAnyInversion,
   type ChordQuality,
   type Midi,
-  type NoteName,
   type PitchClass,
 } from '$lib/theory';
+import { NothingToAskError, pitchClassesIn } from '../coverage';
 import {
-  NothingToAskError,
-  buildableTarget,
-  pitchClassesIn,
-} from '../coverage';
-import { randomInt } from '../rng';
+  drawKey,
+  lowestFrom,
+  pickOccurrence,
+  referenceThenReveal,
+  spellings,
+} from '../draw';
 import { pitchClassSegment, skillIdSegments } from '../skill-id';
 import type {
   Answer,
@@ -120,23 +120,12 @@ export const STARTER_QUALITIES: readonly ChordQuality[] = [
   'min7',
 ];
 
-/** How hard we try to avoid asking the same chord twice in a row. */
-const MAX_REDRAWS = 4;
-
-/** How long the reference root rings, in milliseconds. */
-const ROOT_MS = 900;
-/** How long the revealed shell rings. */
-const SHELL_MS = 1600;
-const ROOT_VELOCITY = 80;
-const SHELL_VELOCITY = 84;
-
 /**
  * Where a shell's root is drawn from when the user's range allows it: the two
  * octaves below middle C, which is where a left-hand shell lives. A narrower
  * instrument range wins over this (it is the real one).
  */
-const COMFORT_LOW: Midi = MIDDLE_C - 24;
-const COMFORT_HIGH: Midi = MIDDLE_C - 3;
+const COMFORT = { low: MIDDLE_C - 24, high: MIDDLE_C - 3 };
 
 /**
  * The mastery unit is **the chord, not the colour**: `play-the-voicing:
@@ -177,11 +166,6 @@ export function parseSkillId(
   return hasShell(quality) ? { quality, rootPc } : null;
 }
 
-/** Flats, like every other spelling in the app (find-the-note's rule). */
-function spell(midi: Midi): NoteName {
-  return midiToName(midi, 'flat');
-}
-
 /**
  * The keys a `quality` shell can be asked in on `range`: those with an octave
  * of the root low enough for the 7th to fit too. All twelve on any keyboard
@@ -218,28 +202,12 @@ function pickRoot(
   rootPc: PitchClass,
   quality: ChordQuality,
 ): Midi {
-  const ceiling = Math.max(low, high - shellSpan(quality));
-  const inRange = (from: Midi, to: Midi): Midi[] => {
-    const notes: Midi[] = [];
-    // The first occurrence of the pitch class at or above `from`, then octaves.
-    for (
-      let midi = from + ((rootPc - pcOf(from) + 12) % 12);
-      midi <= to;
-      midi += 12
-    )
-      notes.push(midi);
-    return notes;
-  };
-
-  const comfortable = inRange(
-    Math.max(low, COMFORT_LOW),
-    Math.min(ceiling, COMFORT_HIGH),
-  );
-  const anywhere = comfortable.length > 0 ? comfortable : inRange(low, ceiling);
+  const window = { low, high: Math.max(low, high - shellSpan(quality)) };
   // A range so narrow that no octave of the root fits under the shell is not a
   // piano either; place it as low as it goes and let the top poke out.
-  if (anywhere.length === 0) return low + ((rootPc - pcOf(low) + 12) % 12);
-  return anywhere[randomInt(rng, 0, anywhere.length - 1)];
+  return (
+    pickOccurrence(rng, rootPc, window, COMFORT) ?? lowestFrom(rootPc, low)
+  );
 }
 
 function generate(
@@ -248,33 +216,16 @@ function generate(
   const { low, high } = ctx.range;
   const choices = buildableQualities(ctx.settings, ctx.range);
   if (choices.length === 0) throw new NothingToAskError(PLAY_THE_VOICING_ID);
-  const recent = ctx.history.recentSkillIds;
 
-  const draw = (): [ChordQuality, PitchClass] => {
-    const quality = choices[randomInt(ctx.rng, 0, choices.length - 1)];
-    const roots = buildableRoots(quality, ctx.range);
-    return [quality, roots[randomInt(ctx.rng, 0, roots.length - 1)]];
-  };
-  // The planner's target, asked exactly when this drill can build it.
-  const target = buildableTarget(
-    ctx.targetSkillId,
+  const { quality, rootPc } = drawKey({
+    rng: ctx.rng,
+    targetSkillId: ctx.targetSkillId,
+    recentSkillIds: ctx.history.recentSkillIds,
+    choices,
+    rootsOf: (quality) => buildableRoots(quality, ctx.range),
     parseSkillId,
-    (skill) =>
-      choices.includes(skill.quality) &&
-      buildableRoots(skill.quality, ctx.range).includes(skill.rootPc),
-  );
-  let [quality, rootPc] = target ? [target.quality, target.rootPc] : draw();
-  // Redraw a few times rather than looping until different: the same chord
-  // twice in a row is dull, but forcing a change would bias the draw. A target
-  // is never redrawn — the planner asked for it.
-  for (
-    let redraw = 0;
-    target === null &&
-    redraw < MAX_REDRAWS &&
-    recent[0] === skillIdFor(quality, rootPc);
-    redraw += 1
-  )
-    [quality, rootPc] = draw();
+    skillIdFor,
+  });
 
   const rootMidi = pickRoot(ctx.rng, low, high, rootPc, quality);
   const payload: PlayTheVoicingPayload = { rootPc, rootMidi, quality };
@@ -294,30 +245,8 @@ function generate(
       subtitle: 'Play the shell: root, 3rd and 7th',
       showKeyboard: true,
     },
-    playback: {
-      // The root alone: a pitch reference, so `Replay` is worth pressing and
-      // the key can be found by ear — and never the answer, which is the
-      // voicing you are being asked to build.
-      events: [
-        {
-          atMs: 0,
-          notes: [rootMidi],
-          durationMs: ROOT_MS,
-          velocity: ROOT_VELOCITY,
-        },
-      ],
-    },
-    // What a miss gets to hear: the shell itself (`Question.revealPlayback`).
-    revealPlayback: {
-      events: [
-        {
-          atMs: 0,
-          notes,
-          durationMs: SHELL_MS,
-          velocity: SHELL_VELOCITY,
-        },
-      ],
-    },
+    // The root alone; the shell itself only on the reveal (`draw.ts`).
+    ...referenceThenReveal(rootMidi, notes),
     answerMode: 'note-sequence',
     expected: {
       kind: 'notes',
@@ -325,7 +254,7 @@ function generate(
       label: `${symbol} shell`,
     },
     // No `range`: the shell may be played in any octave, so nothing dims.
-    spellings: new Map(notes.map((midi) => [midi, spell(midi)])),
+    spellings: spellings(notes),
   };
 }
 

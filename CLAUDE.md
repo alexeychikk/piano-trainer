@@ -424,6 +424,26 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
     is not a guide tone) and `dim7` because it has no 3rd-and-7th pair at all.
   - `registry.test.ts`'s `craftedIds()` net now also builds **three-segment** ids, so it reaches
     slice 11's shape as well as this one's — it grows with the longest id any exercise registers.
+- **How a question is drawn (`$lib/exercises/draw.ts`)** — the scaffolding every `generate()` is
+  built from, so a new drill composes it instead of copying a neighbour's:
+  - `spell`/`spellings` (flats, the one spelling for `Question.spellings`), `occurrences`/`lowestFrom`
+    (the octaves of a pitch class), `choose` (one item, uniformly).
+  - `drawAvoidingRepeat(draw, skillIdOf, recent, canVary)`: the `MAX_REDRAWS = 4` loop. A planner
+    target never goes through it.
+  - `drawKeyed`/`drawKey`: a keyed drill's quality → buildable root → `buildableTarget` draw. The
+    progression drill reuses it through a `{ type, tonicPc }` adapter. Rootless voicings keep their
+    own target check, because a form is a third dimension, but draw through `drawKeyed` and
+    `drawAvoidingRepeat`.
+  - `pickInWindow` (a root in a window, comfortable part first) and `pickOccurrence` (the same for a
+    pitch class whose key is decided; `null` when it does not fit, so the caller places the overflow).
+  - `referenceThenReveal(root, answer)`: a *read* drill's playback. The root sounds 900 ms at
+    velocity 80, and the reveal is the answer for 1600 ms at velocity 84.
+  - **RNG consumption is the contract.** Each helper draws exactly as the inline code it replaced did,
+    and `randomInt` over a span of 0 or 1 consumes nothing. `seed-snapshot.test.ts` records 50
+    question ids plus a digest of the full questions, per exercise, on four ranges, at fixed seeds.
+    Any change in which question a logged seed draws fails it. **Never re-record it to make a
+    refactor pass.** Only a deliberate change to an exercise's questions may re-record it, and it is
+    called out in that PR. Snapshots need `CI` unset to be *written*.
 - **What an exercise can ask (`$lib/exercises/coverage.ts`)** — `skillsCovered(settings, range)`
   returns **only skills `generate()` can build** under those settings on that range (theory can
   build it *and* it fits the keyboard), and `generate()` draws from the same set, so `/progress`,

@@ -44,17 +44,15 @@ import {
   chordQualityShortName,
   intervalsAboveBass,
   isChordQuality,
-  midiToName,
   qualityOfIntervals,
   spellsQuality,
   spellsQualityInAnyInversion,
   spokenChordQuality,
   type ChordQuality,
   type Midi,
-  type NoteName,
 } from '$lib/theory';
 import { NothingToAskError, buildableTarget } from '../coverage';
-import { randomInt } from '../rng';
+import { choose, drawAvoidingRepeat, pickInWindow, spellings } from '../draw';
 import { skillIdSegments } from '../skill-id';
 import type {
   Answer,
@@ -100,9 +98,6 @@ export const STARTER_QUALITIES: readonly ChordQuality[] = [
   'dim7',
 ];
 
-/** How hard we try to avoid asking the same quality twice in a row. */
-const MAX_REDRAWS = 4;
-
 /** How long the chord rings, in milliseconds. */
 const CHORD_MS = 1600;
 const CHORD_VELOCITY = 88;
@@ -113,8 +108,7 @@ const CHORD_VELOCITY = 88;
  * hand and is easiest to hear. A narrower instrument range wins over this (it
  * is the real one).
  */
-const COMFORT_LOW: Midi = MIDDLE_C - 12;
-const COMFORT_HIGH: Midi = MIDDLE_C + 4;
+const COMFORT = { low: MIDDLE_C - 12, high: MIDDLE_C + 4 };
 
 /** The mastery unit is the quality itself (ADR §10): one skill per colour. */
 export function skillIdFor(quality: ChordQuality): SkillId {
@@ -144,11 +138,6 @@ export function parseSkillId(skillId: SkillId): ChordQuality | null {
   // grid cell to name; one it does not know at all never was a skill.
   if (!isChordQuality(quality) || chordIntervals(quality) === null) return null;
   return quality;
-}
-
-/** Flats, like every other spelling in the app (find-the-note's rule). */
-function spell(midi: Midi): NoteName {
-  return midiToName(midi, 'flat');
 }
 
 /** The notes of a question, low to high. */
@@ -185,14 +174,10 @@ function pickRoot(
   quality: ChordQuality,
 ): Midi {
   // The whole chord has to fit: the root may go no higher than the top of the
-  // instrument minus the chord's span.
-  const ceiling = Math.max(low, high - spanOf(quality));
-  // Prefer the comfortable middle, but never leave the real range to get it.
-  const comfortLow = Math.max(low, COMFORT_LOW);
-  const comfortHigh = Math.min(ceiling, COMFORT_HIGH);
-  return comfortHigh >= comfortLow
-    ? randomInt(rng, comfortLow, comfortHigh)
-    : randomInt(rng, low, ceiling);
+  // instrument minus the chord's span. Prefer the comfortable middle, but
+  // never leave the real range to get it.
+  const window = { low, high: Math.max(low, high - spanOf(quality)) };
+  return pickInWindow(rng, window, COMFORT);
 }
 
 function generate(
@@ -207,21 +192,14 @@ function generate(
   const target = buildableTarget(ctx.targetSkillId, parseSkillId, (quality) =>
     choices.includes(quality),
   );
-  let quality = target ?? choices[randomInt(ctx.rng, 0, choices.length - 1)];
-  // Redraw a few times rather than looping until different: asking the same
-  // quality twice in a row is dull, but forcing a change would bias the draw
-  // (and could not terminate at all on a one-quality set). A target is never
-  // redrawn — the planner asked for it.
-  for (
-    let redraw = 0;
-    target === null &&
-    redraw < MAX_REDRAWS &&
-    choices.length > 1 &&
-    recent[0] === skillIdFor(quality);
-    redraw += 1
-  ) {
-    quality = choices[randomInt(ctx.rng, 0, choices.length - 1)];
-  }
+  const quality =
+    target ??
+    drawAvoidingRepeat(
+      () => choose(ctx.rng, choices),
+      skillIdFor,
+      recent,
+      choices.length > 1,
+    );
 
   const rootMidi = pickRoot(ctx.rng, low, high, quality);
   const payload: ChordQualityPayload = { rootMidi, quality };
@@ -258,7 +236,7 @@ function generate(
       label: chordQualityName(quality),
     },
     // No `range`: the answer may be played from any key, so nothing dims.
-    spellings: new Map(notes.map((midi) => [midi, spell(midi)])),
+    spellings: spellings(notes),
   };
 }
 
