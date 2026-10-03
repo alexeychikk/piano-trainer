@@ -1,6 +1,6 @@
 # ADR 0004 — MIDI chord answers close on key release
 
-- **Status**: Accepted (product decision on ticket `34bbf58c`, 2026-10-03). **Partly implemented**: part a (runner + the four single-chord drills) landed; part b (the ii-V-I) is pending.
+- **Status**: Accepted (product decision on ticket `34bbf58c`, 2026-10-03). **Implemented**: part a (runner + the four single-chord drills) and part b (the ii-V-I, ticket `a3366776`) have landed.
 - **Date**: 2026-10-03
 - **Context**: refinement backlog item 1. Amends ADR 0001 §3 (revives `chord-released` and
   `CHORD_SETTLE_MS`, with the rules below rather than §3's one-line sketch) and ADR 0001 §5 (one

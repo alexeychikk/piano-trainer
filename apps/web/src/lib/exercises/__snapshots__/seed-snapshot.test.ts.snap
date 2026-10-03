@@ -1172,7 +1172,7 @@ exports[`seeded questions are reproducible > progression-recognition on 36–96 
   "progression-recognition:4194675987:46:major-ii-V-I progression-recognition:major-ii-V-I:10",
   "progression-recognition:522634105:52:minor-ii-V-i progression-recognition:minor-ii-V-i:4",
   "progression-recognition:613992015:43:major-ii-V-I progression-recognition:major-ii-V-I:7",
-  "digest 1e8d6a902d469f",
+  "digest 16bfb5a9df73c7",
 ]
 `;
 
@@ -1228,7 +1228,7 @@ exports[`seeded questions are reproducible > progression-recognition on 48–72 
   "progression-recognition:4194675987:58:major-ii-V-I progression-recognition:major-ii-V-I:10",
   "progression-recognition:522634105:55:minor-ii-V-i progression-recognition:minor-ii-V-i:7",
   "progression-recognition:613992015:59:major-ii-V-I progression-recognition:major-ii-V-I:11",
-  "digest 88f8c4ecdb256",
+  "digest 1be629c2d65b93",
 ]
 `;
 
@@ -1340,7 +1340,7 @@ exports[`seeded questions are reproducible > progression-recognition on 60–79 
   "progression-recognition:4194675987:67:major-ii-V-I progression-recognition:major-ii-V-I:7",
   "progression-recognition:522634105:66:minor-ii-V-i progression-recognition:minor-ii-V-i:6",
   "progression-recognition:613992015:66:major-ii-V-I progression-recognition:major-ii-V-I:6",
-  "digest 73d747cea2528",
+  "digest c5bd0c6944903",
 ]
 `;
 

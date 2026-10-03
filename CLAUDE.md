@@ -224,8 +224,7 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
   `notes` (their union), so single-chord `grade()`s read `notes` unchanged. The frame shows one slot
   per chord (named by its lowest note), keeps captured notes lit, hides `⌫` while capturing and adds
   `release to answer` (`RELEASE_TO_ANSWER_HINT`) to the bar when a MIDI device is connected. Part (b)
-  — the ii-V-I on `chord-released` — is a separate ticket; until it lands slice 10 below describes the
-  code.
+  has landed too: the ii-V-I is on `chord-released` with `answerChords: 3` (slice 10 below).
 - **Interval recognition + `note-sequence` (slice 6)** — `$lib/exercises/interval-recognition/`, the
   second exercise and the first ear-training drill:
   - **The graded quantity is the interval, not the pitches**: a question is asked from a random root,
@@ -273,8 +272,8 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
     and as a `note-sequence` from every other source (ADR 0004 §1): a mouse on the on-screen
     keyboard cannot hold a chord at all (one pointer, one key), and every drill must stay playable
     with no MIDI device. Grading is **order-insensitive** either way, so notes struck together
-    arriving in note-on order (QA's slice-6 observation) cannot reach it. Slices 8, 11 and 12 use
-    the same mode.
+    arriving in note-on order (QA's slice-6 observation) cannot reach it. Slices 8, 10, 11 and 12
+    use the same mode.
   - Chord **vocabulary lives in `$lib/theory/chords.ts`**, never in the exercise — the
     `intervals.ts` rule: `chordIntervals`/`chordNotes` (build), `intervalsAboveBass`/
     `qualityOfIntervals`/`spellsQuality`/`spellsQualityInAnyInversion` (read) and the three names
@@ -336,16 +335,24 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
     `a major ii-V-I` — which lower-cases **only the first word**, because the numerals' case *is*
     the cadence).
   - **The graded quantity is the progression in a key** (slice 8's rule, one level up):
-    `spellsProgression()` requires each chord to spell its degree's quality over **its own root**
-    (`spellsQualityFromRoot`, new in `chords.ts` — `spellsQuality` with the key pinned). Free:
-    register, octave, spacing and note order *inside* a chord, and enharmonics. Rejected: another
-    key, another quality, the chords in another order, an inverted chord, a shell, a doubling (it
-    always costs a chord tone — the answer is twelve notes and a chord is four, slice 8's rule), and
-    any answer that is not exactly twelve notes. Binary scoring (ADR §10).
-  - **Chords are separated by count, not by time** — each chord is four notes, so the answer is
-    chunked 4–4–4 in played order. Nothing downstream *can* use timing: an `Answer` carries notes,
-    order and a source and no timestamps. Slice 7's `CHORD_SETTLE_MS` note therefore stays
-    unimplemented (and unneeded here); slice 2's `detectChords()` deviation is untouched.
+    `spellsProgressionChords(chords, tonicPc, type)` requires exactly one chord per degree, in
+    order, each spelling its degree's quality over **its own root** (`spellsQualityFromRoot`, new in
+    `chords.ts` — `spellsQuality` with the key pinned). Free: register, octave, spacing and note
+    order *inside* a chord, enharmonics, and **doublings** (grading is pitch-class set plus lowest
+    note — a chord's size is never counted). Rejected: another key, another quality, the chords in
+    another order, an inverted chord, a shell, an extra pitch class, the wrong number of chords.
+    Binary scoring (ADR §10). `spellsProgression(notes, …)` is the sequence path's wrapper:
+    exactly twelve notes, `chunkIntoChords`, then `spellsProgressionChords` — so on the
+    `note-sequence` path (mouse, computer keys) a doubled note still uses up one of the answer's
+    twelve notes, because that path closes at the expected length (ADR 0004 §3).
+  - **How chords are separated depends on the path** (ADR 0004 §1, part b). The answer mode is
+    `chord-released` with `answerChords: 3`. **From MIDI, by hand shape**: chord capture starts a new
+    chord at a settled moment after any key went up, so voice-leading that **holds common tones**
+    (Dm7 → G7 with F held) is three chords, and `grade()` reads `Answer.chords` directly. Chords run
+    together (keys only added) are one; a wrong count is the named miss `Heard 2 chords — a ii-V-I
+    is three`, asked first in `missDetail` (which takes the chunks plus `{ captured }`). **From the
+    mouse and the computer keys, by count** — four notes a chord, chunked 4–4–4 in played order,
+    byte-identical to slice 10; a sequence answer has no timestamps to separate by.
   - **Whole four-note chords, not shells**: the minor ii is a `m7b5`, whose shell *is* `m7`'s, so a
     shelled minor cadence could not be told from the major one.
   - `SkillId` is `progression-recognition:<type>:<tonicPc>` (the exercise-id prefix rule, not the
