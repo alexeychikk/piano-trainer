@@ -7,6 +7,10 @@
    * two opposite 45° cuts, a 1 px luminous edge, a static outer glow and an
    * optional 32 px micro-label header band.
    *
+   * A panel repeated once per exercise passes `glow="hot-only"`: it keeps the
+   * whole anatomy but the filter, and glows only while hot
+   * (refinement-pass.md §1).
+   *
    * With `href` it becomes a card link (home's exercise cards, §8) and takes
    * the meaningful edge on hover/focus. Everything else — padding, chamfer
    * size, well vs panel — is a prop, so no screen re-implements the recipe.
@@ -31,8 +35,18 @@
     hot?: boolean;
     /** A well (elevation −1): sunken, hairline edge, no glow. */
     well?: boolean;
+    /**
+     * `rest` (default): the static glow is always on. `hot-only`: for a panel
+     * that is one of N siblings (home's exercise cards, `/progress`'s groups)
+     * — no glow at rest, the hot glow on hover / focus-visible for a link and
+     * on focus-within otherwise, so the ≤ 12 glow budget no longer grows with
+     * the registry (refinement-pass.md §1). The `hot` prop still wins.
+     */
+    glow?: 'rest' | 'hot-only';
     href?: string;
     padding?: 'none' | 'md' | 'lg';
+    /** `data-testid` on the glow element, so e2e asserts on the real panel. */
+    testId?: string;
     children: Snippet;
   }
 
@@ -44,20 +58,32 @@
     chamfer = 'lg',
     hot = false,
     well = false,
+    glow: glowMode = 'rest',
     href,
     padding = 'lg',
+    testId,
     children,
   }: Props = $props();
 
   const cut = $derived(chamfer === 'lg' ? 'hud-cut hud-cut-lg' : 'hud-cut');
-  const glow = $derived(well ? '' : hot ? 'hud-glow hud-glow-hot' : 'hud-glow');
+  const glow = $derived(
+    well
+      ? ''
+      : hot
+        ? 'hud-glow hud-glow-hot'
+        : glowMode === 'hot-only'
+          ? 'hud-glow-hot-only'
+          : 'hud-glow',
+  );
 </script>
 
 <svelte:element
   this={href ? 'a' : 'div'}
   {href}
+  data-testid={testId}
   class="panel {glow}"
   class:link={href !== undefined}
+  class:hot-only={!well && !hot && glowMode === 'hot-only'}
   class:hot
   class:well
 >
@@ -85,7 +111,8 @@
     display: block;
     color: inherit;
     text-decoration: none;
-    transition: filter var(--dur-base) var(--ease);
+    /* No `transition: filter` — animating a filter is a §7 violation, so a
+       glow switches on and off discretely (refinement-pass.md §1). */
   }
 
   /* The edge is a flex container so the face can be inset by a margin and
@@ -98,6 +125,12 @@
   }
 
   .hot .edge {
+    background: var(--panel-border-hot);
+  }
+
+  /* A non-link repeated panel is hot while focus is inside it: the edge says
+     so as well as the glow (refinement-pass.md §1). */
+  .hot-only:not(.link):focus-within .edge {
     background: var(--panel-border-hot);
   }
 

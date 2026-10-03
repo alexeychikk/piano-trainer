@@ -205,10 +205,15 @@
   <ul class="cards">
     {#each EXERCISES as exercise (exercise.id)}
       <li>
+        <!-- One card per exercise: no glow at rest, the hot glow on hover /
+             focus, so home costs ≤ 4 glows at any registry size
+             (refinement-pass.md §1). -->
         <HudPanel
           href={`${base}/practice/${exercise.id}/`}
           chamfer="md"
           padding="md"
+          glow="hot-only"
+          testId="exercise-card"
         >
           <span class="card">
             <span class="title">{exercise.title}</span>

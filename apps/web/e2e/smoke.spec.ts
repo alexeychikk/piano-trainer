@@ -693,6 +693,88 @@ test('an answered question survives a reload and shows on /progress', async ({
   expect(consoleErrors).toEqual([]);
 });
 
+/** Every element under `root` that paints a `filter` (a glow layer). */
+async function glowLayers(page: Page, root = 'html'): Promise<number> {
+  return page.evaluate(
+    (selector) =>
+      [...document.querySelectorAll(`${selector}, ${selector} *`)].filter(
+        (element) => getComputedStyle(element).filter !== 'none',
+      ).length,
+    root,
+  );
+}
+
+async function filterOf(locator: ReturnType<Page['locator']>): Promise<string> {
+  return locator.evaluate((element) => getComputedStyle(element).filter);
+}
+
+test('repeated panels glow only when hot (refinement R1)', async ({ page }) => {
+  const consoleErrors = watchConsole(page);
+
+  // A history first: it puts the Today card on home and a group on
+  // `/progress`, i.e. each screen at the most glows it can carry.
+  await page.goto('/practice/find-the-note/');
+  const prompt = page.getByTestId('prompt');
+  await expect(prompt).toHaveText('Ready?');
+  await page.keyboard.press('Space');
+  await expect(page.getByTestId('replay')).toBeEnabled();
+  await page.keyboard.press('a');
+  await expect(page.getByTestId('answered')).toContainText('/1');
+
+  // `/progress`: a group is not a link, so it is hot only while focus is
+  // inside it (refinement-pass.md §1) — never on hover.
+  await page.getByRole('link', { name: /^progress$/i }).click();
+  const group = page.getByTestId('progress-group').first();
+  await expect(group).toBeVisible();
+  expect(await filterOf(group)).toBe('none');
+  await group.hover();
+  expect(await filterOf(group)).toBe('none');
+  await group.getByRole('link').first().focus();
+  expect(await filterOf(group)).not.toBe('none');
+
+  // Home: the cards wear no glow at rest, so the screen's glows no longer
+  // grow with the registry. The page itself carries hero + Today and nothing
+  // else; the shell adds a constant three (wordmark + the two status chips —
+  // refinement-pass.md §1's "≤ 4" tally counts the wordmark but not the
+  // chips). At rest that is 5 of part 1 §7's 12, at any exercise count.
+  await page.goto('/');
+  await appIsListening(page);
+  await expect(page.getByRole('heading', { name: /^today$/i })).toBeVisible();
+  const cards = page.getByTestId('exercise-card');
+  expect(await cards.count()).toBeGreaterThan(4);
+  await page.mouse.move(0, 0);
+  expect(await glowLayers(page, '.cards')).toBe(0);
+  expect(await glowLayers(page, 'main')).toBeLessThanOrEqual(2);
+  expect(await glowLayers(page)).toBeLessThanOrEqual(5);
+  expect(await filterOf(cards.nth(0))).toBe('none');
+  expect(await filterOf(cards.nth(1))).toBe('none');
+
+  // The glow is now a card's focus feedback, so the keyboard path is part of
+  // the test: `Tab` makes the next focus keyboard focus (`:focus-visible`).
+  await page.keyboard.press('Tab');
+  await cards.nth(0).focus();
+  await expect(cards.nth(0)).toBeFocused();
+  expect(await filterOf(cards.nth(0))).not.toBe('none');
+  expect(await filterOf(cards.nth(1))).toBe('none');
+  // …and the focus ring is still there: the edge layer turns `--focus`.
+  const edge = cards.nth(0).locator('.edge');
+  const restEdge = await cards
+    .nth(1)
+    .locator('.edge')
+    .evaluate((element) => getComputedStyle(element).backgroundColor);
+  await expect
+    .poll(() =>
+      edge.evaluate((element) => getComputedStyle(element).backgroundColor),
+    )
+    .not.toBe(restEdge);
+
+  // Hover lights a card too.
+  await cards.nth(1).hover();
+  expect(await filterOf(cards.nth(1))).not.toBe('none');
+
+  expect(consoleErrors).toEqual([]);
+});
+
 test('the mixed session runs from the hero to the summary (slice 9b)', async ({
   page,
 }) => {

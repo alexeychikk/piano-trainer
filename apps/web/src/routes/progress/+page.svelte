@@ -189,10 +189,14 @@
 
   {#each practised as group (group.id)}
     <section class="group" aria-labelledby={`group-${group.id}`}>
+      <!-- One group per practised exercise: glows only while focus is inside
+           it (refinement-pass.md §1). -->
       <HudPanel
         header={group.title}
         headerAs="h2"
         headerId={`group-${group.id}`}
+        glow="hot-only"
+        testId="progress-group"
       >
         {#snippet headerTrailing()}
           <span class="band">

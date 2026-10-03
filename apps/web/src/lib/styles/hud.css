@@ -71,6 +71,20 @@
   --hud-glow-color: var(--hud-glow-cyan);
 }
 
+/*
+ * A repeated panel — one of N siblings, one per exercise (home's cards,
+ * `/progress`'s groups) — wears **no glow at rest** and the hot glow only
+ * while it is hot (refinement-pass.md §1, the rule added to part 1 §7), so the
+ * ≤ 12 budget stops scaling with the registry. A link is hot on hover or
+ * keyboard focus; a panel that is not a link has nothing to hover, so it is
+ * hot while focus is inside it. The swap is discrete: `filter` is never
+ * animated (§7).
+ */
+a.hud-glow-hot-only:is(:hover, :focus-visible),
+.hud-glow-hot-only:not(a):focus-within {
+  filter: drop-shadow(0 0 10px var(--hud-glow-cyan));
+}
+
 .hud-glow-accent {
   --hud-glow-color: var(--hud-glow-accent);
 }
