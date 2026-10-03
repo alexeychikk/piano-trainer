@@ -98,6 +98,16 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
   never `Math.random()`.
 - Audio is scheduled on `AudioContext.currentTime` through the shared lookahead scheduler, never with
   `setTimeout`. The `AudioContext` starts on a user gesture.
+- **iPad / iOS ([ADR 0005](docs/decisions/0005-midi-on-ipados-capacitor-shell.md), not yet built)**:
+  WebKit has no Web MIDI, so iPadOS gets a **Capacitor shell in `apps/ios`** that ships the ordinary
+  `pnpm build` output and reaches CoreMIDI through a local Swift plugin exposed as a
+  **`navigator.requestMIDIAccess` shim** (a document-start `WKUserScript`). Rules: **`apps/web` never
+  imports `@capacitor/*` and never asks whether it is in the app** — it sees Web MIDI or no Web MIDI,
+  like any browser; `$lib/midi` is Web-MIDI-only and the shim copies **Chrome's** semantics (live
+  `inputs` map, removed ports stay as `disconnected`, `permissions.query({name:'midi'})` →
+  `granted`); native code stays small and logic goes in the TS shim, because agents compile Swift
+  only on macOS CI and only the owner can test on a device. The app is a separate origin
+  (`capacitor://localhost`, never changed after the first build) — the backup JSON is the only bridge.
 - **Audio (slice 3)**: one engine — `$lib/audio/engine.svelte.ts`, singleton `audio` — owns the
   `AudioContext`, the master gain, instrument loading and the instrument cache, and is the only thing
   that makes a sound. It is created in `ensureStarted()` only, wired once in `+layout.svelte`
