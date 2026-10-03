@@ -1,6 +1,7 @@
 import 'fake-indexeddb/auto';
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { tick } from 'svelte';
 import { render } from '@testing-library/svelte';
 import DataSection from './DataSection.svelte';
 import { practice } from '$lib/practice/store.svelte';
@@ -55,8 +56,12 @@ function fileText(attempts: unknown[]): string {
  * Drive the hidden `<input type="file">` the way the browser does. jsdom has no
  * file picker, so the `FileList` is stubbed and `text()` is the only method the
  * component calls — the parser is pure, so nothing else is needed.
+ *
+ * It only *starts* the import: the handler runs on behind `file.text()`, the
+ * parse, the write queue, the open and the `reload()`. The caller waits for
+ * the outcome the component itself announces — see the signals below.
  */
-async function pick(container: HTMLElement, text: string): Promise<void> {
+function pick(container: HTMLElement, text: string): void {
   const input = container.querySelector(
     '[data-testid="import-file"]',
   ) as HTMLInputElement;
@@ -65,26 +70,36 @@ async function pick(container: HTMLElement, text: string): Promise<void> {
     configurable: true,
   });
   input.dispatchEvent(new Event('change', { bubbles: true }));
-  await settle();
 }
 
-/**
- * Let the picker's `await`s, the write queue, the open and the `reload()`
- * behind a replace all run out — several rounds, because each IndexedDB
- * transaction needs a macrotask turn of its own.
+/*
+ * The signals. Each is the **last** thing the component does on that path, so
+ * once it is visible everything before it has run — never a count of ticks or
+ * macrotask rounds, which is a guess that a loaded runner outgrows (the
+ * `settle()` drain this file used to have failed exactly that way, as
+ * `store.svelte.test.ts`'s did on `5836f1a`):
  *
- * The one drain left in the suite, and deliberately: `practice.flush()` — the
- * signal `store.svelte.test.ts` waits on — only covers the write queue, and at
- * the moment this is called nothing is queued yet (the component is still
- * awaiting `file.text()` and the parse). There is no signal here for "the
- * handler and the re-render behind it are done"; a component-level one would
- * have to come from the component.
+ * - an import or a confirmed reset ends in `report()` — the inline `✓`/`✗`
+ *   result line, which is written only after `replaceAll()` has resolved (and
+ *   so after its transaction and `reload()`) and after `applySettings()`;
+ * - a question being asked ends in `ask()` focusing the field;
+ * - a cancel ends in `restoreFocus()` focusing the control that opened it.
+ *
+ * Writes queued *outside* the component (`practice.record`) are waited for with
+ * `practice.flush()`, the store's own signal.
  */
-async function settle(): Promise<void> {
-  for (let round = 0; round < 6; round += 1) {
-    for (let i = 0; i < 20; i += 1) await Promise.resolve();
-    await new Promise((resolve) => setTimeout(resolve, 0));
-  }
+async function reported(container: HTMLElement): Promise<void> {
+  await vi.waitFor(() =>
+    expect(container.querySelector('[role="status"]')).not.toBeNull(),
+  );
+}
+
+async function focused(container: HTMLElement, testId: string): Promise<void> {
+  await vi.waitFor(() =>
+    expect(document.activeElement).toBe(
+      container.querySelector(`[data-testid="${testId}"]`),
+    ),
+  );
 }
 
 describe('Settings → Data, the reset control', () => {
@@ -109,7 +124,7 @@ describe('Settings → Data, the reset control', () => {
     expect(container.querySelector('[data-testid="reset-word"]')).toBeNull();
 
     press(container.querySelector('[data-testid="reset-data"]'));
-    await Promise.resolve();
+    await tick();
 
     const field = container.querySelector('[data-testid="reset-word"]');
     expect(field).not.toBeNull();
@@ -121,13 +136,13 @@ describe('Settings → Data, the reset control', () => {
     expect(confirmButton).toHaveProperty('disabled', true);
 
     type(field, 'rese');
-    await Promise.resolve();
+    await tick();
     expect(
       container.querySelector('[data-testid="reset-confirm"]'),
     ).toHaveProperty('disabled', true);
 
     type(field, 'reset');
-    await Promise.resolve();
+    await tick();
     expect(
       container.querySelector('[data-testid="reset-confirm"]'),
     ).toHaveProperty('disabled', false);
@@ -135,28 +150,26 @@ describe('Settings → Data, the reset control', () => {
 
   it('cancelling closes the question and leaves the log alone', async () => {
     practice.record(attempt);
+    await practice.flush();
     const before = [...practice.attempts];
 
     const { container } = render(DataSection);
     press(container.querySelector('[data-testid="reset-data"]'));
-    await Promise.resolve();
+    await tick();
     type(container.querySelector('[data-testid="reset-word"]'), 'RESET');
-    await Promise.resolve();
+    await tick();
 
     press(container.querySelector('[data-testid="reset-cancel"]'));
-    await settle();
+    // The field has left the DOM, so focus goes back to the control that
+    // opened the question rather than falling to `<body>` (UX §8).
+    await focused(container, 'reset-data');
 
     expect(container.querySelector('[data-testid="reset-word"]')).toBeNull();
     expect(practice.attempts).toEqual(before);
-    // The field has left the DOM, so focus goes back to the control that
-    // opened the question rather than falling to `<body>` (UX §8).
-    expect(document.activeElement).toBe(
-      container.querySelector('[data-testid="reset-data"]'),
-    );
     // Re-asking starts from an empty field, so a typed `RESET` cannot survive
     // a cancel and arm the next question.
     press(container.querySelector('[data-testid="reset-data"]'));
-    await Promise.resolve();
+    await tick();
     expect(
       container.querySelector('[data-testid="reset-confirm"]'),
     ).toHaveProperty('disabled', true);
@@ -189,11 +202,12 @@ describe('Settings → Data, a file that would empty the log', () => {
 
   it('asks before applying an empty file, and writes nothing until the word is typed', async () => {
     practice.record(attempt);
-    await settle();
+    await practice.flush();
     const replaceAll = vi.spyOn(practice, 'replaceAll');
 
     const { container } = render(DataSection);
-    await pick(container, fileText([]));
+    pick(container, fileText([]));
+    await focused(container, 'reset-word');
 
     // The same inline question, with its own sentence naming the emptiness —
     // and the field is described by it, so focusing the field reads the reason.
@@ -212,9 +226,9 @@ describe('Settings → Data, a file that would empty the log', () => {
     expect(practice.attempts).toHaveLength(1);
 
     type(field, 'RESET');
-    await Promise.resolve();
+    await tick();
     press(container.querySelector('[data-testid="reset-confirm"]'));
-    await settle();
+    await reported(container);
 
     expect(replaceAll).toHaveBeenCalledWith({ attempts: [], skills: [] });
     expect(practice.attempts).toHaveLength(0);
@@ -222,28 +236,26 @@ describe('Settings → Data, a file that would empty the log', () => {
 
   it('cancelling discards the pending file and leaves the log byte-identical', async () => {
     practice.record(attempt);
-    await settle();
+    await practice.flush();
     const before = JSON.stringify(practice.attempts);
     const replaceAll = vi.spyOn(practice, 'replaceAll');
 
     const { container } = render(DataSection);
-    await pick(container, fileText([]));
+    pick(container, fileText([]));
+    await focused(container, 'reset-word');
     press(container.querySelector('[data-testid="reset-cancel"]'));
-    await settle();
+    // Focus goes back to the control that opened the question — `Import JSON…`
+    // here, not the danger button the user never invoked.
+    await focused(container, 'import-json');
 
     expect(container.querySelector('[data-testid="reset-word"]')).toBeNull();
     expect(replaceAll).not.toHaveBeenCalled();
     expect(JSON.stringify(practice.attempts)).toBe(before);
-    // Focus goes back to the control that opened the question — `Import JSON…`
-    // here, not the danger button the user never invoked.
-    expect(document.activeElement).toBe(
-      container.querySelector('[data-testid="import-json"]'),
-    );
 
     // The file is gone, not parked: pressing the reset button afterwards asks
     // about the reset, and confirming it cannot apply the discarded file.
     press(container.querySelector('[data-testid="reset-data"]'));
-    await Promise.resolve();
+    await tick();
     expect(
       container
         .querySelector('[data-testid="reset-word"]')
@@ -261,7 +273,7 @@ describe('Settings → Data, a file that would empty the log', () => {
     settings.patch({ sessionLengthMin: 5, countIn: 'off' });
 
     const { container } = render(DataSection);
-    await pick(
+    pick(
       container,
       JSON.stringify({
         schemaVersion: PRACTICE_SCHEMA_VERSION,
@@ -271,6 +283,7 @@ describe('Settings → Data, a file that would empty the log', () => {
         attempts: [{ ...attempt, ts: 1 }],
       }),
     );
+    await reported(container);
 
     expect(settings.value.sessionLengthMin).toBe(20);
     expect(settings.value.countIn).toBe('1-bar');
@@ -278,14 +291,15 @@ describe('Settings → Data, a file that would empty the log', () => {
 
   it('a file that carries something still imports without a question', async () => {
     practice.record(attempt);
-    await settle();
+    await practice.flush();
     const replaceAll = vi.spyOn(practice, 'replaceAll');
 
     const { container } = render(DataSection);
-    await pick(
+    pick(
       container,
       fileText([{ ...attempt, questionId: 'find-the-note:9:64', ts: 1 }]),
     );
+    await reported(container);
 
     expect(container.querySelector('[data-testid="reset-word"]')).toBeNull();
     expect(replaceAll).toHaveBeenCalledTimes(1);
