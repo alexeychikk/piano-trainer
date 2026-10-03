@@ -34,12 +34,11 @@ Anything below is the short version; the ADR wins on detail.
 | --- | --- |
 | `apps/web/` | The SvelteKit app (the rewrite). All new work goes here. |
 | `apps/web/src/lib/{theory,audio,midi,exercises,practice,storage,components}` | Domain modules — see the layering rule below. |
-| `legacy/electron-app/` | The frozen 2022 React/Electron app. Reference only; excluded from CI. Do not modify; it is deleted in its own ticket once the web app reaches parity. |
 | `docs/decisions/` | ADRs. |
 | `docs/design/` | UX specs. |
 
 Slice 1 has landed: the workspace root holds `package.json` (all scripts), `pnpm-workspace.yaml`
-(`apps/*` only — the legacy app is not a workspace member), `eslint.config.js`, `.prettierrc`,
+(`apps/*` only), `eslint.config.js`, `.prettierrc`,
 `.nvmrc` (Node 22), commitlint + husky hooks, and the CI/Pages workflows, now active in
 `.github/workflows/` (`ci.yml` on every pull request **and every push to `master`**, `deploy.yml`
 publishing `master` to Pages). The required status check is the job name
@@ -78,8 +77,7 @@ pnpm test         # vitest run (alias: pnpm test:unit)
 pnpm test:e2e     # playwright — needs `pnpm --filter web exec playwright install chromium` once
 ```
 
-Everything runs from the root and is filtered into `apps/web`; never run a package manager inside
-`legacy/`. CI runs exactly this list: `lint` → `check` → `test:unit` → `build` → `test:e2e`, in one
+Everything runs from the root and is filtered into `apps/web`. CI runs exactly this list: `lint` → `check` → `test:unit` → `build` → `test:e2e`, in one
 job named `lint · check · test · build · e2e`. Under `CI=true` Playwright reuses that `build` (it
 only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still builds first.
 

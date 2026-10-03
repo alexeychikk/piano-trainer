@@ -34,16 +34,16 @@ Web MIDI needs a secure context: `localhost` and the deployed HTTPS site both qu
 
 ## Layout
 
-| Path                   | What                                                       |
-| ---------------------- | ---------------------------------------------------------- |
-| `apps/web/`            | The SvelteKit app — all new work goes here                 |
-| `docs/decisions/`      | ADRs (start with `0001-target-architecture-and-stack.md`)  |
-| `docs/design/`         | UX specs and design tokens                                 |
-| `legacy/electron-app/` | The frozen 2022 React/Electron desktop app, reference only |
+| Path              | What                                                      |
+| ----------------- | --------------------------------------------------------- |
+| `apps/web/`       | The SvelteKit app — all new work goes here                |
+| `docs/decisions/` | ADRs (start with `0001-target-architecture-and-stack.md`) |
+| `docs/design/`    | UX specs and design tokens                                |
 
-The desktop app that used to live at the repository root is unchanged in
-[`legacy/electron-app/`](legacy/electron-app/), including its own README and release instructions.
-It is removed once the web app reaches parity.
+The 2022 React/Electron desktop app this project started as has been removed now that the web app
+has reached parity. Its Windows build stays on
+[GitHub Releases (`v1.0.0`)](https://github.com/alexeychikk/piano-trainer/releases/tag/v1.0.0) and
+its code in the git history.
 
 ## CI and deployment
 
