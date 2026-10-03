@@ -136,6 +136,12 @@ export class ExerciseRunner {
   announcement = $state('');
   /** True while the question's playback is still sounding. */
   playing = $state(false);
+  /**
+   * The run ended because the exercise had nothing it could build under its
+   * settings on this keyboard (`NothingToAskError`, `coverage.ts`) — not
+   * because it was over. The frame says so instead of ending silently.
+   */
+  nothingToAsk = $state(false);
 
   answered = $state(0);
   correctCount = $state(0);
@@ -502,6 +508,7 @@ export class ExerciseRunner {
       // the run rather than ask a question from outside its settings. A
       // session never gets here — it only mixes exercises that can ask.
       if (!(error instanceof NothingToAskError)) throw error;
+      this.nothingToAsk = true;
       this.#end();
       return;
     }

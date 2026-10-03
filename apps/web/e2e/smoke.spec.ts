@@ -604,6 +604,43 @@ test('the progression drill takes a twelve-note cadence from the computer keys',
   expect(consoleErrors).toEqual([]);
 });
 
+test('a drill with nothing to ask on a narrow keyboard says so and links to Settings', async ({
+  page,
+}) => {
+  const consoleErrors = watchConsole(page);
+  // A 14-semitone keyboard (C4–D5): the ii-V-I's cadence cannot fit, so the
+  // exercise has nothing buildable and `generate()` would throw
+  // `NothingToAskError`. Seeded before the app boots, as the range wizard
+  // would have stored it.
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      'piano-trainer:settings',
+      JSON.stringify({ keyboardLow: 60, keyboardHigh: 74 }),
+    );
+  });
+
+  await page.goto('/practice/progression-recognition/');
+  const prompt = page.getByTestId('prompt');
+  await expect(prompt).toHaveText('This drill needs a wider keyboard');
+  await expect(page.getByTestId('prompt-sub')).toHaveText(
+    'Widen the keyboard range in Settings',
+  );
+  await expect(page.getByTestId('replay')).toHaveCount(0);
+
+  // Space starts nothing: the message stays, nothing was answered.
+  await page.keyboard.press('Space');
+  await expect(prompt).toHaveText('This drill needs a wider keyboard');
+  await expect(page.getByTestId('answered')).toContainText('0/0');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+
+  // The way out is the range, in Settings.
+  await page.getByTestId('nothing-to-ask-settings').click();
+  await expect(page).toHaveURL(/\/settings\/#practice$/);
+  await expect(page.getByTestId('range-wizard')).toBeVisible();
+
+  expect(consoleErrors).toEqual([]);
+});
+
 test('the range wizard learns the keyboard from two presses', async ({
   page,
 }) => {

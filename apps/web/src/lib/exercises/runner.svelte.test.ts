@@ -650,6 +650,17 @@ describe('ExerciseRunner · nothing to ask', () => {
     expect(h.runner.phase).toBe('summary');
     expect(h.runner.question).toBeNull();
     expect(h.plays).toHaveLength(0);
+    // …and says why, so the frame can explain instead of ending silently.
+    expect(h.runner.nothingToAsk).toBe(true);
+  });
+
+  it('does not flag an ordinary run, nor one that is ended', async () => {
+    const h = harness();
+    await h.runner.start();
+    expect(h.runner.nothingToAsk).toBe(false);
+    h.runner.end();
+    expect(h.runner.phase).toBe('summary');
+    expect(h.runner.nothingToAsk).toBe(false);
   });
 
   it('still lets any other error through', async () => {

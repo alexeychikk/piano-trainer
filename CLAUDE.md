@@ -429,9 +429,14 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
   build it *and* it fits the keyboard), and `generate()` draws from the same set, so `/progress`,
   home and the planner never show a skill the drill will not ask. **No fallback**: nothing
   buildable is `[]` plus `generate()` throwing `NothingToAskError` (the old `['maj']` fallback drilled
-  a chord nobody enabled). `/session` mixes only `askableExercises(EXERCISES, range)`; a plain drill
-  opened anyway ends (`#end()` → `summary`). Reachable today only for the ii-V-I on a 12–16 semitone
-  keyboard; a "needs a wider keyboard" line is a design follow-up. Screens go through
+  a chord nobody enabled). `/session` mixes only `askableExercises(EXERCISES, range)`. A plain drill
+  with nothing to ask **says so before `Start`**: the frame derives `unavailable` from the
+  exercise's own `coveredSkills()` (plus the runner's `nothingToAsk` flag, set when `#next()` catches
+  `NothingToAskError` and ends in `summary`), swaps the prompt for `NOTHING_TO_ASK` (`feedback.ts`),
+  the phase label for `UNAVAILABLE_PHASE` (`phases.ts`), and `Start` for an `Open Settings` link to
+  `/settings#practice` (the range wizard); `Space`/`Enter` do nothing. Generic — no exercise is named.
+  Reachable today only for the ii-V-I on a 12–16 semitone keyboard; home's card still opens to the
+  message rather than being marked. Screens go through
   `coveredSkills`/`planInputs`, never call `skillsCovered` without a range.
   - **`targetSkillId` is honoured exactly** when buildable: every exercise exports a validating
     `parseSkillId()` (also what its `skillLabel` decodes with) and uses

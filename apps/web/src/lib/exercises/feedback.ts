@@ -76,3 +76,17 @@ export function feedbackAnnouncement({
   if (outcome === 'skipped') return `Skipped. The answer was ${expectedLabel}.`;
   return `Incorrect. ${played}The answer was ${expectedLabel}.`;
 }
+
+/**
+ * What the prompt well says when an exercise has nothing it can build under
+ * its settings on this keyboard (`NothingToAskError`, `coverage.ts`) — today
+ * only the ii-V-I on a keyboard narrower than its cadence. Generic on purpose:
+ * the runner never learns which exercise, so the copy names the remedy, not
+ * the drill. The settings link is the way out (the range lives in Settings →
+ * Practice).
+ */
+export const NOTHING_TO_ASK = {
+  title: 'This drill needs a wider keyboard',
+  detail: 'Widen the keyboard range in Settings',
+  action: 'Open Settings',
+} as const;

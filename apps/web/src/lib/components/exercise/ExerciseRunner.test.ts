@@ -1,7 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { render } from '@testing-library/svelte';
 import ExerciseRunner from './ExerciseRunner.svelte';
 import { findTheNote } from '$lib/exercises/find-the-note';
+import { progressionRecognition } from '$lib/exercises/progression-recognition';
+import { DEFAULT_SETTINGS, settings } from '$lib/storage/settings.svelte';
 
 /**
  * Markup-level rules only — the state machine is tested in
@@ -51,5 +53,51 @@ describe('ExerciseRunner frame', () => {
     const bar = mount().querySelector('[data-testid="answered"]');
     expect(bar?.querySelector('[role="progressbar"]')).not.toBeNull();
     expect(bar?.textContent).toContain('0/0');
+  });
+});
+
+describe('ExerciseRunner frame · nothing to ask on this keyboard', () => {
+  afterEach(() => {
+    settings.value = { ...DEFAULT_SETTINGS };
+  });
+
+  /** A 14-semitone keyboard: an octave and a bit, narrower than any cadence. */
+  function mountNarrow() {
+    settings.value = { ...DEFAULT_SETTINGS, keyboardLow: 60, keyboardHigh: 74 };
+    const { container } = render(ExerciseRunner, {
+      props: { definition: progressionRecognition },
+    });
+    return container;
+  }
+
+  it('says the drill needs a wider keyboard instead of offering Start', () => {
+    const container = mountNarrow();
+    expect(container.querySelector('[data-testid="prompt"]')?.textContent).toBe(
+      'This drill needs a wider keyboard',
+    );
+    expect(
+      container.querySelector('[data-testid="prompt-sub"]')?.textContent,
+    ).toBe('Widen the keyboard range in Settings');
+    expect(container.querySelector('.phase')?.textContent).toBe('Unavailable');
+    expect(container.querySelector('[data-testid="replay"]')).toBeNull();
+  });
+
+  it('links to the keyboard range in Settings', () => {
+    const link = mountNarrow().querySelector(
+      '[data-testid="nothing-to-ask-settings"]',
+    );
+    expect(link?.tagName).toBe('A');
+    expect(link?.getAttribute('href')).toMatch(/\/settings\/?#practice$/);
+    expect(link?.textContent).toContain('Open Settings');
+  });
+
+  it('is a normal drill on a keyboard wide enough', () => {
+    const { container } = render(ExerciseRunner, {
+      props: { definition: progressionRecognition },
+    });
+    expect(container.querySelector('[data-testid="prompt"]')?.textContent).toBe(
+      'Ready?',
+    );
+    expect(container.querySelector('[data-testid="replay"]')).not.toBeNull();
   });
 });

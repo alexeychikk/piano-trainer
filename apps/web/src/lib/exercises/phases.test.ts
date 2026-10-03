@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { phaseLabel } from './phases';
+import { UNAVAILABLE_PHASE, phaseLabel } from './phases';
 import type { RunnerPhase } from './runner.svelte';
 
 const PHASES: RunnerPhase[] = [
@@ -24,5 +24,9 @@ describe('phaseLabel', () => {
   it('is hot only while something is live (§5.3)', () => {
     const hot = PHASES.filter((phase) => phaseLabel(phase).hot);
     expect(hot).toEqual(['presenting', 'awaiting']);
+  });
+
+  it('names a drill that has nothing to ask with a word, not hot', () => {
+    expect(UNAVAILABLE_PHASE).toEqual({ label: 'Unavailable', hot: false });
   });
 });

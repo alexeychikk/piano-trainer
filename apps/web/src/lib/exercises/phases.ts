@@ -33,3 +33,14 @@ const PHASE_LABELS: Readonly<Record<RunnerPhase, PhaseLabel>> = {
 export function phaseLabel(phase: RunnerPhase): PhaseLabel {
   return PHASE_LABELS[phase];
 }
+
+/**
+ * Not a phase of the machine: the frame of a drill that has nothing it can
+ * ask on this keyboard (`NOTHING_TO_ASK` in `feedback.ts`). It replaces
+ * `Ready` / `Complete`, either of which would promise a drill that will not
+ * come. A word, never only a colour (part 1 §4.3) — and not hot.
+ */
+export const UNAVAILABLE_PHASE: PhaseLabel = {
+  label: 'Unavailable',
+  hot: false,
+};
