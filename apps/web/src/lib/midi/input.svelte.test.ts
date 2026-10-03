@@ -74,6 +74,30 @@ describe('MidiInput', () => {
     expect(input.status).toBe('unsupported');
     expect(input.chip.label).toBe('MIDI unsupported');
     expect(input.explanation).toContain('no Web MIDI');
+    expect(input.explanation).toContain('Chrome');
+  });
+
+  it('explains the missing Web MIDI on an iPad that reports itself as a Mac', async () => {
+    // @ts-expect-error — no Web MIDI at all
+    delete navigator.requestMIDIAccess;
+    vi.spyOn(navigator, 'platform', 'get').mockReturnValue('MacIntel');
+    // jsdom has no `maxTouchPoints` at all, so it is defined, then removed.
+    Object.defineProperty(navigator, 'maxTouchPoints', {
+      configurable: true,
+      value: 5,
+    });
+    try {
+      const input = new MidiInput();
+      await input.autoConnect();
+      expect(input.status).toBe('unsupported');
+      expect(input.appleMobile).toBe(true);
+      expect(input.explanation).toContain('Web MIDI Browser');
+      expect(input.explanation).not.toContain('Chrome');
+    } finally {
+      vi.restoreAllMocks();
+      // @ts-expect-error — removing the fake again
+      delete navigator.maxTouchPoints;
+    }
   });
 
   it('reports a blocked permission as a state, not an error', async () => {

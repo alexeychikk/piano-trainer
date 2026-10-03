@@ -34,6 +34,14 @@ export interface MidiChipInput {
   deviceName: string | null;
 }
 
+export interface MidiExplanationInput extends MidiChipInput {
+  /**
+   * An iPhone or iPad (`isAppleMobile()` in `platform.ts`). Every browser
+   * there is WebKit, so "use Chrome" would be wrong advice (ADR 0005).
+   */
+  appleMobile?: boolean;
+}
+
 /** The top-bar device chip (UX spec §2.2). Never colour alone. */
 export function midiChip({
   status,
@@ -164,6 +172,11 @@ export function deviceAction({
 export const MIDI_COPY = {
   none: `No MIDI keyboard — answer with the on-screen keys or A W S E D F T G Y H U J K`,
   unsupported: `This browser has no Web MIDI. Chrome, Edge and Opera do — or play on-screen.`,
+  /**
+   * `unsupported` on iPhone/iPad (ADR 0005 §2). Never "use Chrome": Chrome
+   * there is WebKit too. Product-approved on ticket 6090a6cc.
+   */
+  unsupportedAppleMobile: `MIDI input isn't available here: on iPad and iPhone no browser has Web MIDI. Open this page in the Web MIDI Browser app — or play the on-screen or computer keys.`,
   denied: `MIDI access was blocked. Re-allow it in the browser's site settings, or play on-screen.`,
   noInputs: `No MIDI input found. Plug your piano in and switch it on — it appears automatically.`,
 } as const;
@@ -173,9 +186,14 @@ export function midiExplanation({
   status,
   inputCount,
   deviceName,
-}: MidiChipInput): string | null {
+  appleMobile = false,
+}: MidiExplanationInput): string | null {
   if (deviceName) return null;
-  if (status === 'unsupported') return MIDI_COPY.unsupported;
+  if (status === 'unsupported') {
+    return appleMobile
+      ? MIDI_COPY.unsupportedAppleMobile
+      : MIDI_COPY.unsupported;
+  }
   if (status === 'denied') return MIDI_COPY.denied;
   if (status === 'granted' && inputCount === 0) return MIDI_COPY.noInputs;
   return MIDI_COPY.none;

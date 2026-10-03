@@ -62,6 +62,28 @@ describe('midiExplanation', () => {
     ).toBeNull();
   });
 
+  it('never sends an iPhone/iPad user to Chrome (ADR 0005)', () => {
+    const line = midiExplanation({
+      status: 'unsupported',
+      inputCount: 0,
+      deviceName: null,
+      appleMobile: true,
+    });
+    expect(line).toBe(MIDI_COPY.unsupportedAppleMobile);
+    expect(line).toContain('Web MIDI Browser');
+    expect(line).toContain('on-screen');
+    expect(line).not.toMatch(/Chrome|Edge|Opera/);
+  });
+
+  it('changes nothing on an iPad once Web MIDI exists', () => {
+    for (const status of ['idle', 'granted', 'denied'] as const) {
+      const input = { status, inputCount: 0, deviceName: null };
+      expect(midiExplanation({ ...input, appleMobile: true })).toBe(
+        midiExplanation(input),
+      );
+    }
+  });
+
   it('uses the copy deck line for each case', () => {
     expect(
       midiExplanation({

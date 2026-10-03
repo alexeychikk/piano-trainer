@@ -35,6 +35,33 @@ export const DEFAULT_NOTE_S = 0.9;
 
 type AudioContextCtor = new (options?: AudioContextOptions) => AudioContext;
 
+/**
+ * A context that must be resumed before it sounds. `interrupted` is WebKit's
+ * own state (a call, Siri, backgrounding on iPad) and is not in the DOM
+ * typings; left alone, the app comes back mute after a FaceTime call
+ * (ADR 0005 §5).
+ */
+export function needsResume(state: string): boolean {
+  return state === 'suspended' || state === 'interrupted';
+}
+
+/**
+ * Ask Safari/iPadOS 17+ for a `playback` session, so Silent Mode does not
+ * mute an ear trainer (ADR 0005 §5). A no-op wherever the API is missing.
+ */
+export function requestPlaybackSession(
+  nav: unknown = typeof navigator === 'undefined' ? undefined : navigator,
+): void {
+  const session = (nav as { audioSession?: { type?: string } } | undefined)
+    ?.audioSession;
+  if (!session) return;
+  try {
+    session.type = 'playback';
+  } catch {
+    // A refused session type leaves WebKit's default — quieter, not broken.
+  }
+}
+
 function audioContextCtor(): AudioContextCtor | null {
   if (typeof globalThis === 'undefined') return null;
   const candidate = (globalThis as { AudioContext?: AudioContextCtor })
@@ -87,7 +114,7 @@ export class AudioEngine {
    */
   async ensureStarted(): Promise<void> {
     if (this.#ctx) {
-      if (this.#ctx.state === 'suspended') await this.#ctx.resume();
+      await this.resume();
       return;
     }
     const Ctor = audioContextCtor();
@@ -95,6 +122,8 @@ export class AudioEngine {
       this.status = 'failed';
       return;
     }
+
+    requestPlaybackSession();
 
     const ctx = new Ctor({ latencyHint: 'interactive' });
     const master = ctx.createGain();
@@ -106,16 +135,26 @@ export class AudioEngine {
     this.#synth = createSynthSource(ctx, master);
     this.status = 'loading';
 
-    if (ctx.state === 'suspended') {
-      try {
-        await ctx.resume();
-      } catch {
-        // Some browsers reject a resume outside a gesture; the next gesture
-        // retries, and the state stays honest either way.
-      }
-    }
+    await this.resume();
 
     await this.#loadInstrument(this.#instrumentId);
+  }
+
+  /**
+   * Resume a `suspended` or `interrupted` context; never creates one (that
+   * needs a gesture — `ensureStarted()`). Safe to call from
+   * `visibilitychange`: WebKit may refuse outside a gesture, and the next
+   * gesture retries through `ensureStarted()`.
+   */
+  async resume(): Promise<void> {
+    const ctx = this.#ctx;
+    if (!ctx || !needsResume(ctx.state)) return;
+    try {
+      await ctx.resume();
+    } catch {
+      // Some browsers reject a resume outside a gesture; the next gesture
+      // retries, and the state stays honest either way.
+    }
   }
 
   get #instrumentId(): string {

@@ -16,6 +16,7 @@ import {
   parseMidiMessage,
 } from './events';
 import type { HeldNotes, NoteEvent, NoteSource } from './events';
+import { currentPlatformHints, isAppleMobile } from './platform';
 import { midiChip, midiExplanation, type MidiStatus } from './status';
 import { settings } from '$lib/storage/settings.svelte';
 import type { Midi } from '$lib/theory';
@@ -39,6 +40,11 @@ export class MidiInput {
   status = $state<MidiStatus>('idle');
   devices = $state<MidiDevice[]>([]);
   heldNotes = $state<HeldNotes>(new Map());
+  /**
+   * Read once, when Web MIDI turns out to be missing: only that sentence
+   * changes on an iPhone/iPad (ADR 0005), never the behaviour.
+   */
+  appleMobile = $state(false);
 
   /** Called when the selected device disappears; the UI shows a banner. */
   onDeviceLost: ((deviceName: string) => void) | null = null;
@@ -72,6 +78,7 @@ export class MidiInput {
       status: this.status,
       inputCount: this.devices.length,
       deviceName: this.selectedDevice?.name ?? null,
+      appleMobile: this.appleMobile,
     }),
   );
 
@@ -121,7 +128,7 @@ export class MidiInput {
    */
   async connect(): Promise<void> {
     if (!this.supported) {
-      this.status = 'unsupported';
+      this.#markUnsupported();
       return;
     }
     if (this.#access) {
@@ -146,7 +153,7 @@ export class MidiInput {
    */
   async autoConnect(): Promise<void> {
     if (!this.supported) {
-      this.status = 'unsupported';
+      this.#markUnsupported();
       return;
     }
     let permission: PermissionStatus | undefined;
@@ -174,6 +181,12 @@ export class MidiInput {
   select(key: string | null): void {
     settings.patch({ midiDeviceKey: key });
     this.#attachPorts();
+  }
+
+  #markUnsupported(): void {
+    const hints = currentPlatformHints();
+    this.appleMobile = hints !== null && isAppleMobile(hints);
+    this.status = 'unsupported';
   }
 
   #refreshDevices(): void {

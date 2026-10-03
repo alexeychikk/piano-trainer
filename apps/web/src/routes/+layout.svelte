@@ -81,6 +81,14 @@
     window.addEventListener('pointerdown', startAudio, { capture: true });
     window.addEventListener('keydown', onKeyDown, { capture: true });
 
+    // WebKit `interrupts` the context on a call or backgrounding (iPad,
+    // ADR 0005 §5); coming back is the first chance to resume it. If WebKit
+    // wants a gesture for that, the next press retries via `ensureStarted()`.
+    const resumeAudio = () => {
+      if (document.visibilityState === 'visible') void audio.resume();
+    };
+    document.addEventListener('visibilitychange', resumeAudio);
+
     // The other two leave paths — a hidden tab, a reload or a closing window.
     // Neither can be awaited, so the flush is started and not waited for.
     const detachLeave = attachFlushOnLeave(window, () => void practice.flush());
@@ -92,6 +100,7 @@
       unsubscribe();
       window.removeEventListener('pointerdown', startAudio, { capture: true });
       window.removeEventListener('keydown', onKeyDown, { capture: true });
+      document.removeEventListener('visibilitychange', resumeAudio);
       midiInput.onDeviceLost = null;
       audio.onFallback = null;
       practice.onError = null;

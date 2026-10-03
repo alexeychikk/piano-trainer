@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { AudioEngine } from './engine.svelte';
+import {
+  AudioEngine,
+  needsResume,
+  requestPlaybackSession,
+} from './engine.svelte';
 import { DEFAULT_SETTINGS, settings } from '$lib/storage/settings.svelte';
 import { SUMMED_PEAK_CEILING, sampledVoiceGain, velocityGain } from './gain';
 import { installFakeAudioContext, type FakeAudioContext } from './testing';
@@ -81,6 +85,68 @@ describe('the gesture rule (ADR §2)', () => {
     expect(() => engine.noteOn(60)).not.toThrow();
 
     if (previous !== undefined) global.AudioContext = previous;
+  });
+});
+
+describe('iPad hardening (ADR 0005 §5)', () => {
+  it('resumes an interrupted context, as it does a suspended one', async () => {
+    const engine = new AudioEngine();
+    await engine.ensureStarted();
+    // WebKit's own state: a FaceTime call, Siri, backgrounding.
+    (context() as { state: string }).state = 'interrupted';
+
+    await engine.resume();
+    expect(context().state).toBe('running');
+
+    (context() as { state: string }).state = 'interrupted';
+    await engine.ensureStarted();
+    expect(context().state).toBe('running');
+    expect(fake.contexts).toHaveLength(1);
+  });
+
+  it('never creates a context from resume() — that needs a gesture', async () => {
+    const engine = new AudioEngine();
+    await engine.resume();
+    expect(fake.contexts).toHaveLength(0);
+  });
+
+  it('survives a resume the browser refuses outside a gesture', async () => {
+    const engine = new AudioEngine();
+    await engine.ensureStarted();
+    context().state = 'suspended';
+    context().resume = () => Promise.reject(new Error('NotAllowedError'));
+    await expect(engine.resume()).resolves.toBeUndefined();
+    expect(context().state).toBe('suspended');
+  });
+
+  it('knows which states need a resume', () => {
+    expect(needsResume('suspended')).toBe(true);
+    expect(needsResume('interrupted')).toBe(true);
+    expect(needsResume('running')).toBe(false);
+    expect(needsResume('closed')).toBe(false);
+  });
+
+  it('asks for a playback audio session where the browser has one', async () => {
+    const session = { type: 'auto' };
+    requestPlaybackSession({ audioSession: session });
+    expect(session.type).toBe('playback');
+    expect(() => requestPlaybackSession({})).not.toThrow();
+    expect(() => requestPlaybackSession(undefined)).not.toThrow();
+
+    Object.defineProperty(navigator, 'audioSession', {
+      configurable: true,
+      value: { type: 'auto' },
+    });
+    try {
+      await new AudioEngine().ensureStarted();
+      expect(
+        (navigator as unknown as { audioSession: { type: string } })
+          .audioSession.type,
+      ).toBe('playback');
+    } finally {
+      // @ts-expect-error — removing the fake again
+      delete navigator.audioSession;
+    }
   });
 });
 
