@@ -694,8 +694,9 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
   - **A panel repeated once per exercise glows only when hot** (refinement-pass.md §1, R1): home's
     exercise cards and `/progress`'s groups pass `HudPanel glow="hot-only"` — full anatomy, no
     filter at rest; a link card takes the hot glow on `:hover`/`:focus-visible`, a non-link group on
-    `:focus-within` (never hover). The recipe is `.hud-glow-hot-only` in `hud.css`. So home costs
-    wordmark + hero + Today + ≤ 1 hot card at any registry size — **every new per-exercise panel
+    `:focus-within` (never hover). The recipe is `.hud-glow-hot-only` in `hud.css`. So home's page costs
+    hero + Today + ≤ 1 hot card at any registry size (plus the shell's constant three: wordmark and
+    the two top-bar status chips — the spec's "≤ 4" tally missed the chips; 5 at rest) — **every new per-exercise panel
     uses it**. `filter` is never transitioned (the swap is discrete); the e2e
     `repeated panels glow only when hot` counts the layers.
   - Glows are **static** `drop-shadow`s, ≤ 10 px blur, ≤ 12 on a screen. `drop-shadow()` takes no

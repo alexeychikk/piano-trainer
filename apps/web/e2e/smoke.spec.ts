@@ -693,13 +693,14 @@ test('an answered question survives a reload and shows on /progress', async ({
   expect(consoleErrors).toEqual([]);
 });
 
-/** Every element on the page that paints a `filter` (a glow layer). */
-async function glowLayers(page: Page): Promise<number> {
+/** Every element under `root` that paints a `filter` (a glow layer). */
+async function glowLayers(page: Page, root = 'html'): Promise<number> {
   return page.evaluate(
-    () =>
-      [...document.querySelectorAll('*')].filter(
+    (selector) =>
+      [...document.querySelectorAll(`${selector}, ${selector} *`)].filter(
         (element) => getComputedStyle(element).filter !== 'none',
       ).length,
+    root,
   );
 }
 
@@ -731,15 +732,20 @@ test('repeated panels glow only when hot (refinement R1)', async ({ page }) => {
   await group.getByRole('link').first().focus();
   expect(await filterOf(group)).not.toBe('none');
 
-  // Home: wordmark + hero + Today + at most one hot card, at any registry
-  // size — the cards wear no glow at rest.
+  // Home: the cards wear no glow at rest, so the screen's glows no longer
+  // grow with the registry. The page itself carries hero + Today and nothing
+  // else; the shell adds a constant three (wordmark + the two status chips —
+  // refinement-pass.md §1's "≤ 4" tally counts the wordmark but not the
+  // chips). At rest that is 5 of part 1 §7's 12, at any exercise count.
   await page.goto('/');
   await appIsListening(page);
   await expect(page.getByRole('heading', { name: /^today$/i })).toBeVisible();
   const cards = page.getByTestId('exercise-card');
   expect(await cards.count()).toBeGreaterThan(4);
   await page.mouse.move(0, 0);
-  expect(await glowLayers(page)).toBeLessThanOrEqual(4);
+  expect(await glowLayers(page, '.cards')).toBe(0);
+  expect(await glowLayers(page, 'main')).toBeLessThanOrEqual(2);
+  expect(await glowLayers(page)).toBeLessThanOrEqual(5);
   expect(await filterOf(cards.nth(0))).toBe('none');
   expect(await filterOf(cards.nth(1))).toBe('none');
 
