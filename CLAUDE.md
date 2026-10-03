@@ -847,12 +847,20 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
   a question is playing) already proves the client is there; `/progress` renders both its panels
   behind `practice.hydrated`. **`/play`, `/settings` and `/progress` are prerendered**, so their
   buttons, fields and piano keys are on screen with no handlers on them and a press in that window is
-  lost — those specs call `appIsListening(page)` (`smoke.spec.ts`), which waits for SvelteKit's
+  lost — those specs call `appIsListening(page)` (`e2e/support.ts`), which waits for SvelteKit's
   `#svelte-announcer`: it is client-only and rendered from the *root* component's `onMount`, which
   runs **after** `+layout.svelte`'s (a parent mounts after its children), i.e. after
   `computerKeyboard.attach(window)`, the capture-phase audio starter and `settings`/`practice`
   hydration. The same wait is what makes a *negative* assertion on a prerendered screen mean
   anything.
+- **Shared e2e helpers live in `apps/web/e2e/support.ts`** (`SOUNDFONT_URLS`, `watchConsole`,
+  `appIsListening`) — a new spec imports them, never copies them. Beside `smoke.spec.ts`:
+  `data-round-trip.spec.ts` (answer → export → reset → import in real Chromium IndexedDB, a reload
+  before every read) and `a11y.spec.ts` (`@axe-core/playwright` on every v1 route, fails on any
+  `serious`/`critical` violation). An axe exemption goes in its `EXEMPT_RULES` **with a cited
+  reason**, never as a blanket tag filter. axe reports `color-contrast` as *incomplete* on every
+  route (gradients and the body texture), so contrast stays owned by the specs' hand-measured §9
+  tables — the axe spec does not check it.
 - **A unit test waits the same way: on a signal, never on a number of ticks.** For anything queued
   behind the practice write queue that is `await store.flush()` (it loops until the queue's tail
   stops moving), per store — a case with two stores flushes the one whose write it is about. A
