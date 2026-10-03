@@ -108,6 +108,13 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
   `granted`); native code stays small and logic goes in the TS shim, because agents compile Swift
   only on macOS CI and only the owner can test on a device. The app is a separate origin
   (`capacitor://localhost`, never changed after the first build) — the backup JSON is the only bridge.
+  **ADR 0005 §9 ticket 1 has landed (web-side iPad hardening)**: `isAppleMobile()`
+  (`$lib/midi/platform.ts`, pure; iPadOS-as-Mac = `Mac` platform + `maxTouchPoints > 1`) changes
+  **one sentence only** — `MIDI_COPY.unsupportedAppleMobile` (Web MIDI Browser app, never "use
+  Chrome") — read once when `requestMIDIAccess` turns out missing; nothing may branch on it for
+  behaviour. The engine resumes `suspended` **and** WebKit's `interrupted` state (`needsResume`,
+  `audio.resume()` on `visibilitychange → visible`, `ensureStarted()` on the next gesture) and sets
+  `navigator.audioSession.type = 'playback'` where it exists, so Silent Mode cannot mute it.
 - **Audio (slice 3)**: one engine — `$lib/audio/engine.svelte.ts`, singleton `audio` — owns the
   `AudioContext`, the master gain, instrument loading and the instrument cache, and is the only thing
   that makes a sound. It is created in `ensureStarted()` only, wired once in `+layout.svelte`
