@@ -225,13 +225,15 @@ export function progressionNoteCount(type: ProgressionType): number {
 
 /**
  * Cut a played answer into one group per chord, **by count and in played
- * order** — a progression's chords are separated by how many notes each takes
- * (four, here), never by how long the user waited between them.
+ * order** — on the sequence path (mouse, computer keys) a progression's chords
+ * are separated by how many notes each takes (four, here), never by how long
+ * the user waited between them.
  *
- * That is the only separation rule available and the right one: an `Answer`
- * carries the notes and their order and no timestamps at all (ADR §5), so
- * nothing downstream *can* see a gap — and making a gap meaningful would grade
- * a beginner on their tempo while they are hunting for the next chord.
+ * That is the only separation rule a sequence has, and the right one: an
+ * `Answer` carries no timestamps (ADR §5), and making a gap meaningful would
+ * grade a beginner on their tempo while they hunt for the next chord. A MIDI
+ * answer never comes through here — chord capture separates its chords by
+ * **hand shape** (ADR 0004 §2 rule 3) and hands them over as `Answer.chords`.
  *
  * Trailing notes that do not fill a whole chord are returned as a short last
  * group, so a half-played answer can still be described in feedback.
@@ -255,31 +257,54 @@ export function chunkIntoChords(
 }
 
 /**
- * Does this answer play the progression in `tonicPc`?
+ * Does this answer play the progression in `tonicPc`? The **sequence path**
+ * (mouse, computer keys — ADR 0004 §1): the answer is cut into chords by count
+ * and in played order (`chunkIntoChords`), and must be exactly the
+ * progression's note count, then graded chord by chord through
+ * `spellsProgressionChords`.
  *
- * The rule, stated once (slice 10): the answer is cut into chords by count and
- * in played order, and **every chord must spell its degree's quality over its
- * own root** (`spellsQualityFromRoot`). So register, octave, spacing and the
- * order of the notes *inside* a chord are all free, enharmonics compare equal
- * for free, and what is graded is the cadence in the key: the order of the
- * chords, each chord's quality and each chord's root.
+ * So register, octave, spacing and the order of the notes *inside* a chord are
+ * all free, enharmonics compare equal for free, and what is graded is the
+ * cadence in the key: the order of the chords, each chord's quality and each
+ * chord's root.
  *
- * A **doubling is a miss**, for slice 8's reason: the answer is exactly twelve
- * notes and a chord is exactly four, so a doubled note always costs a chord
- * tone and leaves its chunk a pitch class short (`intervalsAboveBass` dedupes).
- * The note itself is not rejected — the missing one is.
+ * **Doublings are free**: grading is pitch-class set plus lowest note. On this
+ * path a doubled note still uses up one of the answer's twelve notes, because
+ * the path closes at the expected length (ADR 0004 §3) — so a doubling here
+ * leaves its chunk a pitch class short. That is counting, not a grading rule;
+ * a MIDI answer's chords come from `spellsProgressionChords` directly.
  */
 export function spellsProgression(
   notes: readonly Midi[],
   tonicPc: PitchClass,
   type: ProgressionType,
 ): boolean {
-  const chords = progressionChords(tonicPc, type);
-  if (chords === null) return false;
+  if (progressionSteps(type) === null) return false;
   if (notes.length !== progressionNoteCount(type)) return false;
-  const chunks = chunkIntoChords(notes, type);
-  if (chunks.length !== chords.length) return false;
-  return chords.every((chord, index) =>
-    spellsQualityFromRoot(chunks[index], chord.rootPc, chord.quality),
+  return spellsProgressionChords(chunkIntoChords(notes, type), tonicPc, type);
+}
+
+/**
+ * Do these chords play the progression in `tonicPc`? The rule, stated once
+ * (slice 10, ADR 0004 §3): **one chord per degree, in order, and every chord
+ * spells its degree's quality over its own root** (`spellsQualityFromRoot` —
+ * pitch-class set plus lowest note). A chord's size is free, so a doubling, a
+ * left-hand root under a right-hand chord or a common tone held into the next
+ * chord all pass; an extra pitch class, a missing tone, an inversion, another
+ * quality, another key or another order do not.
+ *
+ * This is what a MIDI answer is graded on: chord capture hands the drill its
+ * chords already split by hand shape (`Answer.chords`), so nothing here counts
+ * notes.
+ */
+export function spellsProgressionChords(
+  chords: readonly (readonly Midi[])[],
+  tonicPc: PitchClass,
+  type: ProgressionType,
+): boolean {
+  const asked = progressionChords(tonicPc, type);
+  if (asked === null || chords.length !== asked.length) return false;
+  return asked.every((chord, index) =>
+    spellsQualityFromRoot(chords[index], chord.rootPc, chord.quality),
   );
 }

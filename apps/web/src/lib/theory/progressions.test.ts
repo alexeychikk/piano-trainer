@@ -17,6 +17,7 @@ import {
   progressionSteps,
   progressionText,
   spellsProgression,
+  spellsProgressionChords,
   spokenProgression,
 } from './progressions';
 
@@ -222,7 +223,8 @@ describe('spellsProgression', () => {
       chords[1],
       chords[2],
     ].flat();
-    // A doubled note always costs a chord tone: the answer is twelve long.
+    // On the sequence path a doubled note costs a chord tone: the answer is
+    // twelve long (ADR 0004 §3 — counting, not a grading rule).
     expect(spellsProgression(doubled, C, 'major-ii-V-I')).toBe(false);
     expect(
       spellsProgression(chords.flat().slice(0, 8), C, 'major-ii-V-I'),
@@ -242,6 +244,79 @@ describe('spellsProgression', () => {
   });
 });
 
+describe('spellsProgressionChords', () => {
+  const chords = progressionNotes(48, 'major-ii-V-I') ?? [];
+  const [ii, V, I] = chords;
+
+  it('accepts the cadence as voiced, in every key and both types', () => {
+    for (const type of PROGRESSION_TYPES)
+      for (let tonicPc = 0; tonicPc < 12; tonicPc += 1)
+        expect(
+          spellsProgressionChords(
+            progressionNotes(48 + tonicPc, type) ?? [],
+            tonicPc,
+            type,
+          ),
+        ).toBe(true);
+  });
+
+  it('accepts doublings and any chord size — no note is counted', () => {
+    const doubled = [
+      [ii[0] - 12, ...ii, ii[1] + 12], // LH root + chord + a doubled 3rd
+      [V[0] - 24, V[0] - 12, ...V], // root in octaves under the chord
+      [I[0], I[1], I[2], I[3], I[0] + 12, I[3] + 12, I[1] + 24],
+    ];
+    expect(spellsProgressionChords(doubled, C, 'major-ii-V-I')).toBe(true);
+  });
+
+  it('accepts common tones shared by neighbouring chords', () => {
+    // Dm7 → G7 holding F (and D); G7 → Cmaj7 holding B: a held key belongs
+    // to the chord on either side of the change.
+    const voiceLed = [
+      [50, 65, 69, 72], // D · F A C
+      [43, 62, 65, 71], // G · D F B
+      [48, 64, 67, 71], // C · E G B
+    ];
+    expect(spellsProgressionChords(voiceLed, C, 'major-ii-V-I')).toBe(true);
+  });
+
+  it('rejects the wrong count of chords, whatever is in them', () => {
+    expect(spellsProgressionChords([ii, V], C, 'major-ii-V-I')).toBe(false);
+    expect(spellsProgressionChords([[...ii, ...V], I], C, 'major-ii-V-I')).toBe(
+      false,
+    );
+    expect(spellsProgressionChords([ii, V, I, I], C, 'major-ii-V-I')).toBe(
+      false,
+    );
+    expect(spellsProgressionChords([], C, 'major-ii-V-I')).toBe(false);
+  });
+
+  it('rejects an empty chord, an extra pitch class, a missing tone and an inversion', () => {
+    for (const wrong of [
+      [ii, [], I],
+      [ii, [...V, V[0] + 14], I], // a 9th on the V
+      [ii, V.slice(0, 3), I], // the V's 7th missing
+      [[...ii.slice(1), ii[0] + 12], V, I], // the ii inverted
+    ])
+      expect(spellsProgressionChords(wrong, C, 'major-ii-V-I')).toBe(false);
+  });
+
+  it('rejects another key, another quality and another order', () => {
+    expect(spellsProgressionChords(chords, Db, 'major-ii-V-I')).toBe(false);
+    expect(spellsProgressionChords(chords, C, 'minor-ii-V-i')).toBe(false);
+    expect(spellsProgressionChords([V, ii, I], C, 'major-ii-V-I')).toBe(false);
+  });
+
+  it('agrees with spellsProgression on every twelve-note sequence', () => {
+    for (const type of PROGRESSION_TYPES) {
+      const notes = progressionNotes(48, type)?.flat() ?? [];
+      expect(
+        spellsProgressionChords(chunkIntoChords(notes, type), C, type),
+      ).toBe(spellsProgression(notes, C, type));
+    }
+  });
+});
+
 describe('the unknown type', () => {
   it('answers null rather than inventing a cadence', () => {
     const unknown = 'I-VI-ii-V' as unknown as 'major-ii-V-I';
@@ -252,6 +327,7 @@ describe('the unknown type', () => {
     expect(progressionSpan(unknown)).toEqual({ low: 0, high: 0 });
     expect(progressionNoteCount(unknown)).toBe(0);
     expect(spellsProgression([60], 0, unknown)).toBe(false);
+    expect(spellsProgressionChords([[60]], 0, unknown)).toBe(false);
   });
 });
 

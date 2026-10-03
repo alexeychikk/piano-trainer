@@ -1,15 +1,28 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   chordNotes,
+  chunkIntoChords,
   pcOf,
   progressionNotes,
   progressionSpan,
+  PROGRESSION_TYPES,
   type ProgressionType,
 } from '$lib/theory';
 import { NothingToAskError } from '../coverage';
 import { mulberry32 } from '../rng';
-import { SEQUENCE_GAP_MS } from '../runner.svelte';
-import type { Answer, GenerateContext, Question } from '../types';
+import {
+  CHORD_RELEASE_MS,
+  CHORD_SETTLE_MS,
+  ExerciseRunner,
+  SEQUENCE_GAP_MS,
+} from '../runner.svelte';
+import type {
+  Answer,
+  AnyExercise,
+  AttemptResult,
+  GenerateContext,
+  Question,
+} from '../types';
 import {
   PROGRESSION_RECOGNITION_ID,
   STARTER_TYPES,
@@ -56,6 +69,24 @@ function played(notes: number[]): Answer {
   return { kind: 'notes', notes, order: notes, source: 'onscreen' };
 }
 
+/** A chord-capture answer (ADR 0004 §2), shaped the way the runner builds it. */
+function captured(chords: number[][]): Answer {
+  const sorted = chords.map((chord) =>
+    [...new Set(chord)].sort((a, b) => a - b),
+  );
+  const notes = [...new Set(sorted.flat())].sort((a, b) => a - b);
+  return { kind: 'notes', notes, order: notes, source: 'midi', chords: sorted };
+}
+
+/** A question of a known type, whatever the seed drew. */
+function askType(type: ProgressionType): Question<ProgressionPayload> {
+  for (let seed = 0; seed < 200; seed += 1) {
+    const question = ask(seed, undefined, [], { types: [type] });
+    if (question.payload.type === type) return question;
+  }
+  throw new Error(`no ${type} question`);
+}
+
 /** The cadence a question asked for, as it was voiced. */
 function cadenceOf(question: Question<ProgressionPayload>): number[] {
   const { tonicMidi, type } = question.payload;
@@ -97,9 +128,11 @@ describe('progression-recognition generate', () => {
       expect(event.notes).toHaveLength(4);
   });
 
-  it('answers in twelve notes, with a window long enough to play them', () => {
+  it('answers in three chords from MIDI, twelve notes from anything else, with a window long enough to play them', () => {
     const question = ask(11);
-    expect(question.answerMode).toBe('note-sequence');
+    // ADR 0004: chord capture from a MIDI port, a sequence from the rest.
+    expect(question.answerMode).toBe('chord-released');
+    expect(question.answerChords).toBe(3);
     expect(question.expected.kind).toBe('notes');
     expect(
       question.expected.kind === 'notes' ? question.expected.notes : [],
@@ -239,15 +272,6 @@ describe('progression-recognition grade', () => {
 });
 
 describe('the major and the minor cadence are different answers', () => {
-  /** A question of a known type, whatever the seed drew. */
-  function askType(type: ProgressionType): Question<ProgressionPayload> {
-    for (let seed = 0; seed < 200; seed += 1) {
-      const question = ask(seed, undefined, [], { types: [type] });
-      if (question.payload.type === type) return question;
-    }
-    throw new Error(`no ${type} question`);
-  }
-
   it('will not take a m7 ii for the minor cadence', () => {
     const question = askType('minor-ii-V-i');
     const { tonicMidi } = question.payload;
@@ -275,20 +299,20 @@ describe('missDetail', () => {
   const tonicMidi = 48; // C3
   const tonicPc = pcOf(tonicMidi);
   const chords = progressionNotes(tonicMidi, 'major-ii-V-I') ?? [];
+  /** A sequence answer, cut the way `grade()` cuts it. */
+  const seq = (notes: number[]) => chunkIntoChords(notes, 'major-ii-V-I');
+  const miss = (notes: number[], tonic = tonicPc) =>
+    missDetail(tonic, 'major-ii-V-I', seq(notes));
 
   it('says nothing about a right answer', () => {
-    expect(missDetail(tonicPc, 'major-ii-V-I', chords.flat())).toBeUndefined();
+    expect(miss(chords.flat())).toBeUndefined();
   });
 
   it('names the first wrong chord by its numeral and its symbol', () => {
     const wrongV = chordNotes(chords[1][0], 'min7') ?? [];
-    expect(
-      missDetail(
-        tonicPc,
-        'major-ii-V-I',
-        [chords[0], wrongV, chords[2]].flat(),
-      ),
-    ).toBe('The V is G7 — you played Gm7');
+    expect(miss([chords[0], wrongV, chords[2]].flat())).toBe(
+      'The V is G7 — you played Gm7',
+    );
   });
 
   it('tells an inversion from a wrong chord', () => {
@@ -298,41 +322,218 @@ describe('missDetail', () => {
       chords[0][3],
       chords[0][0] + 12,
     ];
-    expect(
-      missDetail(
-        tonicPc,
-        'major-ii-V-I',
-        [inverted, chords[1], chords[2]].flat(),
-      ),
-    ).toBe('The ii is Dm7 — the root belongs at the bottom');
+    expect(miss([inverted, chords[1], chords[2]].flat())).toBe(
+      'The ii is Dm7 — the root belongs at the bottom',
+    );
   });
 
   it('names the chord it cannot name at all by the chord that was asked', () => {
     const noise = [60, 61, 62, 63];
-    expect(
-      missDetail(tonicPc, 'major-ii-V-I', [noise, chords[1], chords[2]].flat()),
-    ).toBe('The ii is Dm7');
+    expect(miss([noise, chords[1], chords[2]].flat())).toBe('The ii is Dm7');
   });
 
   it('calls a reordered cadence what it is', () => {
     const shuffled = [chords[1], chords[2], chords[0]].flat();
-    expect(missDetail(tonicPc, 'major-ii-V-I', shuffled)).toBe(
-      'Right chords — the order is Dm7 · G7 · Cmaj7',
-    );
+    expect(miss(shuffled)).toBe('Right chords — the order is Dm7 · G7 · Cmaj7');
   });
 
   it('reminds a short answer what the shape of the answer is', () => {
-    expect(missDetail(tonicPc, 'major-ii-V-I', chords[0])).toBe(
-      'Major ii-V-I — three chords of four notes',
-    );
+    expect(miss(chords[0])).toBe('Major ii-V-I — three chords of four notes');
   });
 
   it('spells feedback in the asked key, not in C', () => {
     const db = progressionNotes(49, 'major-ii-V-I') ?? [];
     const wrongV = chordNotes(db[1][0], 'min7') ?? [];
-    expect(missDetail(1, 'major-ii-V-I', [db[0], wrongV, db[2]].flat())).toBe(
+    expect(miss([db[0], wrongV, db[2]].flat(), 1)).toBe(
       'The V is Ab7 — you played Abm7',
     );
+  });
+});
+
+describe('progression-recognition · MIDI chord answers (ADR 0004)', () => {
+  const question = askType('major-ii-V-I');
+  const { tonicMidi, tonicPc } = question.payload;
+  const [ii, V, I] = progressionNotes(tonicMidi, 'major-ii-V-I') ?? [];
+  const grade = (chords: number[][]) =>
+    progressionRecognition.grade(question, captured(chords));
+
+  it('accepts the cadence chord by chord', () => {
+    expect(grade([ii, V, I])).toEqual({ correct: true, score: 1 });
+  });
+
+  it('accepts two hands and doublings — a chord’s size is free', () => {
+    // LH root an octave down under the RH chord, which doubles the root.
+    const twoHands = [ii, V, I].map((chord) => [chord[0] - 12, ...chord]);
+    expect(grade(twoHands).correct).toBe(true);
+    // A doubled 3rd and 7th on top as well.
+    const thick = [ii, V, I].map((chord) => [
+      ...chord,
+      chord[1] + 12,
+      chord[3] + 12,
+    ]);
+    expect(grade(thick).correct).toBe(true);
+  });
+
+  it('accepts voice-leading with the common tones held', () => {
+    // How the runner hands over Dm7 → G7 → Cmaj7 played LH root + RH
+    // voicing with the common tones held: each chord is the whole held set,
+    // so a held tone belongs to both chords either side of the change.
+    const ii7 = [ii[0], ii[1] + 12, ii[2] + 12, ii[3] + 12]; // D · F A C
+    const v7 = [V[0], ii[1] + 12, V[1] + 12, V[2] + 12]; // G · F B D (F held)
+    const i7 = [I[0], I[1] + 12, I[2] + 12, V[1] + 12]; // C · E G B (B held)
+    expect(grade([ii7, v7, i7]).correct).toBe(true);
+  });
+
+  it('is what the sequence path rejects: a doubling costs a note there', () => {
+    const doubled = [[ii[0], ...ii.slice(0, 3)], V, I].flat();
+    expect(
+      progressionRecognition.grade(question, played(doubled)).correct,
+    ).toBe(false);
+  });
+
+  it('names chords run together, and a split chord, by the count', () => {
+    expect(grade([[...ii, ...V], I]).feedback).toBe(
+      'Heard 2 chords — a ii-V-I is three',
+    );
+    expect(grade([[...ii, ...V, ...I]]).feedback).toBe(
+      'Heard 1 chord — a ii-V-I is three',
+    );
+    expect(grade([ii, [V[0]], V, I]).feedback).toBe(
+      'Heard 4 chords — a ii-V-I is three',
+    );
+    // A single key held through a settle is still an answer, and explained.
+    expect(grade([[ii[0]]]).feedback).toBe('Heard 1 chord — a ii-V-I is three');
+    const minor = askType('minor-ii-V-i');
+    const [mii, mV] =
+      progressionNotes(minor.payload.tonicMidi, 'minor-ii-V-i') ?? [];
+    expect(
+      progressionRecognition.grade(minor, captured([mii, mV])).feedback,
+    ).toBe('Heard 2 chords — a ii-V-i is three');
+  });
+
+  it('still names the wrong chord, an inversion and the wrong order', () => {
+    const symbols = question.expected.label.split(' · ');
+    // An extra pitch class (a held stray, a 9th) is a different chord.
+    const withNinth = grade([ii, [...V, V[0] + 14], I]);
+    expect(withNinth.correct).toBe(false);
+    expect(withNinth.feedback).toMatch(
+      new RegExp(`^The V is ${symbols[1]}\\b`),
+    );
+    const inverted = grade([[...ii.slice(1), ii[0] + 12], V, I]);
+    expect(inverted.feedback).toBe(
+      `The ii is ${symbols[0]} — the root belongs at the bottom`,
+    );
+    expect(grade([V, I, ii]).feedback).toBe(
+      `Right chords — the order is ${question.expected.label}`,
+    );
+  });
+
+  it('keeps the skill id: a MIDI answer is the same skill as a mouse one', () => {
+    expect(question.skillId).toBe(skillIdFor('major-ii-V-I', tonicPc));
+  });
+});
+
+/**
+ * The real drill inside the real runner, fed MIDI note-ons and note-offs the
+ * way the frame forwards them — the acceptance path of ADR 0004 part b, with
+ * fake timers and no Web Audio.
+ */
+describe('progression-recognition · in the runner', () => {
+  const PLAYBACK_MS = 4000;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** A seed whose first question is a `type` cadence. */
+  function seedFor(type: ProgressionType): number {
+    for (let seed = 0; seed < 200; seed += 1)
+      if (ask(seed, RANGE).payload.type === type) return seed;
+    throw new Error(`no ${type} seed`);
+  }
+
+  async function started(seed = 1) {
+    const attempts: AttemptResult[] = [];
+    const runner = new ExerciseRunner(progressionRecognition as AnyExercise, {
+      playback: {
+        play: () => PLAYBACK_MS,
+        stop: () => {},
+        ensureStarted: () => Promise.resolve(),
+      },
+      now: () => 0,
+      seed: () => seed,
+      range: () => RANGE,
+      onAttempt: (attempt) => attempts.push(attempt),
+    });
+    await runner.start();
+    vi.advanceTimersByTime(PLAYBACK_MS);
+    expect(runner.phase).toBe('awaiting');
+    const payload = runner.question?.payload as ProgressionPayload;
+    const chords = progressionNotes(payload.tonicMidi, payload.type) ?? [];
+    return { runner, attempts, payload, chords };
+  }
+
+  for (const type of PROGRESSION_TYPES)
+    it(`grades a two-handed ${type} with doublings and held common tones correct`, async () => {
+      const { runner, attempts, payload, chords } = await started(
+        seedFor(type),
+      );
+      expect(payload.type).toBe(type);
+      const on = (notes: number[]) =>
+        notes.forEach((midi) => runner.noteOn(midi, 'midi'));
+      const off = (notes: number[]) =>
+        notes.forEach((midi) => runner.noteOff(midi, 'midi'));
+
+      // Each chord: the LH plays the root doubled in octaves; the RH plays
+      // the other three tones an octave up, but **holds** any key the next
+      // chord shares — voice-leading, so the chords are told apart by the
+      // change of hand shape, never by a full lift.
+      let lh: number[] = [];
+      let rh: number[] = [];
+      let held = 0;
+      for (const chord of chords) {
+        const pcs = new Set(chord.map((midi) => pcOf(midi)));
+        const keep = rh.filter((midi) => pcs.has(pcOf(midi)));
+        held += keep.length;
+        off([...lh, ...rh.filter((midi) => !keep.includes(midi))]);
+        const keptPcs = new Set(keep.map((midi) => pcOf(midi)));
+        lh = [chord[0] - 12, chord[0]];
+        const fresh = chord
+          .slice(1)
+          .map((midi) => midi + 12)
+          .filter((midi) => !keptPcs.has(pcOf(midi)));
+        rh = [...keep, ...fresh];
+        on([...lh, ...fresh]);
+        vi.advanceTimersByTime(CHORD_SETTLE_MS);
+        expect(runner.phase).toBe('awaiting');
+      }
+      // The ii's 3rd is the V's 7th in both cadences, so a tone was held.
+      expect(held).toBeGreaterThan(0);
+      expect(runner.capturedChords).toHaveLength(3);
+
+      off([...lh, ...rh]);
+      vi.advanceTimersByTime(CHORD_RELEASE_MS);
+      expect(runner.outcome).toBe('correct');
+      expect(attempts).toHaveLength(1);
+      expect(attempts[0].answerSource).toBe('midi');
+      expect(attempts[0].skillId).toBe(
+        skillIdFor(payload.type, payload.tonicPc),
+      );
+    });
+
+  it('keeps the mouse on the twelve-note sequence, unchanged', async () => {
+    const { runner, chords } = await started();
+    for (const midi of chords.flat().slice(0, -1))
+      runner.noteOn(midi, 'onscreen');
+    expect(runner.capture).toBe('sequence');
+    expect(runner.phase).toBe('awaiting');
+    // The twelfth note closes it, exactly as before ADR 0004.
+    runner.noteOn(chords.flat()[11], 'onscreen');
+    expect(runner.outcome).toBe('correct');
   });
 });
 

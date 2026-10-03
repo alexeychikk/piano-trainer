@@ -6,9 +6,9 @@
  * actually built from.
  *
  * **The graded quantity is the progression in a key** (slice 8's rule, one
- * level up): the answer is cut into chords by count and in played order, and
- * each chord must spell its degree's quality **over its own root**
- * (`spellsProgression` in `$lib/theory/progressions.ts`). So:
+ * level up): the answer is cut into chords, and each chord must spell its
+ * degree's quality **over its own root** (`spellsProgressionChords` in
+ * `$lib/theory/progressions.ts`). So:
  *
  * - **key** — the one you heard. `Dm7 · G7 · Cmaj7` and `Ebm7 · Ab7 · Dbmaj7`
  *   are the same cadence and two different shapes under the hand, which is
@@ -18,21 +18,30 @@
  * - **octave / register / spacing** — free, per chord and for the whole
  *   progression: only the pitch classes above each chord's bass are compared,
  *   so a wide left-hand chord and a close right-hand one grade the same.
- * - **doubling** — fails, exactly as it does in slice 8: the answer is twelve
- *   notes and a chord is four, so a doubled note always costs a chord tone and
- *   leaves its chunk a pitch class short.
+ * - **doubling** — free: grading is pitch-class set plus lowest note. On the
+ *   `note-sequence` path (mouse, computer keys) a doubled note still uses up
+ *   one of the answer's twelve notes, because that path closes at the expected
+ *   length (ADR 0004 §3).
  * - **inversion** — root position, chord by chord. A pitch-class set alone
  *   does not name one quality (slice 7's reasoning: Cm7 and Eb6 are the same
  *   four notes), so the lowest note of each chord is read as its root.
  * - **enharmonics** — equal for free: integer arithmetic on MIDI numbers.
  *
- * **Chords are separated by count, not by time.** Each chord is exactly four
- * notes, so the answer is chunked 4–4–4 in played order. Nothing downstream
- * *can* separate them by timing — an `Answer` carries notes, order and a
- * source, and no timestamps (ADR §5) — and a time-based rule would grade a
- * beginner on how long they hunt for the next chord. Slice 7's unimplemented
- * `CHORD_SETTLE_MS` note is therefore **still unimplemented and no longer
- * needed here**; slice 2's `detectChords()` deviation is untouched.
+ * **How the chords are told apart depends on the path** (ADR 0004 §1). The
+ * answer mode is `chord-released` with `answerChords: 3`:
+ *
+ * - **From a MIDI port, by hand shape** — the runner's chord capture starts a
+ *   new chord whenever a settled hand shape follows a key going up, so the
+ *   chords arrive as `Answer.chords`. Voice-leading that holds common tones
+ *   (Dm7 → G7 with F held) is three chords, and so is lifting both hands
+ *   between them; chords run together (keys only added) are one, which is the
+ *   named `Heard 2 chords — a ii-V-I is three` miss. Lifting a wrong key and
+ *   pressing the right one splits a chord (ADR 0004 §6's known limit).
+ * - **From the mouse and the computer keys, by count** — each chord is four
+ *   notes, so the twelve-note answer is chunked 4–4–4 in played order. Nothing
+ *   there *can* use timing: a sequence answer carries no timestamps (ADR §5),
+ *   and a time-based rule would grade a beginner on how long they hunt for the
+ *   next chord.
  *
  * **The chords are whole four-note sevenths, not shells.** The minor cadence's
  * ii is a `min7b5`, whose shell *is* `min7`'s (the b5 is exactly the note a
@@ -70,6 +79,7 @@ import {
   progressionText,
   qualityOfIntervals,
   spellsProgression,
+  spellsProgressionChords,
   spellsQualityFromRoot,
   spellsQualityInAnyInversion,
   PROGRESSION_TYPES,
@@ -293,6 +303,7 @@ function generate(
   const payload: ProgressionPayload = { tonicPc, tonicMidi, type };
   const chords = chordsOf(payload);
   const notes = chords.flat();
+  const steps = progressionSteps(type) ?? [];
 
   return {
     // Derived from the seed, not `crypto.randomUUID()`: `generate()` is pure,
@@ -325,9 +336,12 @@ function generate(
         velocity: CHORD_VELOCITY,
       })),
     },
-    answerMode: 'note-sequence',
-    // A twelve-note answer needs a longer silence window than a two-note
-    // interval — see `ANSWER_GAP_MS`.
+    // ADR 0004: a MIDI answer is captured as chords, split by hand shape; the
+    // mouse and the computer keys still answer in a twelve-note sequence.
+    answerMode: 'chord-released',
+    answerChords: steps.length,
+    // A twelve-note (or three-chord) answer needs a longer silence window than
+    // a two-note interval — see `ANSWER_GAP_MS`.
     answerGapMs: ANSWER_GAP_MS,
     expected: {
       kind: 'notes',
@@ -339,20 +353,43 @@ function generate(
   };
 }
 
-/** How a miss is explained — one short line, a teacher's tone (UX §9). */
+/**
+ * How a miss is explained — one short line, a teacher's tone (UX §9).
+ *
+ * `chunks` is the answer chord by chord: `Answer.chords` from chord capture
+ * (`captured`), or the sequence cut 4–4–4 by `chunkIntoChords`. A captured
+ * chord is whole at any size (doublings, two hands); a sequence chunk is whole
+ * only at its chord's note count.
+ */
 export function missDetail(
   tonicPc: PitchClass,
   type: ProgressionType,
-  played: readonly Midi[],
+  chunks: readonly (readonly Midi[])[],
+  { captured = false }: { captured?: boolean } = {},
 ): string | undefined {
   const chords = progressionChords(tonicPc, type);
   const steps = progressionSteps(type);
   if (chords === null || steps === null) return undefined;
-  if (spellsProgression(played, tonicPc, type)) return undefined;
+  const played = chunks.flat();
+  const right = captured
+    ? spellsProgressionChords(chunks, tonicPc, type)
+    : spellsProgression(played, tonicPc, type);
+  if (right) return undefined;
+
+  // Chord capture split the answer into the wrong number of chords: chords
+  // run together (keys only added), or a correction that split one (ADR 0004
+  // §3). Named first — nothing chord-by-chord can be said about it.
+  if (captured && chunks.length !== chords.length)
+    return `Heard ${chunks.length} ${chunks.length === 1 ? 'chord' : 'chords'} — a ${progressionShortName(type)} is three`;
 
   const sizes = progressionChordSizes(type);
-  const chunks = chunkIntoChords(played, type);
-  const whole = chunks.filter((chunk, index) => chunk.length === sizes[index]);
+  const isWhole = (
+    chunk: readonly Midi[] | undefined,
+    index: number,
+  ): chunk is readonly Midi[] =>
+    chunk !== undefined &&
+    (captured ? chunk.length > 0 : chunk.length === sizes[index]);
+  const whole = chunks.filter(isWhole);
 
   // The right three chords in the wrong order: a different mistake from
   // playing the wrong chords, and the one worth naming first.
@@ -373,7 +410,7 @@ export function missDetail(
   // Otherwise: the first chord that was not the asked one, named.
   for (const [index, chord] of chords.entries()) {
     const chunk = chunks[index];
-    if (chunk === undefined || chunk.length !== sizes[index]) break;
+    if (!isWhole(chunk, index)) break;
     if (spellsQualityFromRoot(chunk, chord.rootPc, chord.quality)) continue;
 
     const numeral = steps[index].numeral;
@@ -414,23 +451,33 @@ function grade(question: Question<ProgressionPayload>, answer: Answer): Grade {
   const notes = notesOf(question.payload);
   const reveal = { notes, label: progressionText(tonicPc, type) };
 
-  // Fewer than two notes is not a chord, let alone a cadence — a
-  // closed-but-short sequence (the silence window ran out) is a miss, like any
-  // other wrong answer.
-  if (answer.kind !== 'notes' || answer.notes.length < 2) {
+  if (answer.kind !== 'notes')
     return { correct: false, score: 0, revealed: reveal };
-  }
 
-  // Graded on played order, not on the sorted set: the order of the chords is
-  // half of what a cadence *is*.
-  if (spellsProgression(answer.order, tonicPc, type))
-    return { correct: true, score: 1 };
+  // `chords` is present only from chord capture (ADR 0004 §2): the chords
+  // arrive already split by hand shape, at any size. Without it the answer is
+  // a sequence, cut 4–4–4 in played order — order, not the sorted set, since
+  // the order of the chords is half of what a cadence *is*.
+  const captured = answer.chords !== undefined;
+
+  // Fewer than two notes in a sequence is not a chord, let alone a cadence — a
+  // closed-but-short sequence (the silence window ran out) is a miss, like any
+  // other wrong answer. A captured answer is always explained: its count
+  // line names even a single held note.
+  if (!captured && answer.notes.length < 2)
+    return { correct: false, score: 0, revealed: reveal };
+
+  const chunks = answer.chords ?? chunkIntoChords(answer.order, type);
+  const correct = captured
+    ? spellsProgressionChords(chunks, tonicPc, type)
+    : spellsProgression(answer.order, tonicPc, type);
+  if (correct) return { correct: true, score: 1 };
 
   return {
     // Binary, per ADR §10.
     correct: false,
     score: 0,
-    feedback: missDetail(tonicPc, type, answer.order),
+    feedback: missDetail(tonicPc, type, chunks, { captured }),
     revealed: reveal,
   };
 }
