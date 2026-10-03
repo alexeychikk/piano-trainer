@@ -23,11 +23,17 @@
  *   one (`missDetail`), never a bare ✗.
  * - **octave / register / spacing** — any, for the shape and for each note in
  *   it, exactly as slice 8.
- * - **order** — any: the answer closes on four note-ons and grading is
- *   order-insensitive, so a rolled, arpeggiated or block voicing grade the
- *   same. (Which note is *lowest* is not order — it is the form.)
- * - **doubling** — fails: the answer is four notes long, so a doubled note
- *   always leaves a chord tone unplayed (slices 7, 8 and 10's rule).
+ * - **order** — any: grading is order-insensitive, so a rolled, arpeggiated
+ *   or block voicing grade the same. (Which note is *lowest* is not order —
+ *   it is the form.) The answer mode is `chord-released` (ADR 0004): from a
+ *   MIDI port it closes when every key is up; the mouse and computer keys
+ *   close on four note-ons.
+ * - **doubling** — free, in any octave and across the hands. Grading is pitch-class set plus lowest
+ *   note. On the `note-sequence` path (mouse, computer keys) a doubled note
+ *   still uses up one of the answer's N notes, because that path closes at
+ *   the expected length (ADR 0004 §3).
+ *   A left-hand root under the voicing is still the root, and still the
+ *   named near-miss (ADR 0004 §6).
  * - **enharmonics** — equal for free: integer arithmetic on MIDI numbers.
  *
  * Scoring is **binary** (ADR §10), like every other drill: three quarters of a
@@ -351,7 +357,7 @@ function generate(
     // pressing; it cannot give the answer away, being the one note the answer
     // must *not* contain. A miss hears the voicing itself (`draw.ts`).
     ...referenceThenReveal(rootMidi, notes),
-    answerMode: 'note-sequence',
+    answerMode: 'chord-released',
     answerGapMs: ANSWER_GAP_MS,
     expected: {
       kind: 'notes',

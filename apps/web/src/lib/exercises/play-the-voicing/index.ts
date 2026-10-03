@@ -23,14 +23,18 @@
  * - **octave / register** — any, for the whole shape and for each note in it,
  *   so the A form (`1-7-3`, the 3rd an octave up) and the B form (`1-3-7`)
  *   both pass, as does the same shell two octaves down.
- * - **order** — any: the answer closes on three note-ons, and grading is
- *   order-insensitive, so a rolled, arpeggiated or block shell grade the same.
+ * - **order** — any: grading is order-insensitive, so a rolled, arpeggiated
+ *   or block shell grade the same.
+ * - **answer mode** — `chord-released` (ADR 0004): from a MIDI port the shell
+ *   closes when every key is up, so a left-hand root under a right-hand `3-7`
+ *   is one answer; the mouse and computer keys close on three note-ons.
  * - **hands** — no concept. Nothing upstream tells the app which hand a note
- *   came from (ADR §3: a `NoteEvent` has a source, never a hand), so this
- *   drill is one-handed by construction and the deferred two-hand voicing
- *   colours roll on to the rootless-voicings ticket.
- * - **doubling** — fails, because the answer is three notes long and a doubled
- *   note always leaves a chord tone unplayed.
+ *   came from (ADR §3: a `NoteEvent` has a source, never a hand), so a shell
+ *   split across two hands is the same pitch classes over the same bass.
+ * - **doubling** — free (`C3 · C4 E4 B4` passes). Grading is pitch-class set plus lowest
+ *   note. On the `note-sequence` path (mouse, computer keys) a doubled note
+ *   still uses up one of the answer's N notes, because that path closes at
+ *   the expected length (ADR 0004 §3).
  * - **enharmonics** — equal for free: integer arithmetic on MIDI numbers.
  *
  * Scoring is **binary** (ADR §10), like every other drill: half a shell is not
@@ -247,7 +251,7 @@ function generate(
     },
     // The root alone; the shell itself only on the reveal (`draw.ts`).
     ...referenceThenReveal(rootMidi, notes),
-    answerMode: 'note-sequence',
+    answerMode: 'chord-released',
     expected: {
       kind: 'notes',
       notes,

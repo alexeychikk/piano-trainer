@@ -41,6 +41,7 @@
     OCTAVE_DOWN_HINT,
     OCTAVE_SHIFT_HINT_LABEL,
     OCTAVE_UP_HINT,
+    RELEASE_TO_ANSWER_HINT,
     isTypingTarget,
   } from '$lib/midi/keymap';
   import { settings } from '$lib/storage/settings.svelte';
@@ -144,7 +145,13 @@
     runnerHighlights({
       keyboard: keyboardRange,
       questionRange: runner.question?.range,
-      held: midiInput.held,
+      // While a MIDI chord is being captured (ADR 0004 §4), the chords already
+      // captured stay lit after the hands lift — "sounded notes stay lit until
+      // release commits" (UX §4.4).
+      held:
+        runner.capture === 'chord'
+          ? [...new Set([...midiInput.held, ...runner.answerNotes])]
+          : midiInput.held,
       answered: runner.answerNotes,
       outcome: runner.outcome,
       revealed: runner.revealNotes,
@@ -186,12 +193,46 @@
    * the count comes from `Question.expected`, the spelling from
    * `Question.spellings` (the same map the keys are labelled from).
    */
-  const sequenceMode = $derived(
-    runner.question?.answerMode === 'note-sequence',
+  const chordReleased = $derived(
+    runner.question?.answerMode === 'chord-released',
   );
+  /**
+   * A `chord-released` question answers as a sequence from every source but
+   * a MIDI port (ADR 0004 §1), so it shows the sequence's slots until chord
+   * capture has started — exactly today's frame for the mouse and the keys.
+   */
+  const sequenceMode = $derived(
+    runner.question?.answerMode === 'note-sequence' ||
+      (chordReleased && runner.capture !== 'chord'),
+  );
+  /** Chord capture is open: one slot per expected chord (ADR 0004 §4). */
+  const chordMode = $derived(chordReleased && runner.capture === 'chord');
   const slots = $derived.by(() => {
     const question = runner.question;
-    if (!question || !sequenceMode) return [];
+    if (!question) return [];
+    if (chordMode) {
+      // Each slot is named by its chord's lowest note — the root the grader
+      // will read, so a wrong bass is visible before the reveal.
+      const chords = runner.capturedChords;
+      const asked = question.answerChords;
+      const expected =
+        asked !== undefined && Number.isInteger(asked) && asked >= 1
+          ? asked
+          : 1;
+      const count = Math.max(expected, chords.length);
+      return Array.from({ length: count }, (_, index) => {
+        const bass: Midi | undefined = chords[index]?.[0];
+        return {
+          index,
+          label:
+            bass === undefined
+              ? '◻'
+              : (question.spellings?.get(bass) ?? midiToName(bass, 'flat')),
+          filled: bass !== undefined,
+        };
+      });
+    }
+    if (!sequenceMode) return [];
     const played = runner.answerNotes;
     const count = Math.max(expectedLength(question.expected), played.length);
     return Array.from({ length: count }, (_, index) => {
@@ -285,6 +326,9 @@
     // on-screen keys or computer keys (ADR §3): the runner cannot tell.
     const unsubscribe = midiInput.subscribe((event) => {
       if (event.type === 'on') runner.noteOn(event.midi, event.source);
+      // Chord capture closes on release (ADR 0004 §2); every other path
+      // ignores note-offs inside the runner.
+      else runner.noteOff(event.midi, event.source);
     });
     window.addEventListener('keydown', onKeyDown);
     return () => {
@@ -425,8 +469,9 @@
           <p class="feedback-detail">{runner.feedback.detail}</p>
         </div>
       </div>
-    {:else if sequenceMode}
-      <!-- The note slots of a sequence answer (§4.4), in the slot that is
+    {:else if sequenceMode || chordMode}
+      <!-- The note slots of a sequence answer (§4.4) — or one per chord while
+           a MIDI chord is captured (ADR 0004 §4) — in the slot that is
            reserved and empty for exactly as long as an answer is open. -->
       <p class="slots" data-testid="slots">
         <MicroLabel>answer</MicroLabel>
@@ -465,6 +510,9 @@
         <Chip variant="key">⌫</Chip> clear last ·
       {/if}
       <Chip variant="key">Esc</Chip> end
+      {#if chordReleased && midiInput.connected}
+        · {RELEASE_TO_ANSWER_HINT}
+      {/if}
       {#if !midiInput.connected}
         <!-- The whole mapping, `Z` / `X` included (§4.6): with the root at the
              bottom of a voicing, most answers need the shift between notes. -->

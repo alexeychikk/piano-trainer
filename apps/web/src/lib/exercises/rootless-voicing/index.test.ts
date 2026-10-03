@@ -62,6 +62,18 @@ function played(notes: number[]): Answer {
   return { kind: 'notes', notes, order: notes, source: 'onscreen' };
 }
 
+/** A chord-capture answer (ADR 0004): the union, plus the chord it came from. */
+function chordAnswer(notes: number[]): Answer {
+  const union = [...new Set(notes)].sort((a, b) => a - b);
+  return {
+    kind: 'notes',
+    notes: union,
+    order: union,
+    source: 'midi',
+    chords: [union],
+  };
+}
+
 describe('rootless-voicing generate', () => {
   it('is reproducible from the seed', () => {
     expect(ask(42)).toEqual(ask(42));
@@ -184,7 +196,7 @@ describe('rootless-voicing generate', () => {
 
   it('answers as a note sequence, with a window sized for building it', () => {
     const question = ask(7);
-    expect(question.answerMode).toBe('note-sequence');
+    expect(question.answerMode).toBe('chord-released');
     expect(question.answerGapMs).toBe(2500);
     expect(
       [...(question.spellings ?? [])].map(([, name]) => name),
@@ -312,7 +324,27 @@ describe('rootless-voicing grade', () => {
     );
   });
 
-  it('rejects a doubling, which always costs a chord tone', () => {
+  it('accepts the voicing doubled across the hands (ADR 0004)', () => {
+    expect(
+      rootlessVoicing.grade(
+        question,
+        chordAnswer([...voicing, ...voicing.map((midi) => midi + 12)]),
+      ).correct,
+    ).toBe(true);
+  });
+
+  it('still names a left-hand root under the voicing (ADR 0004 §6)', () => {
+    const grade = rootlessVoicing.grade(
+      question,
+      chordAnswer([rootMidi - 12, ...voicing]),
+    );
+    expect(grade.correct).toBe(false);
+    expect(grade.feedback).toBe(
+      'You played the root — a rootless voicing leaves it to the bass',
+    );
+  });
+
+  it('still rejects a doubled tone that leaves another out', () => {
     expect(
       rootlessVoicing.grade(
         question,

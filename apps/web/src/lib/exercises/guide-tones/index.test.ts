@@ -62,6 +62,18 @@ function played(notes: number[]): Answer {
   return { kind: 'notes', notes, order: notes, source: 'onscreen' };
 }
 
+/** A chord-capture answer (ADR 0004): the union, plus the chord it came from. */
+function chordAnswer(notes: number[]): Answer {
+  const union = [...new Set(notes)].sort((a, b) => a - b);
+  return {
+    kind: 'notes',
+    notes: union,
+    order: union,
+    source: 'midi',
+    chords: [union],
+  };
+}
+
 /** The other starter quality, for "you played that colour's 3rd" cases. */
 function otherQuality(quality: ChordQuality): ChordQuality {
   return STARTER_QUALITIES.find((other) => other !== quality) ?? 'dom7';
@@ -162,7 +174,7 @@ describe('guide-tones generate', () => {
 
   it('answers as a note sequence, with a window sized for building it', () => {
     const question = ask(7);
-    expect(question.answerMode).toBe('note-sequence');
+    expect(question.answerMode).toBe('chord-released');
     // A construction drill, not an echo: slice 11's window (the runner's
     // 1200 ms default closes an answer the user is still working out).
     expect(question.answerGapMs).toBe(2500);
@@ -292,7 +304,17 @@ describe('guide-tones grade', () => {
     );
   });
 
-  it('rejects a doubling, which always costs the other guide tone', () => {
+  it('accepts the pair doubled across the hands (ADR 0004)', () => {
+    // LH 3-7, RH 7-3 an octave up.
+    expect(
+      guideTones.grade(
+        question,
+        chordAnswer([pair[0], pair[1], pair[1] + 12, pair[0] + 24]),
+      ).correct,
+    ).toBe(true);
+  });
+
+  it('names a doubled tone that leaves the other out', () => {
     const grade = guideTones.grade(question, played([pair[0], pair[0] + 12]));
     expect(grade.correct).toBe(false);
     expect(grade.feedback).toBe(

@@ -58,6 +58,18 @@ function played(notes: number[]): Answer {
   return { kind: 'notes', notes, order: notes, source: 'onscreen' };
 }
 
+/** A chord-capture answer (ADR 0004): the union, plus the chord it came from. */
+function chordAnswer(notes: number[]): Answer {
+  const union = [...new Set(notes)].sort((a, b) => a - b);
+  return {
+    kind: 'notes',
+    notes: union,
+    order: union,
+    source: 'midi',
+    chords: [union],
+  };
+}
+
 describe('play-the-voicing generate', () => {
   it('is reproducible from the seed', () => {
     expect(ask(42)).toEqual(ask(42));
@@ -143,7 +155,7 @@ describe('play-the-voicing generate', () => {
 
   it('answers as a note sequence, with the shell spelled for the keys', () => {
     const question = ask(7);
-    expect(question.answerMode).toBe('note-sequence');
+    expect(question.answerMode).toBe('chord-released');
     expect(
       [...(question.spellings ?? [])].map(([, name]) => name),
     ).toHaveLength(3);
@@ -234,7 +246,15 @@ describe('play-the-voicing grade', () => {
     ).toBe(false);
   });
 
-  it('rejects a doubling, which always costs a chord tone', () => {
+  it('accepts a two-hand shell with a doubled root (ADR 0004)', () => {
+    // LH root an octave below the shell's own root, RH the shell.
+    expect(
+      playTheVoicing.grade(question, chordAnswer([rootMidi - 12, ...shell]))
+        .correct,
+    ).toBe(true);
+  });
+
+  it('still rejects a doubled shell tone that leaves another out', () => {
     expect(
       playTheVoicing.grade(
         question,

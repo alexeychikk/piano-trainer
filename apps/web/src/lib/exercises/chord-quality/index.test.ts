@@ -52,6 +52,18 @@ function played(notes: number[]): Answer {
   return { kind: 'notes', notes, order: notes, source: 'onscreen' };
 }
 
+/** A chord-capture answer (ADR 0004): the union, plus the chord it came from. */
+function chordAnswer(notes: number[]): Answer {
+  const union = [...new Set(notes)].sort((a, b) => a - b);
+  return {
+    kind: 'notes',
+    notes: union,
+    order: union,
+    source: 'midi',
+    chords: [union],
+  };
+}
+
 describe('chord-quality generate', () => {
   it('is reproducible from the seed', () => {
     expect(ask(99)).toEqual(ask(99));
@@ -89,7 +101,7 @@ describe('chord-quality generate', () => {
 
   it('answers on the keyboard, from any key, in played order', () => {
     const question = ask(7);
-    expect(question.answerMode).toBe('note-sequence');
+    expect(question.answerMode).toBe('chord-released');
     expect(question.prompt.showKeyboard).toBe(true);
     // Nothing dims: the chord may be played back from any root.
     expect(question.range).toBeUndefined();
@@ -139,6 +151,17 @@ describe('chord-quality grade', () => {
       correct: true,
       score: 1,
     });
+  });
+
+  it('accepts a two-hand chord with doublings (ADR 0004)', () => {
+    // LH root an octave down, RH the whole chord with the root doubled.
+    expect(
+      chordQuality.grade(question, chordAnswer([root - 12, ...notes])).correct,
+    ).toBe(true);
+    expect(
+      chordQuality.grade(question, chordAnswer([...notes, notes[1] + 12]))
+        .correct,
+    ).toBe(true);
   });
 
   it('accepts it from any other root — the quality is what is graded', () => {

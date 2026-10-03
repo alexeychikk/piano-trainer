@@ -22,6 +22,8 @@
  * - `ExerciseDefinition.skillLabel` — how an exercise names one of its own
  *   skill ids, so `/progress` can label a cell without decoding the id (slice
  *   5a).
+ * - `Question.revealPlayback` (slice 8), `Question.answerGapMs` (slice 10) and
+ *   `Question.answerChords` (ADR 0004) — documented where they are declared.
  */
 
 import type { Midi, NoteName } from '$lib/theory';
@@ -109,14 +111,36 @@ export interface Question<P = unknown> {
    * The idle pause (`IDLE_PAUSE_MS`) still ends an abandoned drill.
    */
   answerGapMs?: number;
+  /**
+   * How many chords a `chord-released` answer is made of (default 1) — an
+   * eighth generic extension to ADR §5 (ADR 0004 §2). It says how many
+   * *chords* the answer has, never what they are; the runner's chord capture
+   * closes once it has captured this many and every key is up. Only a
+   * multi-chord question (the ii-V-I) sets it.
+   */
+  answerChords?: number;
   /** Keys this question is answered on; outside them the keyboard dims. */
   range?: KeyRange;
   /** Spelling of the notes in play, for `labelStyle: 'context'`. */
   spellings?: ReadonlyMap<Midi, NoteName>;
 }
 
+/**
+ * What the user answered with. A `notes` answer from the runner's **chord
+ * capture** (ADR 0004: a `chord-released` question answered from a MIDI port)
+ * also carries `chords` — each chord ascending and deduped, in played order —
+ * and then `notes` is their union (ascending, deduped) and `order` those
+ * pitches in first-note-on order. Every other `notes` answer has no `chords`,
+ * exactly as before, so a single-chord `grade()` keeps reading `notes`.
+ */
 export type Answer =
-  | { kind: 'notes'; notes: Midi[]; order: Midi[]; source: NoteSource }
+  | {
+      kind: 'notes';
+      notes: Midi[];
+      order: Midi[];
+      source: NoteSource;
+      chords?: Midi[][];
+    }
   | { kind: 'choice'; choiceId: string };
 
 export interface Grade {

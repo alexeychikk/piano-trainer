@@ -13,9 +13,11 @@
  *   interval: what is being trained is the sound of the quality, and absolute
  *   pitch is what "Find the note" drills.
  * - **octave / voicing** — any. Register, spacing and doubling are thrown
- *   away, so C3-E4-G4-B4 is the same answer as C4-E4-G4-B4. (The runner closes
- *   a `note-sequence` answer at the expected length, so in practice a doubling
- *   means one chord tone never gets played.)
+ *   away, so C3-E4-G4-B4 is the same answer as C4-E4-G4-B4, and a left-hand
+ *   root under a right-hand chord (`C2 · C4 E4 G4 B4`) passes. Doublings are free: grading is pitch-class set plus lowest
+ *   note. On the `note-sequence` path (mouse, computer keys) a doubled note
+ *   still uses up one of the answer's N notes, because that path closes at
+ *   the expected length (ADR 0004 §3).
  * - **inversion** — root position. The lowest note played is read as the root,
  *   because a pitch-class set alone does not name one quality: Cm7 and Eb6 are
  *   the same four notes, and slice 8's 6th chords would make that ambiguity
@@ -23,12 +25,11 @@
  * - **enharmonics** — equal for free: the comparison is integer arithmetic on
  *   MIDI numbers (ADR §4), never on spellings.
  *
- * The answer mode is **`note-sequence`**, not `chord-sustained`: it is the one
- * mode that behaves the same on a MIDI piano (a held chord arrives as four
- * note-ons), on the computer keys and on the on-screen keyboard — where a
- * mouse can only press one key at a time and "hold the chord" cannot be played
- * at all. Grading is order-insensitive, so QA's slice-6 observation (notes
- * struck together are read in note-on arrival order) cannot affect it: a
+ * The answer mode is **`chord-released`** (ADR 0004), which the runner
+ * captures as a chord from a MIDI port — closed when every key is up, two
+ * hands and doublings included — and as a `note-sequence` from every other
+ * source, where a mouse can only press one key at a time and "hold the chord"
+ * cannot be played at all. Grading is order-insensitive either way, so a
  * rolled, arpeggiated or block chord grade identically.
  *
  * `generate()` and `grade()` are pure and take the seeded `rng`, so a question
@@ -229,7 +230,7 @@ function generate(
         },
       ],
     },
-    answerMode: 'note-sequence',
+    answerMode: 'chord-released',
     expected: {
       kind: 'notes',
       notes,
