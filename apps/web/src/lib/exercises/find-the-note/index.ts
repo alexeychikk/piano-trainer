@@ -9,18 +9,13 @@
  * without a browser (ADR §5).
  */
 
-import {
-  MIDDLE_C,
-  midiToName,
-  pcOf,
-  type Midi,
-  type PitchClass,
-} from '$lib/theory';
+import { MIDDLE_C, pcOf, type Midi, type PitchClass } from '$lib/theory';
 import {
   NothingToAskError,
   buildableTarget,
   pitchClassesIn,
 } from '../coverage';
+import { choose, drawAvoidingRepeat, occurrences, spell } from '../draw';
 import { randomInt } from '../rng';
 import { pitchClassSegment, skillIdSegments } from '../skill-id';
 import type {
@@ -28,7 +23,6 @@ import type {
   ExerciseDefinition,
   GenerateContext,
   Grade,
-  KeyRange,
   Question,
   SkillId,
 } from '../types';
@@ -42,9 +36,6 @@ export interface FindTheNotePayload {
 /** No per-exercise settings yet: the instrument range is all it needs. */
 export type FindTheNoteSettings = Record<string, never>;
 
-/** How hard we try to avoid asking the same pitch class twice in a row. */
-const MAX_REDRAWS = 4;
-
 /** How long the question note rings, in milliseconds. */
 const NOTE_MS = 1200;
 const NOTE_VELOCITY = 90;
@@ -52,15 +43,6 @@ const NOTE_VELOCITY = 90;
 /** The mastery unit is the pitch class — where a note lives, in any octave. */
 export function skillIdFor(midi: Midi): string {
   return `${FIND_THE_NOTE_ID}:pc:${pcOf(midi)}`;
-}
-
-/**
- * Black keys are spelled with flats: that is how a jazz chart names them, and
- * one spelling per pitch keeps the reveal, the prompt and the keyboard label
- * (`labelStyle: 'context'`) saying the same thing.
- */
-export function spell(midi: Midi): string {
-  return midiToName(midi, 'flat');
 }
 
 /**
@@ -86,18 +68,6 @@ export function parseSkillId(skillId: SkillId): PitchClass | null {
   return pitchClassSegment(segments[1]);
 }
 
-/** The keys of `pc` on `range`, low to high. */
-function occurrences(pc: PitchClass, range: KeyRange): Midi[] {
-  const notes: Midi[] = [];
-  for (
-    let midi = range.low + ((pc - pcOf(range.low) + 12) % 12);
-    midi <= range.high;
-    midi += 12
-  )
-    notes.push(midi);
-  return notes;
-}
-
 function generate(
   ctx: GenerateContext<FindTheNoteSettings>,
 ): Question<FindTheNotePayload> {
@@ -109,25 +79,18 @@ function generate(
   const target = buildableTarget(ctx.targetSkillId, parseSkillId, (pc) =>
     pitchClassesIn(low, high).includes(pc),
   );
-  const targetNotes = target === null ? [] : occurrences(target, ctx.range);
-  let midi =
+  // One of the target's octaves, drawn like any other note — and never
+  // redrawn: the planner asked for it. Otherwise any key, avoiding a repeat
+  // when the keyboard has another note to offer (`draw.ts`).
+  const midi =
     target === null
-      ? randomInt(ctx.rng, low, high)
-      : targetNotes[randomInt(ctx.rng, 0, targetNotes.length - 1)];
-  // Redraw a few times rather than looping until different: asking the same
-  // note twice in a row is dull, but forcing a change would bias the draw on a
-  // narrow range (and could not terminate at all on a one-note one). A target
-  // is never redrawn — the planner asked for it.
-  for (
-    let redraw = 0;
-    target === null &&
-    redraw < MAX_REDRAWS &&
-    high > low &&
-    recent[0] === skillIdFor(midi);
-    redraw += 1
-  ) {
-    midi = randomInt(ctx.rng, low, high);
-  }
+      ? drawAvoidingRepeat(
+          () => randomInt(ctx.rng, low, high),
+          skillIdFor,
+          recent,
+          high > low,
+        )
+      : choose(ctx.rng, occurrences(target, low, high));
 
   const name = spell(midi);
   return {

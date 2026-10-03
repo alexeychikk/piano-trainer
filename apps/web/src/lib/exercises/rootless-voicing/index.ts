@@ -47,7 +47,6 @@ import {
   intervalsAboveBass,
   isChordQuality,
   isRootlessForm,
-  midiToName,
   pcOf,
   qualityOfIntervals,
   rootlessBassDegree,
@@ -62,7 +61,6 @@ import {
   spellsShellInAnyInversion,
   type ChordQuality,
   type Midi,
-  type NoteName,
   type PitchClass,
   type RootlessForm,
 } from '$lib/theory';
@@ -72,7 +70,16 @@ import {
   buildableTarget,
   pitchClassesIn,
 } from '../coverage';
-import { randomInt } from '../rng';
+import {
+  choose,
+  drawAvoidingRepeat,
+  drawKeyed,
+  lowestFrom,
+  occurrences,
+  pickOccurrence,
+  referenceThenReveal,
+  spellings,
+} from '../draw';
 import { pitchClassSegment, skillIdSegments } from '../skill-id';
 import type {
   Answer,
@@ -119,16 +126,6 @@ export const STARTER_QUALITIES: readonly ChordQuality[] = [
   'min7',
 ];
 
-/** How hard we try to avoid asking the same chord twice in a row. */
-const MAX_REDRAWS = 4;
-
-/** How long the bass reference rings, in milliseconds. */
-const ROOT_MS = 900;
-/** How long the revealed voicing rings. */
-const VOICING_MS = 1600;
-const ROOT_VELOCITY = 80;
-const VOICING_VELOCITY = 84;
-
 /**
  * How long the answer may go silent before it closes (`Question.answerGapMs`,
  * the runner's per-question override). The runner's default 1200 ms is sized
@@ -147,8 +144,7 @@ const ANSWER_GAP_MS = 2500;
  * left hand comps — low enough to sound like an accompaniment, high enough to
  * stay off the bass player's register (which the reference root occupies).
  */
-const COMFORT_LOW: Midi = MIDDLE_C - 12;
-const COMFORT_HIGH: Midi = MIDDLE_C + 2;
+const COMFORT = { low: MIDDLE_C - 12, high: MIDDLE_C + 2 };
 
 /**
  * The mastery unit is **the chord *and* the form**:
@@ -199,11 +195,6 @@ export function parseSkillId(
   return hasRootless(quality) ? { quality, rootPc, form } : null;
 }
 
-/** Flats, like every other spelling in the app (find-the-note's rule). */
-function spell(midi: Midi): NoteName {
-  return midiToName(midi, 'flat');
-}
-
 /**
  * Whether the `form` voicing of `quality` in `rootPc` fits `range`: some
  * octave of its **bass note** (placement is anchored there, not on the root —
@@ -245,14 +236,6 @@ export function buildableQualities(
   );
 }
 
-/** Every occurrence of `pc` in `[from, to]`, low to high. */
-function occurrences(pc: PitchClass, from: Midi, to: Midi): Midi[] {
-  const notes: Midi[] = [];
-  for (let midi = from + ((pc - pcOf(from) + 12) % 12); midi <= to; midi += 12)
-    notes.push(midi);
-  return notes;
-}
-
 /**
  * Where to put the voicing: an occurrence of the form's bass degree that
  * leaves the whole shape inside the instrument, preferring the left hand's
@@ -272,17 +255,12 @@ function pickBass(
   form: RootlessForm,
 ): Midi {
   const ceiling = Math.max(low, high - rootlessSpan(quality, form));
-  const comfortable = occurrences(
-    bassPc,
-    Math.max(low, COMFORT_LOW),
-    Math.min(ceiling, COMFORT_HIGH),
-  );
-  const anywhere =
-    comfortable.length > 0 ? comfortable : occurrences(bassPc, low, ceiling);
   // A range too narrow to hold the shape is not a piano either; place it as
   // low as it goes and let the top poke out.
-  if (anywhere.length === 0) return low + ((bassPc - pcOf(low) + 12) % 12);
-  return anywhere[randomInt(rng, 0, anywhere.length - 1)];
+  return (
+    pickOccurrence(rng, bassPc, { low, high: ceiling }, COMFORT) ??
+    lowestFrom(bassPc, low)
+  );
 }
 
 /**
@@ -299,9 +277,7 @@ function pickReferenceRoot(
   const below = occurrences(rootPc, low, Math.min(high, bassMidi - 1));
   if (below.length > 0) return below[below.length - 1];
   const anywhere = occurrences(rootPc, low, high);
-  return anywhere.length > 0
-    ? anywhere[0]
-    : low + ((rootPc - pcOf(low) + 12) % 12);
+  return anywhere.length > 0 ? anywhere[0] : lowestFrom(rootPc, low);
 }
 
 function generate(
@@ -310,18 +286,10 @@ function generate(
   const { low, high } = ctx.range;
   const choices = buildableQualities(ctx.settings, ctx.range);
   if (choices.length === 0) throw new NothingToAskError(ROOTLESS_VOICING_ID);
-  const recent = ctx.history.recentSkillIds;
 
-  const draw = (): [ChordQuality, PitchClass, RootlessForm] => {
-    const quality = choices[randomInt(ctx.rng, 0, choices.length - 1)];
-    const roots = buildableRoots(quality, ctx.range);
-    const rootPc = roots[randomInt(ctx.rng, 0, roots.length - 1)];
-    const forms = ROOTLESS_FORMS.filter((form) =>
-      fits(quality, rootPc, form, ctx.range),
-    );
-    return [quality, rootPc, forms[randomInt(ctx.rng, 0, forms.length - 1)]];
-  };
-  // The planner's target, asked exactly when this drill can build it.
+  // The planner's target, asked exactly when this drill can build it; else a
+  // quality, a key it fits in and a form that fits there, not the last chord
+  // asked (`draw.ts`).
   const target = buildableTarget(
     ctx.targetSkillId,
     parseSkillId,
@@ -329,20 +297,21 @@ function generate(
       choices.includes(skill.quality) &&
       fits(skill.quality, skill.rootPc, skill.form, ctx.range),
   );
-  let [quality, rootPc, form] = target
-    ? [target.quality, target.rootPc, target.form]
-    : draw();
-  // Redraw a few times rather than looping until different: the same chord
-  // twice in a row is dull, but forcing a change would bias the draw. A target
-  // is never redrawn — the planner asked for it.
-  for (
-    let redraw = 0;
-    target === null &&
-    redraw < MAX_REDRAWS &&
-    recent[0] === skillIdFor(quality, rootPc, form);
-    redraw += 1
-  )
-    [quality, rootPc, form] = draw();
+  const { quality, rootPc, form } =
+    target ??
+    drawAvoidingRepeat(
+      () => {
+        const key = drawKeyed(ctx.rng, choices, (quality) =>
+          buildableRoots(quality, ctx.range),
+        );
+        const forms = ROOTLESS_FORMS.filter((form) =>
+          fits(key.quality, key.rootPc, form, ctx.range),
+        );
+        return { ...key, form: choose(ctx.rng, forms) };
+      },
+      (drawn) => skillIdFor(drawn.quality, drawn.rootPc, drawn.form),
+      ctx.history.recentSkillIds,
+    );
 
   const offset = rootlessBassOffset(quality, form) ?? 0;
   const bassMidi = pickBass(
@@ -378,31 +347,10 @@ function generate(
       subtitle: `Play the ${form} form: ${rootlessDegrees(form)} — no root`,
       showKeyboard: true,
     },
-    playback: {
-      // The root alone, low: the bass player's note, so `Replay` is worth
-      // pressing and the key can be found by ear. It cannot give the answer
-      // away — it is the one note the answer must *not* contain.
-      events: [
-        {
-          atMs: 0,
-          notes: [rootMidi],
-          durationMs: ROOT_MS,
-          velocity: ROOT_VELOCITY,
-        },
-      ],
-    },
-    // What a miss gets to hear: the voicing itself, and only it — the four
-    // notes the keyboard reveals (`Question.revealPlayback`, slice 8).
-    revealPlayback: {
-      events: [
-        {
-          atMs: 0,
-          notes,
-          durationMs: VOICING_MS,
-          velocity: VOICING_VELOCITY,
-        },
-      ],
-    },
+    // The root alone, low — the bass player's note, so `Replay` is worth
+    // pressing; it cannot give the answer away, being the one note the answer
+    // must *not* contain. A miss hears the voicing itself (`draw.ts`).
+    ...referenceThenReveal(rootMidi, notes),
     answerMode: 'note-sequence',
     answerGapMs: ANSWER_GAP_MS,
     expected: {
@@ -411,7 +359,7 @@ function generate(
       label: `${symbol} ${form} form`,
     },
     // No `range`: the voicing may be played in any octave, so nothing dims.
-    spellings: new Map(notes.map((midi) => [midi, spell(midi)])),
+    spellings: spellings(notes),
   };
 }
 

@@ -21,14 +21,12 @@ import {
   intervalBetween,
   intervalName,
   intervalShortName,
-  midiToName,
   spokenInterval,
   type Midi,
-  type NoteName,
   type Semitones,
 } from '$lib/theory';
 import { NothingToAskError, buildableTarget } from '../coverage';
-import { randomInt } from '../rng';
+import { choose, drawAvoidingRepeat, pickInWindow, spellings } from '../draw';
 import {
   MAX_SEMITONE_SEGMENT,
   integerSegment,
@@ -76,9 +74,6 @@ export type IntervalSettings = {
 /** Minor 2nd, Major 2nd, Minor 3rd, Major 3rd, Perfect 4th, Perfect 5th, Octave. */
 export const STARTER_INTERVALS: readonly Semitones[] = [1, 2, 3, 4, 5, 7, 12];
 
-/** How hard we try to avoid asking the same interval twice in a row. */
-const MAX_REDRAWS = 4;
-
 /** How long each note of the question rings, in milliseconds. */
 const NOTE_MS = 750;
 /** Melodic, so the second note starts when the first stops (ADR §10). */
@@ -90,8 +85,7 @@ const NOTE_VELOCITY = 90;
  * around middle C, where a digital piano's notes are easiest to hear and to
  * play back. A narrower instrument range wins over this (it is the real one).
  */
-const COMFORT_LOW: Midi = MIDDLE_C - 12;
-const COMFORT_HIGH: Midi = MIDDLE_C + 12;
+const COMFORT = { low: MIDDLE_C - 12, high: MIDDLE_C + 12 };
 
 /** The mastery unit is the interval and its direction (ADR §10). */
 export function skillIdFor(
@@ -130,11 +124,6 @@ export function parseSkillId(
   return { size, direction };
 }
 
-/** Flats, like every other spelling in the app (find-the-note's rule). */
-function spell(midi: Midi): NoteName {
-  return midiToName(midi, 'flat');
-}
-
 /** The two notes of a question, low index first in playing order. */
 function notesOf(payload: IntervalPayload): [Midi, Midi] {
   return [payload.rootMidi, payload.rootMidi + payload.semitones];
@@ -148,15 +137,12 @@ function pickRoot(
 ): Midi {
   // The root must leave room for the second note at either end, whichever way
   // the interval goes — that is what keeps a question inside the instrument.
-  const floor = Math.max(low, low - Math.min(0, semitones));
-  const ceiling = Math.min(high, high - Math.max(0, semitones));
-  if (ceiling < floor) return floor;
   // Prefer the comfortable middle, but never leave the real range to get it.
-  const comfortLow = Math.max(floor, COMFORT_LOW);
-  const comfortHigh = Math.min(ceiling, COMFORT_HIGH);
-  return comfortHigh >= comfortLow
-    ? randomInt(rng, comfortLow, comfortHigh)
-    : randomInt(rng, floor, ceiling);
+  const window = {
+    low: Math.max(low, low - Math.min(0, semitones)),
+    high: Math.min(high, high - Math.max(0, semitones)),
+  };
+  return pickInWindow(rng, window, COMFORT);
 }
 
 /**
@@ -192,21 +178,14 @@ function generate(
     parseSkillId,
     (skill) => skill.direction === direction && choices.includes(skill.size),
   );
-  let size = target?.size ?? choices[randomInt(ctx.rng, 0, choices.length - 1)];
-  // Redraw a few times rather than looping until different: asking the same
-  // interval twice in a row is dull, but forcing a change would bias the draw
-  // (and could not terminate at all on a one-interval set). A target is never
-  // redrawn — the planner asked for it.
-  for (
-    let redraw = 0;
-    target === null &&
-    redraw < MAX_REDRAWS &&
-    choices.length > 1 &&
-    recent[0] === skillIdFor(size, direction);
-    redraw += 1
-  ) {
-    size = choices[randomInt(ctx.rng, 0, choices.length - 1)];
-  }
+  const size =
+    target?.size ??
+    drawAvoidingRepeat(
+      () => choose(ctx.rng, choices),
+      (drawn) => skillIdFor(drawn, direction),
+      recent,
+      choices.length > 1,
+    );
 
   const semitones = sign * Math.abs(size);
   const rootMidi = pickRoot(ctx.rng, low, high, semitones);
@@ -245,10 +224,7 @@ function generate(
     answerMode: 'note-sequence',
     expected: { kind: 'notes', notes: [first, second], label },
     // No `range`: the answer may be played from any key, so nothing dims.
-    spellings: new Map([
-      [first, spell(first)],
-      [second, spell(second)],
-    ]),
+    spellings: spellings([first, second]),
   };
 }
 

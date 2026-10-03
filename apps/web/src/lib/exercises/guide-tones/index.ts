@@ -61,7 +61,6 @@ import {
   hasGuideTones,
   intervalsAboveBass,
   isChordQuality,
-  midiToName,
   pcOf,
   qualityOfIntervals,
   qualityOfShellIntervals,
@@ -71,15 +70,16 @@ import {
   type ChordQuality,
   type GuideToneDegree,
   type Midi,
-  type NoteName,
   type PitchClass,
 } from '$lib/theory';
+import { NothingToAskError, pitchClassesIn } from '../coverage';
 import {
-  NothingToAskError,
-  buildableTarget,
-  pitchClassesIn,
-} from '../coverage';
-import { randomInt } from '../rng';
+  drawKey,
+  lowestFrom,
+  pickOccurrence,
+  referenceThenReveal,
+  spellings,
+} from '../draw';
 import { pitchClassSegment, skillIdSegments } from '../skill-id';
 import type {
   Answer,
@@ -128,16 +128,6 @@ export const STARTER_QUALITIES: readonly ChordQuality[] = [
   'min7',
 ];
 
-/** How hard we try to avoid asking the same chord twice in a row. */
-const MAX_REDRAWS = 4;
-
-/** How long the reference root rings, in milliseconds. */
-const ROOT_MS = 900;
-/** How long the revealed pair rings. */
-const GUIDE_TONES_MS = 1600;
-const ROOT_VELOCITY = 80;
-const GUIDE_TONES_VELOCITY = 84;
-
 /**
  * How long the answer may go silent before it closes (`Question.answerGapMs`,
  * the runner's per-question override). The runner's 1200 ms default is sized
@@ -156,8 +146,7 @@ const ANSWER_GAP_MS = 2500;
  * then lands in the octave above it, which is where a right hand comps guide
  * tones over a bass note.
  */
-const COMFORT_LOW: Midi = MIDDLE_C - 12;
-const COMFORT_HIGH: Midi = MIDDLE_C + 2;
+const COMFORT = { low: MIDDLE_C - 12, high: MIDDLE_C + 2 };
 
 /**
  * The mastery unit is **the chord**: `guide-tones:<quality>:<rootPc>`, 36
@@ -202,11 +191,6 @@ export function parseSkillId(
   return hasGuideTones(quality) ? { quality, rootPc } : null;
 }
 
-/** Flats, like every other spelling in the app (find-the-note's rule). */
-function spell(midi: Midi): NoteName {
-  return midiToName(midi, 'flat');
-}
-
 /**
  * The keys a `quality` pair can be asked in on `range`: those with an octave
  * of the reference root low enough for the 7th to fit above it. All twelve on
@@ -232,14 +216,6 @@ export function buildableQualities(
   );
 }
 
-/** Every occurrence of `pc` in `[from, to]`, low to high. */
-function occurrences(pc: PitchClass, from: Midi, to: Midi): Midi[] {
-  const notes: Midi[] = [];
-  for (let midi = from + ((pc - pcOf(from) + 12) % 12); midi <= to; midi += 12)
-    notes.push(midi);
-  return notes;
-}
-
 /**
  * Where the reference root sounds: an occurrence of the asked pitch class that
  * still leaves the 7th inside the instrument, preferring the register a left
@@ -257,18 +233,12 @@ function pickRoot(
   rootPc: PitchClass,
   quality: ChordQuality,
 ): Midi {
-  const ceiling = Math.max(low, high - guideToneSpan(quality));
-  const comfortable = occurrences(
-    rootPc,
-    Math.max(low, COMFORT_LOW),
-    Math.min(ceiling, COMFORT_HIGH),
-  );
-  const anywhere =
-    comfortable.length > 0 ? comfortable : occurrences(rootPc, low, ceiling);
+  const window = { low, high: Math.max(low, high - guideToneSpan(quality)) };
   // A range so narrow that no octave of the root fits under the 7th is not a
   // piano either; place it as low as it goes and let the top poke out.
-  if (anywhere.length === 0) return low + ((rootPc - pcOf(low) + 12) % 12);
-  return anywhere[randomInt(rng, 0, anywhere.length - 1)];
+  return (
+    pickOccurrence(rng, rootPc, window, COMFORT) ?? lowestFrom(rootPc, low)
+  );
 }
 
 function generate(
@@ -277,33 +247,17 @@ function generate(
   const { low, high } = ctx.range;
   const choices = buildableQualities(ctx.settings, ctx.range);
   if (choices.length === 0) throw new NothingToAskError(GUIDE_TONES_ID);
-  const recent = ctx.history.recentSkillIds;
 
-  const draw = (): [ChordQuality, PitchClass] => {
-    const quality = choices[randomInt(ctx.rng, 0, choices.length - 1)];
-    const roots = buildableRoots(quality, ctx.range);
-    return [quality, roots[randomInt(ctx.rng, 0, roots.length - 1)]];
-  };
   // The planner's target, asked exactly when this drill can build it.
-  const target = buildableTarget(
-    ctx.targetSkillId,
+  const { quality, rootPc } = drawKey({
+    rng: ctx.rng,
+    targetSkillId: ctx.targetSkillId,
+    recentSkillIds: ctx.history.recentSkillIds,
+    choices,
+    rootsOf: (quality) => buildableRoots(quality, ctx.range),
     parseSkillId,
-    (skill) =>
-      choices.includes(skill.quality) &&
-      buildableRoots(skill.quality, ctx.range).includes(skill.rootPc),
-  );
-  let [quality, rootPc] = target ? [target.quality, target.rootPc] : draw();
-  // Redraw a few times rather than looping until different: the same chord
-  // twice in a row is dull, but forcing a change would bias the draw. A target
-  // is never redrawn — the planner asked for it.
-  for (
-    let redraw = 0;
-    target === null &&
-    redraw < MAX_REDRAWS &&
-    recent[0] === skillIdFor(quality, rootPc);
-    redraw += 1
-  )
-    [quality, rootPc] = draw();
+    skillIdFor,
+  });
 
   const rootMidi = pickRoot(ctx.rng, low, high, rootPc, quality);
   const notes = guideToneNotes(rootMidi, quality) ?? [rootMidi];
@@ -323,33 +277,12 @@ function generate(
       subtitle: `Play the guide tones: ${GUIDE_TONE_DEGREES} — no root`,
       showKeyboard: true,
     },
-    playback: {
-      // The root alone, low: the bass player's note, so `Replay` is worth
-      // pressing and the key can be found by ear. It cannot give the answer
-      // away — it is one of the notes the answer must *not* contain (slice
-      // 11's reference, one voicing smaller).
-      events: [
-        {
-          atMs: 0,
-          notes: [rootMidi],
-          durationMs: ROOT_MS,
-          velocity: ROOT_VELOCITY,
-        },
-      ],
-    },
-    // What a miss gets to hear: the two guide tones, and only them — never the
-    // shell or the whole chord, which are shapes this drill did not ask for
-    // (slice 11's reveal rule). `Question.revealPlayback`, slice 8's extension.
-    revealPlayback: {
-      events: [
-        {
-          atMs: 0,
-          notes,
-          durationMs: GUIDE_TONES_MS,
-          velocity: GUIDE_TONES_VELOCITY,
-        },
-      ],
-    },
+    // The root alone, low: the bass player's note. It cannot give the answer
+    // away — it is one of the notes the answer must *not* contain (slice 11's
+    // reference, one voicing smaller). The reveal plays the two guide tones
+    // and only them — never the shell or the whole chord, which are shapes
+    // this drill did not ask for (slice 11's reveal rule).
+    ...referenceThenReveal(rootMidi, notes),
     answerMode: 'note-sequence',
     answerGapMs: ANSWER_GAP_MS,
     expected: {
@@ -358,7 +291,7 @@ function generate(
       label: `${symbol} guide tones`,
     },
     // No `range`: the pair may be played in any octave, so nothing dims.
-    spellings: new Map(notes.map((midi) => [midi, spell(midi)])),
+    spellings: spellings(notes),
   };
 }
 
