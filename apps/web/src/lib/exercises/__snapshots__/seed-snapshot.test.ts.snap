@@ -52,7 +52,7 @@ exports[`seeded questions are reproducible > chord-quality on 36–96 1`] = `
   "chord-quality:4194675987:62:dom7 chord-quality:dom7",
   "chord-quality:522634105:54:min7b5 chord-quality:min7b5",
   "chord-quality:613992015:49:min7b5 chord-quality:min7b5",
-  "digest f52bc95f24ced",
+  "digest d2746c76f376f",
 ]
 `;
 
@@ -108,7 +108,7 @@ exports[`seeded questions are reproducible > chord-quality on 48–72 1`] = `
   "chord-quality:4194675987:60:dom7 chord-quality:dom7",
   "chord-quality:522634105:53:min7b5 chord-quality:min7b5",
   "chord-quality:613992015:48:min7b5 chord-quality:min7b5",
-  "digest 11191bab7e4c26",
+  "digest c46d11662eb9c",
 ]
 `;
 
@@ -164,7 +164,7 @@ exports[`seeded questions are reproducible > chord-quality on 60–72 1`] = `
   "chord-quality:4194675987:62:dom7 chord-quality:dom7",
   "chord-quality:522634105:61:min7b5 chord-quality:min7b5",
   "chord-quality:613992015:60:min7b5 chord-quality:min7b5",
-  "digest 1098d861ea07bb",
+  "digest 1d2d168d7e71a3",
 ]
 `;
 
@@ -220,7 +220,7 @@ exports[`seeded questions are reproducible > chord-quality on 60–79 1`] = `
   "chord-quality:4194675987:64:dom7 chord-quality:dom7",
   "chord-quality:522634105:61:min7b5 chord-quality:min7b5",
   "chord-quality:613992015:60:min7b5 chord-quality:min7b5",
-  "digest 1cf222096b986",
+  "digest fca76d2329cb1",
 ]
 `;
 
@@ -500,7 +500,7 @@ exports[`seeded questions are reproducible > guide-tones on 36–96 1`] = `
   "guide-tones:4194675987:58:maj7 guide-tones:maj7:10",
   "guide-tones:522634105:52:dom7 guide-tones:dom7:4",
   "guide-tones:613992015:55:dom7 guide-tones:dom7:7",
-  "digest 1b9c7654ddeaa9",
+  "digest 734b1465b62ad",
 ]
 `;
 
@@ -556,7 +556,7 @@ exports[`seeded questions are reproducible > guide-tones on 48–72 1`] = `
   "guide-tones:4194675987:58:maj7 guide-tones:maj7:10",
   "guide-tones:522634105:52:dom7 guide-tones:dom7:4",
   "guide-tones:613992015:55:dom7 guide-tones:dom7:7",
-  "digest 1b9c7654ddeaa9",
+  "digest 734b1465b62ad",
 ]
 `;
 
@@ -612,7 +612,7 @@ exports[`seeded questions are reproducible > guide-tones on 60–72 1`] = `
   "guide-tones:4194675987:61:maj7 guide-tones:maj7:1",
   "guide-tones:522634105:61:dom7 guide-tones:dom7:1",
   "guide-tones:613992015:62:min7 guide-tones:min7:2",
-  "digest 1b3ecca9033bc0",
+  "digest 1197f92e202c0",
 ]
 `;
 
@@ -668,7 +668,7 @@ exports[`seeded questions are reproducible > guide-tones on 60–79 1`] = `
   "guide-tones:4194675987:67:maj7 guide-tones:maj7:7",
   "guide-tones:522634105:63:dom7 guide-tones:dom7:3",
   "guide-tones:613992015:65:min7 guide-tones:min7:5",
-  "digest a0a3fb55ece1a",
+  "digest 1cbad84956004f",
 ]
 `;
 
@@ -948,7 +948,7 @@ exports[`seeded questions are reproducible > play-the-voicing on 36–96 1`] = `
   "play-the-voicing:4194675987:46:maj7 play-the-voicing:maj7:10",
   "play-the-voicing:522634105:52:dom7 play-the-voicing:dom7:4",
   "play-the-voicing:613992015:43:dom7 play-the-voicing:dom7:7",
-  "digest 141941a1df75a9",
+  "digest f3e9837867912",
 ]
 `;
 
@@ -1004,7 +1004,7 @@ exports[`seeded questions are reproducible > play-the-voicing on 48–72 1`] = `
   "play-the-voicing:4194675987:58:maj7 play-the-voicing:maj7:10",
   "play-the-voicing:522634105:52:dom7 play-the-voicing:dom7:4",
   "play-the-voicing:613992015:55:dom7 play-the-voicing:dom7:7",
-  "digest 1bba622234f8e5",
+  "digest dff6956ec76f9",
 ]
 `;
 
@@ -1060,7 +1060,7 @@ exports[`seeded questions are reproducible > play-the-voicing on 60–72 1`] = `
   "play-the-voicing:4194675987:61:maj7 play-the-voicing:maj7:1",
   "play-the-voicing:522634105:61:dom7 play-the-voicing:dom7:1",
   "play-the-voicing:613992015:62:min7 play-the-voicing:min7:2",
-  "digest 1c7b0f9afab8a0",
+  "digest 2861540a36db8",
 ]
 `;
 
@@ -1116,7 +1116,7 @@ exports[`seeded questions are reproducible > play-the-voicing on 60–79 1`] = `
   "play-the-voicing:4194675987:67:maj7 play-the-voicing:maj7:7",
   "play-the-voicing:522634105:63:dom7 play-the-voicing:dom7:3",
   "play-the-voicing:613992015:65:min7 play-the-voicing:min7:5",
-  "digest 1182aeef7bc0b4",
+  "digest 1898f2ac2b4919",
 ]
 `;
 
@@ -1396,7 +1396,7 @@ exports[`seeded questions are reproducible > rootless-voicing on 36–96 1`] = `
   "rootless-voicing:4194675987:62:maj7:A rootless-voicing:maj7:10:A",
   "rootless-voicing:522634105:62:dom7:B rootless-voicing:dom7:4:B",
   "rootless-voicing:613992015:49:min7:B rootless-voicing:min7:3:B",
-  "digest 3ddb63c522fef",
+  "digest 1d685c0e00bdb6",
 ]
 `;
 
@@ -1452,7 +1452,7 @@ exports[`seeded questions are reproducible > rootless-voicing on 48–72 1`] = `
   "rootless-voicing:4194675987:62:maj7:A rootless-voicing:maj7:10:A",
   "rootless-voicing:522634105:62:dom7:B rootless-voicing:dom7:4:B",
   "rootless-voicing:613992015:49:min7:B rootless-voicing:min7:3:B",
-  "digest f3b775ec7d28c",
+  "digest b7fa3a7f74342",
 ]
 `;
 
@@ -1508,7 +1508,7 @@ exports[`seeded questions are reproducible > rootless-voicing on 60–72 1`] = `
   "rootless-voicing:4194675987:61:maj7:A rootless-voicing:maj7:9:A",
   "rootless-voicing:522634105:62:dom7:B rootless-voicing:dom7:4:B",
   "rootless-voicing:613992015:62:maj7:A rootless-voicing:maj7:10:A",
-  "digest ec507961927ef",
+  "digest 135c3d39f4ae34",
 ]
 `;
 
@@ -1564,6 +1564,6 @@ exports[`seeded questions are reproducible > rootless-voicing on 60–79 1`] = `
   "rootless-voicing:4194675987:62:maj7:A rootless-voicing:maj7:10:A",
   "rootless-voicing:522634105:62:dom7:B rootless-voicing:dom7:4:B",
   "rootless-voicing:613992015:61:dom7:B rootless-voicing:dom7:3:B",
-  "digest 62e9fe60df829",
+  "digest c44f4aa4abbf3",
 ]
 `;

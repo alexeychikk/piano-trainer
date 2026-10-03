@@ -41,6 +41,13 @@ export const OCTAVE_DOWN_HINT = OCTAVE_DOWN_KEY.replace('Key', '');
 export const OCTAVE_UP_HINT = OCTAVE_UP_KEY.replace('Key', '');
 export const OCTAVE_SHIFT_HINT_LABEL = 'octave';
 
+/**
+ * Appended to the shortcut bar for a `chord-released` question while a MIDI
+ * device is connected (UX §4.4, ADR 0004 §4): a MIDI chord answer closes when
+ * every key is up, so the bar says how to answer.
+ */
+export const RELEASE_TO_ANSWER_HINT = 'release to answer';
+
 /** `A` starts on C4 by default — middle C is where a beginner orients. */
 export const DEFAULT_BASE_OCTAVE = 4;
 export const MIN_BASE_OCTAVE = 0;

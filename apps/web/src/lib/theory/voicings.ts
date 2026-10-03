@@ -141,8 +141,9 @@ export function shellPitchClasses(
  * the B form (`1-3-7`) both pass, and so does the same shape two octaves down.
  * Enharmonics compare equal for free: this is integer arithmetic on MIDI
  * numbers, never on spellings (ADR §4). A doubled note is not an extra pitch
- * class, but it costs one of the three notes the answer has, so a doubling
- * always leaves a pitch class missing and fails.
+ * class, so a doubling passes as long as all three pitch classes are there.
+ * On the `note-sequence` path (mouse, computer keys) the answer closes at three
+ * notes, so there a doubling still leaves a pitch class missing (ADR 0004 §3).
  */
 export function spellsShell(
   notes: readonly Midi[],
@@ -373,8 +374,9 @@ export function rootlessPitchClasses(
  * must be exactly the voicing's four**, and the **lowest note played must be
  * the form's own bass degree** — the 3rd for A, the 7th for B. Register,
  * octave, spacing and order are free; enharmonics compare equal for free
- * (integer arithmetic, ADR §4); a doubling costs one of the four notes the
- * answer has, so it always leaves a pitch class missing and fails.
+ * (integer arithmetic, ADR §4); a doubling is free under chord capture,
+ * while on the `note-sequence` path (mouse, computer keys) it costs one of the
+ * four notes the answer has, so a pitch class goes missing (ADR 0004 §3).
  *
  * The **root is not one of the four**, so playing it fails — that is what
  * "rootless" means, and the miss is named rather than left bare.
@@ -527,8 +529,8 @@ export function guideTonePitchClasses(
  * The **root is not one of the two**, so playing it fails — a root, a 3rd and
  * a 7th is the shell, which is slice 8's drill and a *named* miss here.
  * Enharmonics compare equal for free (integer arithmetic, ADR §4); a doubling
- * costs one of the two notes the answer has, so it always leaves a pitch class
- * missing and fails.
+ * is free under chord capture, while on the `note-sequence` path (mouse,
+ * computer keys) it costs the other of the answer's two notes (ADR 0004 §3).
  */
 export function spellsGuideTones(
   notes: readonly Midi[],

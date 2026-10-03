@@ -207,10 +207,25 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
   with the root at the bottom of a voicing most answers need the shift between notes). Its wording
   lives in `$lib/midi/keymap.ts`, and the keycaps (`OCTAVE_DOWN_HINT` / `OCTAVE_UP_HINT`) are
   derived from the codes the handler listens to, so the manual cannot drift from the behaviour.
-  **Pending: [ADR 0004](docs/decisions/0004-midi-chord-answers-close-on-release.md)** (accepted
-  2026-10-03, not yet built) moves the five chord drills to `chord-released`. A MIDI answer closes on
-  key release and doublings pass; mouse and computer keys keep `note-sequence`. Its §7 lists the
-  doubling sentences below that the implementing PR rewrites. Until it lands they describe the code.
+  **Chord capture ([ADR 0004](docs/decisions/0004-midi-chord-answers-close-on-release.md), part a
+  landed)**: a `chord-released` question picks its path **per answer, from the first note-on's
+  source** — `midi` opens chord capture (`runner.capture === 'chord'`), anything else is plain
+  `note-sequence`, so the mouse and the computer keys behave exactly as before; once capture is
+  `chord`, non-MIDI notes are ignored. `runner.noteOff()` is fed every `off` event by the frame and
+  only chord capture reads it (a key held before the answer opened is not in `held`, so its release
+  is ignored). Rules, all timed in the runner module: a **moment** is what is held when
+  `CHORD_SETTLE_MS` (90 ms) of note-on silence passes, so a rolled chord or a left hand lifted early
+  still counts; a key grazed down *and* up inside that window is a **stray** and dropped; a **stab**
+  (every key up before the settle fires, ≥ 2 pitches) is one moment; the answer **closes** once every
+  key has been up for `CHORD_RELEASE_MS` (250 ms) and `Question.answerChords` (default 1 — the
+  **eighth** generic extension) chords are captured, otherwise the silence window
+  (`answerGapMs ?? SEQUENCE_GAP_MS`) closes it. A new chord starts at a moment after any key went up,
+  if one is already captured. The graded `Answer` carries `chords` (each ascending, deduped) beside
+  `notes` (their union), so single-chord `grade()`s read `notes` unchanged. The frame shows one slot
+  per chord (named by its lowest note), keeps captured notes lit, hides `⌫` while capturing and adds
+  `release to answer` (`RELEASE_TO_ANSWER_HINT`) to the bar when a MIDI device is connected. Part (b)
+  — the ii-V-I on `chord-released` — is a separate ticket; until it lands slice 10 below describes the
+  code.
 - **Interval recognition + `note-sequence` (slice 6)** — `$lib/exercises/interval-recognition/`, the
   second exercise and the first ear-training drill:
   - **The graded quantity is the interval, not the pitches**: a question is asked from a random root,
@@ -250,16 +265,16 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
     a pitch-class set alone does not name one quality (Cm7 and Eb6 are the same four notes, and
     slice 8's 6th chords make that ambiguity real), so the lowest note played is read as the root.
     A right chord over the wrong bass is a *named* miss, never a silent one
-    (`spellsQualityInAnyInversion`). Scoring is **binary** (ADR §10). `grade()` throws a doubling
-    away like any other spacing, but **a doubling still misses**: the runner closes a
-    `note-sequence` answer at the expected length (four), so a doubled note always costs a chord
-    tone — slice 8's and slice 10's rule, and what `chord-quality/index.ts`'s docblock says.
-  - The **answer mode is `note-sequence`**, not the UX spec's `chord-sustained`/`chord-released`:
-    those two need notes held together, which a mouse on the on-screen keyboard cannot do at all
-    (one pointer, one key), and the acceptance rule is that every drill is playable with no MIDI
-    device. `note-sequence` behaves identically for a held MIDI chord (four note-ons), the computer
-    keys and the mouse, and grading is **order-insensitive**, so QA's slice-6 observation (notes
-    struck together arrive in note-on order) cannot reach it. The runner needed **no change**.
+    (`spellsQualityInAnyInversion`). Scoring is **binary** (ADR §10).
+    **Doublings are free**: grading is pitch-class set plus lowest note. On the `note-sequence` path
+    (mouse, computer keys) a doubled note still uses up one of the answer's N notes, because that
+    path closes at the expected length (ADR 0004 §3).
+  - The **answer mode is `chord-released`**, which the runner captures as a chord from a MIDI port
+    and as a `note-sequence` from every other source (ADR 0004 §1): a mouse on the on-screen
+    keyboard cannot hold a chord at all (one pointer, one key), and every drill must stay playable
+    with no MIDI device. Grading is **order-insensitive** either way, so notes struck together
+    arriving in note-on order (QA's slice-6 observation) cannot reach it. Slices 8, 11 and 12 use
+    the same mode.
   - Chord **vocabulary lives in `$lib/theory/chords.ts`**, never in the exercise — the
     `intervals.ts` rule: `chordIntervals`/`chordNotes` (build), `intervalsAboveBass`/
     `qualityOfIntervals`/`spellsQuality`/`spellsQualityInAnyInversion` (read) and the three names
@@ -289,9 +304,11 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
     matters, because `Dbmaj7` and `Cmaj7` are one colour and two different shapes. `grade()` is
     `spellsShell()`: the **pitch classes played must be exactly the shell's three** and the
     **lowest note played must be the asked root**. Register, octave, spacing and order are free, so
-    the A form (`1-7-3`) and the B form (`1-3-7`) pass by construction; the triad, the whole chord,
-    a doubling (it always costs a chord tone — the answer is three notes long) and a rootless or
-    inverted shell are misses; enharmonics are equal for free. Binary scoring (ADR §10). **Hands
+    the A form (`1-7-3`) and the B form (`1-3-7`) pass by construction; the triad, the whole chord
+    and a rootless or inverted shell are misses; enharmonics are equal for free. Binary scoring
+    (ADR §10). **Doublings are free**: grading is pitch-class set plus lowest note. On the `note-sequence` path
+    (mouse, computer keys) a doubled note still uses up one of the answer's N notes, because that
+    path closes at the expected length (ADR 0004 §3). **Hands
     are not a concept** — a `NoteEvent` carries a source, never a hand — so this drill is
     one-handed and the deferred **two-hand voicing colours roll on to the rootless-voicings
     ticket**.
@@ -355,9 +372,11 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
     `rootlessPitchClasses()` deliberately takes **no form** — only the bass can tell them apart —
     and `spellsRootless()` is "exactly these four pitch classes, with the form's own degree lowest"
     (slice 8's rule with the bass moved off the root). Free: register, octave, spacing, order,
-    enharmonics. Rejected: the other form, another key, another quality, a doubling (the answer is
-    four notes, so it always costs a chord tone) and **any answer containing the root** — that is
-    what rootless means, and it is a *named* near-miss, never a bare ✗. Binary scoring (ADR §10).
+    enharmonics. Rejected: the other form, another key, another quality and **any answer containing
+    the root** — that is what rootless means (a left-hand root under the voicing included, ADR 0004
+    §6), and it is a *named* near-miss, never a bare ✗. Binary scoring (ADR §10). **Doublings are free**: grading is pitch-class set plus lowest note. On the `note-sequence` path
+    (mouse, computer keys) a doubled note still uses up one of the answer's N notes, because that
+    path closes at the expected length (ADR 0004 §3).
   - **An A form is also a seventh chord, and that ambiguity is the music's**: `Cm7`'s A form is
     `Eb-G-Bb-D`, spelled exactly like `Ebmaj7` (`Cmaj7`'s is `Em7`, `C7`'s is `Em7b5`). No B form is
     anything else. Both readings are honest, so `rootlessOfIntervalsAboveBass()` names a played
@@ -397,9 +416,10 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
     note, but `3-7` and `7-3` are both the pair every method teaches — which one a hand reaches for
     is voice leading, not correctness. Free: register, octave, spacing, order, which tone is lowest,
     enharmonics. Rejected: the root (that is the shell — slice 8's answer and the habit this drill
-    breaks), the 5th/9th (that is slice 11's), another key, the other colour, half the pair and a
-    doubling (the answer is two notes, so a doubled note always costs the other tone). Binary
-    scoring (ADR §10).
+    breaks), the 5th/9th (that is slice 11's), another key, the other colour and half the pair.
+    Binary scoring (ADR §10). **Doublings are free**: grading is pitch-class set plus lowest note. On the `note-sequence` path
+    (mouse, computer keys) a doubled note still uses up one of the answer's N notes, because that
+    path closes at the expected length (ADR 0004 §3).
   - **A dominant and its tritone substitute share their pair** (`C7` and `Gb7` are both `E`+`Bb`), so
     playing one for the other is *correct* — the ambiguity is the music's and grading may not call
     it a miss. `guideToneReadings()` therefore returns a **list**, and `missDetail` picks the reading

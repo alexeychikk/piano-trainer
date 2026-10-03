@@ -33,10 +33,14 @@
  *   too, in this drill's own vocabulary (slice 11's rule), and so is one guide
  *   tone played beside the 5th (`E G` for `Cmaj7` — the triad player's reflex,
  *   and a pair that is nobody else's guide tones, so nothing else names it).
- * - **doubling** — fails: the answer is two notes long, so a doubled note
- *   always leaves the other guide tone unplayed (slices 7, 8, 10 and 11's
- *   rule), and it gets its own line because it is a *near* miss here, not a
- *   wrong pair.
+ * - **doubling** — free (LH `3-7` + RH `7-3` passes). Grading is pitch-class set plus lowest
+ *   note. On the `note-sequence` path (mouse, computer keys) a doubled note
+ *   still uses up one of the answer's N notes, because that path closes at
+ *   the expected length (ADR 0004 §3).
+ *   There a doubled note leaves the other guide tone unplayed, and it gets
+ *   its own line because it is a *near* miss, not a wrong pair. The answer
+ *   mode is `chord-released`: from a MIDI port it closes when every key is
+ *   up; the mouse and computer keys close on two note-ons.
  * - **enharmonics** — equal for free: integer arithmetic on MIDI numbers.
  *
  * Scoring is **binary** (ADR §10): one of two guide tones is not a guide-tone
@@ -283,7 +287,7 @@ function generate(
     // and only them — never the shell or the whole chord, which are shapes
     // this drill did not ask for (slice 11's reveal rule).
     ...referenceThenReveal(rootMidi, notes),
-    answerMode: 'note-sequence',
+    answerMode: 'chord-released',
     answerGapMs: ANSWER_GAP_MS,
     expected: {
       kind: 'notes',
@@ -344,7 +348,8 @@ export function missDetail(
   const bassPc = pcOf(Math.min(...played.map((midi) => Math.round(midi))));
 
   // Half the pair — either the 3rd or the 7th on its own, or the same one
-  // twice (a doubling always costs the other, since the answer is two notes).
+  // twice (on the note-sequence path a doubling costs the other, since that
+  // answer closes at two notes).
   if (pcs.length === 1) {
     const degree = guideToneDegree(rootPc, quality, pcs[0]);
     if (degree !== null) {

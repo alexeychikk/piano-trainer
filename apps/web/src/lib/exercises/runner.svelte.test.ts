@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ADVANCE_LOCKOUT_MS,
+  CHORD_RELEASE_MS,
+  CHORD_SETTLE_MS,
   ExerciseRunner,
   FEEDBACK_CORRECT_MS,
   FEEDBACK_STREAK_MS,
@@ -11,6 +13,7 @@ import {
 import { NothingToAskError } from './coverage';
 import type { PlaybackApi } from './playback';
 import type {
+  Answer,
   AnyExercise,
   AttemptResult,
   ExerciseDefinition,
@@ -764,5 +767,344 @@ describe('ExerciseRunner · a mixed session (slice 9b)', () => {
     h.tick(FEEDBACK_CORRECT_MS);
     expect(h.runner.definition.id).toBe('stub');
     expect(h.runner.phase).toBe('presenting');
+  });
+});
+
+// ---- chord capture (ADR 0004) ---------------------------------------------
+
+/** Every answer a chord stub was graded on, newest last. */
+const graded: Answer[] = [];
+
+/**
+ * A `chord-released` stand-in: Cmaj7, graded the way every chord drill grades
+ * — pitch-class set plus lowest note — so doublings and two hands are free and
+ * the runner still learns nothing about chords.
+ */
+const chordStub: ExerciseDefinition<{ answerChords?: number }> = {
+  ...stub,
+  id: 'stub-chord',
+  generate: (ctx) => ({
+    ...stub.generate(ctx),
+    payload: {},
+    answerMode: 'chord-released',
+    expected: { kind: 'notes', notes: [60, 64, 67, 71], label: 'Cmaj7' },
+  }),
+  grade: (_question, answer) => {
+    graded.push(answer);
+    if (answer.kind !== 'notes' || answer.notes.length === 0)
+      return { correct: false, score: 0 };
+    const pcs = [...new Set(answer.notes.map((midi) => midi % 12))].sort(
+      (a, b) => a - b,
+    );
+    const bass = Math.min(...answer.notes) % 12;
+    return pcs.join(',') === '0,4,7,11' && bass === 0
+      ? { correct: true, score: 1 }
+      : { correct: false, score: 0, feedback: 'Not Cmaj7' };
+  },
+};
+
+/** Three chords to an answer — the shape of the ii-V-I, graded on the count. */
+const multiChordStub: AnyExercise = {
+  ...(chordStub as AnyExercise),
+  id: 'stub-multi-chord',
+  generate: (ctx) => ({
+    ...chordStub.generate(ctx as never),
+    answerChords: 3,
+  }),
+  grade: (_question, answer) => {
+    graded.push(answer);
+    const ok = answer.kind === 'notes' && answer.chords?.length === 3;
+    return { correct: ok, score: ok ? 1 : 0 };
+  },
+};
+
+function press(
+  h: ReturnType<typeof harness>,
+  notes: number[],
+  source = 'midi',
+) {
+  for (const midi of notes) h.runner.noteOn(midi, source as 'midi');
+}
+
+function lift(h: ReturnType<typeof harness>, notes: number[], source = 'midi') {
+  for (const midi of notes) h.runner.noteOff(midi, source as 'midi');
+}
+
+function lastAnswer(): Extract<Answer, { kind: 'notes' }> {
+  const answer = graded[graded.length - 1];
+  if (answer?.kind !== 'notes') throw new Error('no notes answer');
+  return answer;
+}
+
+describe('ExerciseRunner · chord capture (ADR 0004)', () => {
+  beforeEach(() => {
+    graded.length = 0;
+  });
+
+  it('closes a two-hand chord with a doubling on release, and grades it right', async () => {
+    const h = await started(harness(chordStub as AnyExercise));
+    // LH root + RH Cmaj7 with the root doubled — four note-ons would have
+    // closed a sequence answer on the doubled C.
+    press(h, [48, 60, 64, 67, 71]);
+    expect(h.runner.capture).toBe('chord');
+    h.tick(CHORD_SETTLE_MS);
+    expect(h.runner.phase).toBe('awaiting');
+    expect(h.runner.capturedChords).toEqual([[48, 60, 64, 67, 71]]);
+
+    lift(h, [48, 60, 64, 67, 71]);
+    h.tick(CHORD_RELEASE_MS - 1);
+    expect(h.runner.phase).toBe('awaiting');
+    h.tick(1);
+    expect(h.runner.phase).toBe('feedback');
+    expect(h.runner.outcome).toBe('correct');
+    expect(lastAnswer()).toEqual({
+      kind: 'notes',
+      notes: [48, 60, 64, 67, 71],
+      order: [48, 60, 64, 67, 71],
+      source: 'midi',
+      chords: [[48, 60, 64, 67, 71]],
+    });
+    expect(h.attempts[0].answerSource).toBe('midi');
+  });
+
+  it('reads a rolled chord as one chord', async () => {
+    const h = await started(harness(chordStub as AnyExercise));
+    for (const midi of [60, 64, 67, 71]) {
+      press(h, [midi]);
+      h.tick(CHORD_SETTLE_MS + 30);
+    }
+    lift(h, [60, 64, 67, 71]);
+    h.tick(CHORD_RELEASE_MS);
+    expect(lastAnswer().chords).toEqual([[60, 64, 67, 71]]);
+    expect(h.runner.outcome).toBe('correct');
+  });
+
+  it('merges a left-hand root lifted 150 ms before the right hand lands', async () => {
+    const h = await started(harness(chordStub as AnyExercise));
+    press(h, [48]);
+    h.tick(CHORD_SETTLE_MS + 10);
+    lift(h, [48]);
+    h.tick(150);
+    press(h, [64, 67, 71]);
+    h.tick(CHORD_SETTLE_MS);
+    lift(h, [64, 67, 71]);
+    h.tick(CHORD_RELEASE_MS);
+    expect(lastAnswer().chords).toEqual([[48, 64, 67, 71]]);
+    expect(h.runner.outcome).toBe('correct');
+  });
+
+  it('drops a key grazed while the chord is held', async () => {
+    const h = await started(harness(chordStub as AnyExercise));
+    press(h, [60, 64, 67, 71]);
+    h.tick(CHORD_SETTLE_MS);
+    press(h, [62]);
+    h.tick(40);
+    lift(h, [62]);
+    h.tick(CHORD_SETTLE_MS);
+    lift(h, [60, 64, 67, 71]);
+    h.tick(CHORD_RELEASE_MS);
+    expect(lastAnswer().notes).toEqual([60, 64, 67, 71]);
+    expect(h.runner.outcome).toBe('correct');
+  });
+
+  it('drops a lone graze before the chord', async () => {
+    const h = await started(harness(chordStub as AnyExercise));
+    press(h, [59]);
+    h.tick(30);
+    lift(h, [59]);
+    // Nothing captured: the release does not close an answer.
+    h.tick(CHORD_RELEASE_MS + 2000);
+    expect(h.runner.phase).toBe('awaiting');
+    expect(graded).toHaveLength(0);
+
+    press(h, [60, 64, 67, 71]);
+    h.tick(CHORD_SETTLE_MS);
+    lift(h, [60, 64, 67, 71]);
+    h.tick(CHORD_RELEASE_MS);
+    expect(lastAnswer().notes).toEqual([60, 64, 67, 71]);
+    expect(lastAnswer().order).toEqual([60, 64, 67, 71]);
+  });
+
+  it('counts a wrong key that is held through a settle', async () => {
+    const h = await started(harness(chordStub as AnyExercise));
+    press(h, [60, 64, 67, 71, 62]);
+    h.tick(CHORD_SETTLE_MS);
+    lift(h, [60, 64, 67, 71, 62]);
+    h.tick(CHORD_RELEASE_MS);
+    expect(lastAnswer().notes).toEqual([60, 62, 64, 67, 71]);
+    expect(h.runner.outcome).toBe('wrong');
+  });
+
+  it('counts a stab shorter than the settle window', async () => {
+    const h = await started(harness(chordStub as AnyExercise));
+    press(h, [60, 64, 67, 71]);
+    h.tick(CHORD_SETTLE_MS - 40);
+    lift(h, [60, 64, 67, 71]);
+    h.tick(CHORD_RELEASE_MS);
+    expect(lastAnswer().chords).toEqual([[60, 64, 67, 71]]);
+    expect(h.runner.outcome).toBe('correct');
+  });
+
+  it('counts a single note held through a settle', async () => {
+    const h = await started(harness(chordStub as AnyExercise));
+    press(h, [64]);
+    h.tick(CHORD_SETTLE_MS);
+    lift(h, [64]);
+    h.tick(CHORD_RELEASE_MS);
+    expect(lastAnswer().notes).toEqual([64]);
+  });
+
+  it('never closes while a key is held, and the silence window waits for the release', async () => {
+    const h = await started(harness(multiChordStub));
+    press(h, [60, 64, 67, 71]);
+    h.tick(CHORD_SETTLE_MS);
+    h.tick(10_000);
+    expect(h.runner.phase).toBe('awaiting');
+
+    lift(h, [60, 64, 67, 71]);
+    // One chord of three: the release arms the silence window instead.
+    h.tick(CHORD_RELEASE_MS);
+    expect(h.runner.phase).toBe('awaiting');
+    h.tick(SEQUENCE_GAP_MS - 1);
+    expect(h.runner.phase).toBe('awaiting');
+    h.tick(1);
+    expect(h.runner.phase).toBe('feedback');
+    expect(lastAnswer().chords).toHaveLength(1);
+  });
+
+  it('reads three chords from full lifts', async () => {
+    const h = await started(harness(multiChordStub));
+    for (const chord of [
+      [50, 53, 57, 60],
+      [43, 59, 62, 65],
+      [48, 64, 67, 71],
+    ]) {
+      press(h, chord);
+      h.tick(CHORD_SETTLE_MS);
+      lift(h, chord);
+      h.tick(CHORD_RELEASE_MS + 100);
+    }
+    expect(lastAnswer().chords).toEqual([
+      [50, 53, 57, 60],
+      [43, 59, 62, 65],
+      [48, 64, 67, 71],
+    ]);
+    expect(h.runner.outcome).toBe('correct');
+  });
+
+  it('reads three chords voice-led with common tones held', async () => {
+    const h = await started(harness(multiChordStub));
+    // Dm7 → G7 → Cmaj7, holding D/F then F/B across the changes.
+    press(h, [50, 53, 57, 60]);
+    h.tick(CHORD_SETTLE_MS);
+    lift(h, [57, 60]);
+    press(h, [55, 59]);
+    h.tick(CHORD_SETTLE_MS);
+    lift(h, [50, 53, 55]);
+    press(h, [52, 48]);
+    h.tick(CHORD_SETTLE_MS);
+    lift(h, [59, 52, 48]);
+    h.tick(CHORD_RELEASE_MS);
+    expect(lastAnswer().chords).toEqual([
+      [50, 53, 57, 60],
+      [50, 53, 55, 59],
+      [48, 52, 59],
+    ]);
+  });
+
+  it('reads chords run together (keys only added) as one chord', async () => {
+    const h = await started(harness(multiChordStub));
+    press(h, [50, 53]);
+    h.tick(CHORD_SETTLE_MS);
+    press(h, [55, 59]);
+    h.tick(CHORD_SETTLE_MS);
+    lift(h, [50, 53, 55, 59]);
+    h.tick(CHORD_RELEASE_MS + SEQUENCE_GAP_MS);
+    expect(lastAnswer().chords).toEqual([[50, 53, 55, 59]]);
+    expect(h.runner.outcome).toBe('wrong');
+  });
+
+  it('keeps a mouse answer on note-sequence, byte for byte', async () => {
+    const h = await started(harness(chordStub as AnyExercise));
+    press(h, [60, 64, 67], 'onscreen');
+    expect(h.runner.capture).toBe('sequence');
+    expect(h.runner.phase).toBe('awaiting');
+    // A MIDI note joins the sequence, as it always has.
+    press(h, [71], 'midi');
+    expect(h.runner.phase).toBe('feedback');
+    expect(lastAnswer()).toEqual({
+      kind: 'notes',
+      notes: [60, 64, 67, 71],
+      order: [60, 64, 67, 71],
+      source: 'midi',
+    });
+  });
+
+  it('ignores other sources once chord capture has started', async () => {
+    const h = await started(harness(chordStub as AnyExercise));
+    press(h, [60, 64]);
+    press(h, [62], 'computer-keyboard');
+    h.runner.noteOff(62, 'computer-keyboard');
+    press(h, [67, 71]);
+    h.tick(CHORD_SETTLE_MS);
+    lift(h, [60, 64, 67, 71]);
+    h.tick(CHORD_RELEASE_MS);
+    expect(lastAnswer().notes).toEqual([60, 64, 67, 71]);
+    expect(h.attempts[0].answerSource).toBe('midi');
+  });
+
+  it('ignores a key that was already down when the answer began', async () => {
+    const h = harness(chordStub as AnyExercise);
+    await h.runner.start();
+    // Held from before `awaiting` (here: during the question's playback).
+    press(h, [62]);
+    h.tick(PLAYBACK_MS);
+    press(h, [60, 64, 67, 71]);
+    h.tick(CHORD_SETTLE_MS);
+    lift(h, [62]);
+    lift(h, [60, 64, 67, 71]);
+    h.tick(CHORD_RELEASE_MS);
+    expect(lastAnswer().notes).toEqual([60, 64, 67, 71]);
+  });
+
+  it('keeps the captured chord through a replay and closes after it', async () => {
+    const h = await started(harness(chordStub as AnyExercise));
+    press(h, [60, 64, 67, 71]);
+    h.tick(CHORD_SETTLE_MS);
+    h.runner.replay();
+    lift(h, [60, 64, 67, 71]);
+    h.tick(CHORD_RELEASE_MS);
+    expect(h.runner.phase).toBe('presenting');
+    h.tick(PLAYBACK_MS - CHORD_RELEASE_MS);
+    expect(h.runner.phase).toBe('awaiting');
+    h.tick(CHORD_RELEASE_MS);
+    expect(h.runner.phase).toBe('feedback');
+    expect(h.runner.outcome).toBe('correct');
+  });
+
+  it('drops the chord in progress on pause, and Backspace does nothing', async () => {
+    const h = await started(harness(chordStub as AnyExercise));
+    press(h, [60, 64]);
+    h.tick(CHORD_SETTLE_MS);
+    h.runner.backspace();
+    expect(h.runner.capturedChords).toEqual([[60, 64]]);
+    h.runner.pause();
+    expect(h.runner.capture).toBeNull();
+    expect(h.runner.capturedChords).toEqual([]);
+    expect(h.runner.answerNotes).toEqual([]);
+  });
+
+  it('starts the next question with no capture', async () => {
+    const h = await started(harness(chordStub as AnyExercise));
+    press(h, [60, 64, 67, 71]);
+    h.tick(CHORD_SETTLE_MS);
+    lift(h, [60, 64, 67, 71]);
+    h.tick(CHORD_RELEASE_MS + FEEDBACK_CORRECT_MS);
+    expect(h.runner.capture).toBeNull();
+    expect(h.runner.capturedChords).toEqual([]);
+    // The next answer may take either path.
+    h.tick(PLAYBACK_MS);
+    press(h, [60], 'onscreen');
+    expect(h.runner.capture).toBe('sequence');
   });
 });

@@ -62,6 +62,18 @@ export const ADVANCE_LOCKOUT_MS = 500;
  * number still lives here, and that one lives with the exercise that needs it.
  */
 export const SEQUENCE_GAP_MS = 1200;
+/**
+ * Chord capture (ADR 0004 §2): how long the held set must be still — no
+ * counted note-on or note-off — to be a *moment*. It covers a rolled chord and
+ * two hands that do not land together (ADR 0001 §3's settling window).
+ */
+export const CHORD_SETTLE_MS = 90;
+/**
+ * Chord capture: how long every key must stay up before a chord is finished.
+ * It covers a hand coming back — a left-hand root lifted just before the right
+ * hand lands is still one chord.
+ */
+export const CHORD_RELEASE_MS = 250;
 
 /** How many recent skills an exercise may see, to avoid immediate repeats. */
 const HISTORY_LENGTH = 8;
@@ -77,6 +89,13 @@ const HISTORY_LENGTH = 8;
  * a later target could.
  */
 const TARGET_SAMPLE_TRIES = 16;
+
+/**
+ * How the answer in progress is being captured (ADR 0004 §1): `null` until its
+ * first note-on, `'chord'` when a `chord-released` question's first note came
+ * from a MIDI port, `'sequence'` otherwise. The frame reads it for the slots.
+ */
+export type CaptureMode = 'sequence' | 'chord';
 
 export type RunnerPhase =
   | 'idle'
@@ -128,6 +147,13 @@ export class ExerciseRunner {
   question = $state<Question | null>(null);
   /** What the user played for the current question. */
   answerNotes = $state<Midi[]>([]);
+  /** How the answer in progress is captured; `null` before its first note. */
+  capture = $state<CaptureMode | null>(null);
+  /**
+   * The chords chord capture has captured so far (each ascending, deduped) —
+   * the frame fills one slot per chord from these. Empty on every other path.
+   */
+  capturedChords = $state<Midi[][]>([]);
   /** The expected notes, once revealed. */
   revealNotes = $state<Midi[]>([]);
   outcome = $state<Outcome | null>(null);
@@ -183,6 +209,17 @@ export class ExerciseRunner {
   #sequenceTimer: ReturnType<typeof setTimeout> | null = null;
   /** The `note-sequence` answer as it is being played, in played order. */
   #sequence: { midi: Midi; source: NoteSource }[] = [];
+  // ---- chord capture (ADR 0004 §2) ----
+  /** Keys down now that were pressed during this answer. */
+  #held = new Set<Midi>();
+  /** Keys pressed since the last moment. */
+  #pending = new Set<Midi>();
+  /** Whether a counted key went up since the last moment. */
+  #offSinceMoment = false;
+  /** Every counted pitch, in first-note-on order (the answer's `order`). */
+  #firstOn: Midi[] = [];
+  #settleTimer: ReturnType<typeof setTimeout> | null = null;
+  #releaseTimer: ReturnType<typeof setTimeout> | null = null;
   /**
    * Whether the pause happened on a reveal. A drill abandoned during feedback
    * must still reach `paused` (§4.3), and coming back to it should put the
@@ -287,8 +324,26 @@ export class ExerciseRunner {
 
     const question = this.question;
     if (!question) return;
+    if (question.answerMode === 'chord-released') {
+      // The path is chosen per answer, from its first note's source (ADR 0004
+      // §1): a MIDI port is captured as a chord, everything else as today's
+      // sequence. Once a chord capture has started, other sources still sound
+      // but are not graded — one answer, one path.
+      if (this.capture === null)
+        this.capture = source === 'midi' ? 'chord' : 'sequence';
+      if (this.capture === 'chord') {
+        if (source !== 'midi') return;
+        this.#armIdleTimer();
+        this.#chordNoteOn(midi);
+        return;
+      }
+    }
     this.#armIdleTimer();
-    if (question.answerMode === 'note-sequence') {
+    if (
+      question.answerMode === 'note-sequence' ||
+      question.answerMode === 'chord-released'
+    ) {
+      this.capture = 'sequence';
       this.#appendToSequence(question, midi, source);
       return;
     }
@@ -314,6 +369,31 @@ export class ExerciseRunner {
   }
 
   /**
+   * A key went up. Only chord capture listens (ADR 0004 §2): a sequence answer
+   * is made of note-ons, and a key that was already down when the answer began
+   * — held from the reveal, or the note that advanced the drill — was never
+   * counted, so its release is ignored too. Heard during a replay as well, so
+   * a chord released while the question replays does not stay "held".
+   */
+  noteOff(midi: Midi, source: NoteSource): void {
+    if (this.phase !== 'awaiting' && this.phase !== 'presenting') return;
+    if (this.capture !== 'chord' || source !== 'midi') return;
+    if (!this.#held.delete(midi)) return;
+    this.#offSinceMoment = true;
+    if (this.phase === 'awaiting') this.#armIdleTimer();
+    if (this.#held.size > 0) {
+      this.#armSettleTimer();
+      return;
+    }
+    this.#clearSettleTimer();
+    // A stab (rule 4): released before it settled, still a chord if it was
+    // more than one key. A single unsettled key is a graze and is dropped.
+    if (this.#pending.size >= 2) this.#commitMoment([...this.#pending]);
+    this.#pending.clear();
+    this.#armReleaseTimer();
+  }
+
+  /**
    * `Backspace` — take back the last note of a `note-sequence` answer
    * (UX §4.4, §4.5). Nothing is graded yet, so this is the only way to undo a
    * fumbled key, and it restarts the silence window rather than closing it.
@@ -324,6 +404,9 @@ export class ExerciseRunner {
     this.answerNotes = this.#sequence.map((note) => note.midi);
     this.#clearSequenceTimer();
     if (this.#sequence.length > 0) this.#armSequenceTimer();
+    // An answer taken all the way back has no first note any more, so the
+    // next one picks the capture path again (ADR 0004 §1).
+    else this.capture = null;
   }
 
   /** Continue after feedback. */
@@ -463,11 +546,15 @@ export class ExerciseRunner {
       : SEQUENCE_GAP_MS;
   }
 
-  #armSequenceTimer(): void {
+  /**
+   * The silence window. Chord capture reuses it with its own close (ADR 0004
+   * §2 rule 5) — the two paths never run in one answer.
+   */
+  #armSequenceTimer(close: () => void = () => this.#closeSequence()): void {
     this.#clearSequenceTimer();
     this.#sequenceTimer = setTimeout(() => {
       this.#sequenceTimer = null;
-      this.#closeSequence();
+      close();
     }, this.#gapMs());
   }
 
@@ -479,12 +566,148 @@ export class ExerciseRunner {
 
   #resetSequence(): void {
     this.#clearSequenceTimer();
+    this.#resetChordCapture();
+    this.capture = null;
     this.#sequence = [];
     // The slots render from `answerNotes`, so dropping the sequence has to drop
     // what is drawn with it: a paused question that came back showing a note it
     // no longer counts would only self-correct on the next note-on. The two
     // callers that keep an answer (`#finish`, `#next`) assign straight after.
     this.answerNotes = [];
+  }
+
+  // ---- chord capture (ADR 0004 §2) ---------------------------------------
+
+  #chordNoteOn(midi: Midi): void {
+    this.#held.add(midi);
+    this.#pending.add(midi);
+    if (!this.#firstOn.includes(midi)) this.#firstOn.push(midi);
+    // A key going down continues the gesture: neither the chord nor the
+    // answer is finished while the hands are still playing.
+    this.#clearReleaseTimer();
+    this.#clearSequenceTimer();
+    this.#armSettleTimer();
+  }
+
+  /**
+   * The held set has been still for `CHORD_SETTLE_MS`. It is a moment when a
+   * key pressed since the last one is still down (rule 1) — so a key grazed
+   * while a chord is held, down and up inside the window, never makes or joins
+   * one (rule 2). Either way the pending keys are spent.
+   */
+  #onSettle(): void {
+    if (this.#held.size === 0) return;
+    const fresh = [...this.#pending].some((midi) => this.#held.has(midi));
+    if (fresh) this.#commitMoment([...this.#held]);
+    this.#pending.clear();
+  }
+
+  /**
+   * Where a moment goes (rule 3): a single-chord question merges every moment
+   * into its one chord; a multi-chord question starts the next chord when a
+   * key went up since the last moment, and merges otherwise.
+   */
+  #commitMoment(notes: readonly Midi[]): void {
+    const chords = this.capturedChords.map((chord) => [...chord]);
+    const startsNew =
+      this.#answerChords() > 1 && this.#offSinceMoment && chords.length > 0;
+    if (startsNew || chords.length === 0) chords.push([]);
+    const last = chords.length - 1;
+    chords[last] = ascendingUnique([...chords[last], ...notes]);
+    this.#offSinceMoment = false;
+    this.capturedChords = chords;
+    this.answerNotes = ascendingUnique(chords.flat());
+  }
+
+  /**
+   * Every key has been up for `CHORD_RELEASE_MS` (rule 5): close the answer
+   * if enough chords are in, otherwise wait out the silence window. Nothing
+   * captured at all (only grazes) is not an answer: the capture starts over,
+   * and the next first note picks the path again.
+   */
+  #onRelease(): void {
+    if (this.#held.size > 0 || this.phase !== 'awaiting') return;
+    if (this.capturedChords.length === 0) {
+      this.#resetChordCapture();
+      this.capture = null;
+      return;
+    }
+    if (this.capturedChords.length >= this.#answerChords()) {
+      this.#closeChord();
+      return;
+    }
+    this.#armSequenceTimer(() => this.#closeChord());
+  }
+
+  /** Grade the captured chords (ADR 0004 §2, "the `Answer` the drill receives"). */
+  #closeChord(): void {
+    const question = this.question;
+    if (!question || this.phase !== 'awaiting') return;
+    if (this.#held.size > 0 || this.capturedChords.length === 0) return;
+    const chords = this.capturedChords.map((chord) => [...chord]);
+    const notes = ascendingUnique(chords.flat());
+    const order = this.#firstOn.filter((midi) => notes.includes(midi));
+    const grade = this.definition.grade(question, {
+      kind: 'notes',
+      notes,
+      order,
+      source: 'midi',
+      chords,
+    });
+    this.#finish(
+      grade.correct ? 'correct' : 'wrong',
+      grade,
+      notes,
+      'midi',
+      grade.feedback,
+      grade.revealed?.notes,
+    );
+  }
+
+  /** `Question.answerChords`, validated: a whole number of at least one. */
+  #answerChords(): number {
+    const asked = this.question?.answerChords;
+    return asked !== undefined && Number.isInteger(asked) && asked >= 1
+      ? asked
+      : 1;
+  }
+
+  #armSettleTimer(): void {
+    this.#clearSettleTimer();
+    this.#settleTimer = setTimeout(() => {
+      this.#settleTimer = null;
+      this.#onSettle();
+    }, CHORD_SETTLE_MS);
+  }
+
+  #clearSettleTimer(): void {
+    if (this.#settleTimer === null) return;
+    clearTimeout(this.#settleTimer);
+    this.#settleTimer = null;
+  }
+
+  #armReleaseTimer(): void {
+    this.#clearReleaseTimer();
+    this.#releaseTimer = setTimeout(() => {
+      this.#releaseTimer = null;
+      this.#onRelease();
+    }, CHORD_RELEASE_MS);
+  }
+
+  #clearReleaseTimer(): void {
+    if (this.#releaseTimer === null) return;
+    clearTimeout(this.#releaseTimer);
+    this.#releaseTimer = null;
+  }
+
+  #resetChordCapture(): void {
+    this.#clearSettleTimer();
+    this.#clearReleaseTimer();
+    this.#held.clear();
+    this.#pending.clear();
+    this.#offSinceMoment = false;
+    this.#firstOn = [];
+    this.capturedChords = [];
   }
 
   // ---- machine -----------------------------------------------------------
@@ -580,6 +803,10 @@ export class ExerciseRunner {
       // of closing itself. Restart it from the end of the playback, which is
       // when the silence the user is being timed on actually begins.
       if (this.#sequence.length > 0) this.#armSequenceTimer();
+      // The same for a chord answer whose keys all went up during the replay:
+      // its release was swallowed by `presenting`, so restart it here.
+      if (this.capture === 'chord' && this.#held.size === 0)
+        this.#armReleaseTimer();
     }, durationMs);
   }
 
@@ -728,6 +955,10 @@ export class ExerciseRunner {
     clearTimeout(this.#idleTimer);
     this.#idleTimer = null;
   }
+}
+
+function ascendingUnique(notes: readonly Midi[]): Midi[] {
+  return [...new Set(notes)].sort((a, b) => a - b);
 }
 
 function expectedNotes(expected: ExpectedAnswer): Midi[] {
