@@ -21,8 +21,11 @@ contracts, so that every following ticket is implementation.
 **Confirmed**, no reason to overrule. Nothing in the old codebase constrains the choice: the only
 reusable parts are `@tonaljs/tonal` (framework-agnostic) and the soundfont/Web Audio approach.
 
-- `@sveltejs/adapter-static` with `prerender = true` in the root layout and `fallback: '200.html'`
-  — the app is a static bundle with no server, deployable to GitHub Pages.
+- `@sveltejs/adapter-static` with `prerender = true` in the root layout and `fallback: '404.html'`
+  — the app is a static bundle with no server, deployable to GitHub Pages. *(Amended 2026-10-03:
+  was `200.html`. GitHub Pages serves `404.html` for any unknown path, so that is the SPA fallback
+  that actually runs; a route that opts out of prerender — every `/practice/<id>` — is served by it
+  with a `404` status, which is harmless to the app.)*
 - `paths.base` comes from `process.env.BASE_PATH` (`/piano-trainer` in CI, empty locally). **Never
   hardcode absolute URLs**; use `base` from `$app/paths` for links and asset URLs.
 - TypeScript `strict: true` everywhere (the old app was strict; keep it).
@@ -88,6 +91,12 @@ reusable parts are `@tonaljs/tonal` (framework-agnostic) and the soundfont/Web A
     melodically).
   - `single-note` — first note-on wins.
   - `choice` — no MIDI; buttons/keyboard shortcuts (also reachable by number keys 1-9).
+  *(Amended 2026-10-03: `chord-sustained`, `chord-released` and `CHORD_SETTLE_MS` were never built.
+  Every chord drill (slices 7, 8, 10, 11, 12) answers in `note-sequence`, because one mouse pointer
+  cannot hold a chord and every drill must be playable without a MIDI device; grading is
+  order-insensitive, so nothing needs a settling window. The two held modes are not withdrawn —
+  whether MIDI players should get a release-closed chord answer is an open question in the
+  refinement backlog — but until a ticket revives them, `CHORD_SETTLE_MS` is not a parked item.)*
 - **On-screen keyboard**: `PianoKeyboard.svelte` is a pure presentational component (props: range,
   highlight map, labels on/off) that emits the same `NoteEvent`s on pointer/keyboard interaction.
   It is also the exercise display surface (target notes, correct/wrong highlighting) — one component,
@@ -148,8 +157,9 @@ Rules of the vocabulary:
   strings. Enharmonics are equal by default (`Eb` === `D#`); an exercise may opt into spelling-aware
   grading later, but v1 does not.
 - Helpers live in `$lib/theory`: `midiToName`, `nameToMidi`, `pcOf`, `intervalBetween`,
-  `transpose`, `detectChords(notes): ChordSymbol[]` (tonal's `Chord.detect` normalised to our
-  types), `voice(symbol, kind, options): VoicedChord`, `randomChord(seed, constraints)`.
+  `transpose`, `detectChords(notes): DetectedChord[]` (tonal's `Chord.detect` normalised to our
+  types — *amended 2026-10-03*: each entry is `{ name, symbol: ChordSymbol | null }`, because Free
+  Play displays tonal's name for chords outside our quality vocabulary, where `symbol` is `null`), `voice(symbol, kind, options): VoicedChord`, `randomChord(seed, constraints)`.
 - `$lib/theory` is **pure TypeScript**: no DOM, no Svelte, no audio, no randomness other than an
   injected seeded RNG. This is what makes it exhaustively unit-testable and, later, cheap to extract
   into `packages/theory`.
