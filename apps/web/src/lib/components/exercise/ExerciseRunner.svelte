@@ -26,10 +26,10 @@
   import NoMidiStrip from '$lib/components/midi/NoMidiStrip.svelte';
   import PianoKeyboard from '$lib/components/piano/PianoKeyboard.svelte';
   import { BED_CHROME_H } from '$lib/components/piano/geometry';
-  import { planInputs } from '$lib/exercises/coverage';
-  import { phaseLabel } from '$lib/exercises/phases';
+  import { coveredSkills, planInputs } from '$lib/exercises/coverage';
+  import { UNAVAILABLE_PHASE, phaseLabel } from '$lib/exercises/phases';
   import { ExerciseRunner, expectedLength } from '$lib/exercises/runner.svelte';
-  import { STREAK_CALLOUT } from '$lib/exercises/feedback';
+  import { NOTHING_TO_ASK, STREAK_CALLOUT } from '$lib/exercises/feedback';
   import type { AnyExercise } from '$lib/exercises/types';
   import { midiToName, type Midi } from '$lib/theory';
   import { midiInput } from '$lib/midi/input.svelte';
@@ -127,6 +127,19 @@
     high: settings.value.keyboardHigh,
   });
 
+  /**
+   * Nothing this drill can ask on this keyboard (`coverage.ts`) — said up
+   * front, before `Start`, rather than discovered by a run that ends at once.
+   * Generic: it asks the exercise's own `skillsCovered()`, so any exercise
+   * that would throw `NothingToAskError` gets it, and the runner's flag
+   * catches whatever this check missed. A session never shows it — it only
+   * mixes exercises that can ask (`askableExercises`).
+   */
+  const unavailable = $derived(
+    runner.nothingToAsk ||
+      (!session && coveredSkills(definition, keyboardRange).length === 0),
+  );
+
   const highlights = $derived(
     runnerHighlights({
       keyboard: keyboardRange,
@@ -139,23 +152,29 @@
   );
 
   const promptTitle = $derived(
-    runner.phase === 'paused'
-      ? 'Paused'
-      : (runner.question?.prompt.title ?? 'Ready?'),
+    unavailable
+      ? NOTHING_TO_ASK.title
+      : runner.phase === 'paused'
+        ? 'Paused'
+        : (runner.question?.prompt.title ?? 'Ready?'),
   );
   const promptSubtitle = $derived(
-    runner.phase === 'paused'
-      ? 'Space to resume'
-      : runner.question
-        ? runner.question.prompt.subtitle
-        : 'Press space to start',
+    unavailable
+      ? NOTHING_TO_ASK.detail
+      : runner.phase === 'paused'
+        ? 'Space to resume'
+        : runner.question
+          ? runner.question.prompt.subtitle
+          : 'Press space to start',
   );
   const replayLabel = $derived(
     runner.phase === 'idle' ? 'Start' : runner.playing ? 'Playing…' : 'Replay',
   );
   /** `Start` is the one "go" affordance of the drill (§5.4). */
   const replayVariant = $derived(runner.phase === 'idle' ? 'go' : 'secondary');
-  const phase = $derived(phaseLabel(runner.phase));
+  const phase = $derived(
+    unavailable ? UNAVAILABLE_PHASE : phaseLabel(runner.phase),
+  );
   /** The rail's bar: how much of what has been answered was right (UX §4.1 ②). */
   const answeredFraction = $derived(
     runner.answered === 0 ? 0 : runner.correctCount / runner.answered,
@@ -247,6 +266,8 @@
       return;
     }
     if (inKeyboard) return;
+    // A drill with nothing to ask has nothing to start or skip.
+    if (unavailable) return;
     if (event.key === ' ') {
       event.preventDefault();
       runner.space();
@@ -358,23 +379,37 @@
 
   <div class="replay-row">
     <div class="replay">
-      <Button
-        variant={replayVariant}
-        size="drill"
-        disabled={runner.playing}
-        testId="replay"
-        block
-        onclick={(event: MouseEvent) => {
-          // §4.5: a clicked button must not keep focus, or Space would hit it.
-          (event.currentTarget as HTMLElement).blur();
-          if (runner.phase === 'idle') void runner.start();
-          else runner.replay();
-        }}
-      >
-        {#snippet glyph()}▶{/snippet}
-        {replayLabel}
-        <span class="keycap"><Chip variant="key">Space</Chip></span>
-      </Button>
+      {#if unavailable}
+        <!-- The way out of a drill that cannot ask: the range lives in
+             Settings → Practice. A link, because it navigates. -->
+        <Button
+          variant="primary"
+          size="drill"
+          href={`${base}/settings#practice`}
+          testId="nothing-to-ask-settings"
+          block
+        >
+          {NOTHING_TO_ASK.action}
+        </Button>
+      {:else}
+        <Button
+          variant={replayVariant}
+          size="drill"
+          disabled={runner.playing}
+          testId="replay"
+          block
+          onclick={(event: MouseEvent) => {
+            // §4.5: a clicked button must not keep focus, or Space would hit it.
+            (event.currentTarget as HTMLElement).blur();
+            if (runner.phase === 'idle') void runner.start();
+            else runner.replay();
+          }}
+        >
+          {#snippet glyph()}▶{/snippet}
+          {replayLabel}
+          <span class="keycap"><Chip variant="key">Space</Chip></span>
+        </Button>
+      {/if}
     </div>
   </div>
 
