@@ -97,6 +97,9 @@ reusable parts are `@tonaljs/tonal` (framework-agnostic) and the soundfont/Web A
   order-insensitive, so nothing needs a settling window. The two held modes are not withdrawn —
   whether MIDI players should get a release-closed chord answer is an open question in the
   refinement backlog — but until a ticket revives them, `CHORD_SETTLE_MS` is not a parked item.)*
+  *(Amended again 2026-10-03: [ADR 0004](0004-midi-chord-answers-close-on-release.md) revives
+  `chord-released` and `CHORD_SETTLE_MS` for answers played from a MIDI port, with its own capture
+  rules; mouse and computer keys keep `note-sequence`. `chord-sustained` stays unbuilt.)*
 - **On-screen keyboard**: `PianoKeyboard.svelte` is a pure presentational component (props: range,
   highlight map, labels on/off) that emits the same `NoteEvent`s on pointer/keyboard interaction.
   It is also the exercise display surface (target notes, correct/wrong highlighting) — one component,

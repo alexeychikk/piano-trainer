@@ -207,6 +207,10 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
   with the root at the bottom of a voicing most answers need the shift between notes). Its wording
   lives in `$lib/midi/keymap.ts`, and the keycaps (`OCTAVE_DOWN_HINT` / `OCTAVE_UP_HINT`) are
   derived from the codes the handler listens to, so the manual cannot drift from the behaviour.
+  **Pending: [ADR 0004](docs/decisions/0004-midi-chord-answers-close-on-release.md)** (accepted
+  2026-10-03, not yet built) moves the five chord drills to `chord-released`. A MIDI answer closes on
+  key release and doublings pass; mouse and computer keys keep `note-sequence`. Its §7 lists the
+  doubling sentences below that the implementing PR rewrites. Until it lands they describe the code.
 - **Interval recognition + `note-sequence` (slice 6)** — `$lib/exercises/interval-recognition/`, the
   second exercise and the first ear-training drill:
   - **The graded quantity is the interval, not the pitches**: a question is asked from a random root,
