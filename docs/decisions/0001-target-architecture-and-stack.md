@@ -300,7 +300,7 @@ expressed on the piano keyboard.
 ## 8. Quality gates & hosting
 
 - **Package manager: pnpm** (workspaces, fast, strict). `packageManager` field pinned; Node 22 LTS
-  (`.nvmrc`). The legacy app keeps its own untouched `package-lock.json` and is not a workspace member.
+  (`.nvmrc`).
 - **Tests**: **Vitest** for units (theory, exercise `generate`/`grade`, scheduler, MIDI parsing —
   these are the parts where bugs are silent) and component tests via
   `@testing-library/svelte` + jsdom where it pays. **Playwright** for a small smoke suite (app loads,
@@ -312,8 +312,7 @@ expressed on the piano keyboard.
   commas, LF). `svelte-check` for typechecking. Keep husky + lint-staged + commitlint
   (**Conventional Commits** — the repo's existing convention).
 - **CI** (`.github/workflows/ci.yml`, on `pull_request` and `push: master`): pnpm install (cached) →
-  `lint` → `check` → `test:unit` → `build` → `test:e2e`. One job, Ubuntu, Node 22. `legacy/` is
-  excluded from every script.
+  `lint` → `check` → `test:unit` → `build` → `test:e2e`. One job, Ubuntu, Node 22.
 - **Hosting**: **GitHub Pages** via `.github/workflows/deploy.yml` on push to `master`: build with
   `BASE_PATH=/piano-trainer`, `actions/upload-pages-artifact`, `actions/deploy-pages`, permissions
   `pages: write`, `id-token: write`. Add `.nojekyll`. URL:
@@ -338,7 +337,6 @@ apps/web/                 the rewrite (SvelteKit)
   src/lib/components/     PianoKeyboard.svelte, ExerciseRunner.svelte, shell/…
   src/lib/styles/         tokens.css (design tokens from the UX spec)
   e2e/                    Playwright specs
-legacy/electron-app/      the old React/Electron app, frozen, excluded from CI and workspace
 docs/decisions/           ADRs (this file)
 docs/design/              UX specs
 ```
@@ -350,11 +348,11 @@ docs/design/              UX specs
 - `packages/*` deliberately **does not exist yet**. Everything starts in `apps/web/src/lib`; a module
   is promoted to a workspace package only when a second consumer appears. The workspace is set up so
   the promotion is a `git mv` plus a `package.json`.
-- **The old app**: moved verbatim (`git mv`, no edits) into `legacy/electron-app/` in slice 1, along
-  with its `package.json`, lockfile, configs and `@types/`. It stays buildable-on-paper as reference
-  and as the source of the current GitHub Releases. It is removed in its own ticket **once the web
-  app reaches parity** (chord display + note-finding ear training), as product's standing rules say.
-  `README.md` at the root describes the web app and links to `legacy/electron-app/` for the old one.
+- **The old app**: moved verbatim (`git mv`, no edits) out of the repository root in slice 1 and kept
+  frozen as reference until the web app reached parity (chord display + note-finding ear training),
+  as product's standing rules say. *Amended 2026-10-03:* parity reached, the folder is **deleted**.
+  Its Windows build stays on GitHub Releases (`v1.0.0`) and its code in the git history; `README.md`
+  links to the release.
 
 ## 10. Implementation slices
 
@@ -365,7 +363,7 @@ can actually practise with. Each is one developer ticket.
 Deliverable: `apps/web` SvelteKit + TS + static adapter app with the dark app shell and placeholder
 routes `/`, `/practice/[exerciseId]`, `/progress`, `/settings`; pnpm workspace root; ESLint/Prettier/
 svelte-check/Vitest/Playwright wired; CI workflow on PRs; Pages deploy workflow on `master`; old app
-moved to `legacy/electron-app/`; root `CLAUDE.md` and README updated.
+moved out of the root (removed since, see §9); root `CLAUDE.md` and README updated.
 *Acceptance*: `pnpm install && pnpm build` and `lint`/`check`/`test` pass locally and in CI; all four
 routes render with no console errors; the Pages URL serves the shell with the correct base path; no
 exercise, MIDI or audio code.

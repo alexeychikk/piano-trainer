@@ -6,13 +6,11 @@ import globals from 'globals';
 import svelteConfig from './apps/web/svelte.config.js';
 
 /**
- * Flat config for the workspace. `legacy/` (the frozen Electron app) keeps its
- * own eslintrc and is never linted here.
+ * Flat config for the workspace.
  */
 export default ts.config(
   {
     ignores: [
-      'legacy/**',
       '**/.svelte-kit/**',
       '**/build/**',
       '**/dist/**',
