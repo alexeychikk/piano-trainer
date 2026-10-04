@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 import WebKit
 
 #if DEBUG
@@ -10,7 +11,9 @@ import WebKit
 /// hydrate, checks that Web MIDI reaches CoreMIDI through the plugin (`midi`),
 /// navigates to the route, waits for it to hydrate, then calls
 /// `webView.reload()` — exactly what Capacitor does after iOS kills the
-/// WebContent process — and waits again. "Hydrated" is SvelteKit's
+/// WebContent process — and waits again. On `/settings/` it then presses
+/// Export and checks that the share sheet opened with the backup (`share`,
+/// ADR 0005 §6). "Hydrated" is SvelteKit's
 /// `#svelte-announcer`, which only the client renders (the e2e suite's
 /// `appIsListening` signal): a page whose scripts did not load never gets it,
 /// which is what Capacitor's default router does at `/settings/` (home's HTML,
@@ -48,7 +51,7 @@ final class ShellSmoke {
     }
 
     private enum Step {
-        case home, midi, load, reload
+        case home, midi, load, reload, share
 
         var name: String {
             switch self {
@@ -56,6 +59,7 @@ final class ShellSmoke {
             case .midi: return "midi"
             case .load: return "load"
             case .reload: return "reload"
+            case .share: return "share"
             }
         }
     }
@@ -70,7 +74,10 @@ final class ShellSmoke {
     private weak var webView: WKWebView?
     private let route: String
     private let routeURL: URL
-    private var steps: [Step] = [.home, .midi, .load, .reload]
+    /// The route whose page has the Data section's Export button.
+    static let shareRoute = "/settings/"
+
+    private var steps: [Step]
     private var deadline = Date()
 
     /// Kept alive by the view controller for the length of the run.
@@ -78,6 +85,8 @@ final class ShellSmoke {
         self.webView = webView
         self.route = route
         self.routeURL = URL(string: route, relativeTo: serverURL)!.absoluteURL
+        self.steps = [.home, .midi, .load, .reload]
+            + (route == Self.shareRoute ? [.share] : [])
     }
 
     func start() {
@@ -112,6 +121,80 @@ final class ShellSmoke {
                 self.webView?.reload()
                 self.poll(step, expectedPath: self.route)
             }
+        case .share:
+            pressExport()
+        }
+    }
+
+    /// ADR 0005 §9 ticket 5: Export in the shell reaches the share sheet.
+    /// The shim cancels the page's `blob:` download and hands the text to
+    /// `FileSharePlugin`, which writes the file and presents the sheet; this
+    /// checks the sheet is up and the file it was given is a backup, then
+    /// closes it. (Import is `<input type="file">`, WKWebView's own document
+    /// picker; the e2e suite covers the round trip through the fake bridge.)
+    private static let exportPress = """
+        const button = document.querySelector('[data-testid="export-json"]');
+        if (!button) return 'FAIL no Export button';
+        button.focus();
+        button.click();
+        return 'ok';
+        """
+
+    private func pressExport() {
+        guard let webView else { return }
+        FileSharePlugin.lastShared = nil
+        webView.callAsyncJavaScript(
+            Self.exportPress, arguments: [:], in: nil, in: .page
+        ) { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .success(let value as String) where value == "ok":
+                self.pollShareSheet()
+            case .success(let value):
+                self.report("FAIL share \(value)")
+            case .failure(let error):
+                self.report("FAIL share \(error.localizedDescription)")
+            }
+        }
+    }
+
+    /// Just enough of the export payload to know it is one.
+    private struct Backup: Decodable {
+        struct Record: Decodable {}
+        let schemaVersion: Int
+        let attempts: [Record]
+    }
+
+    private func pollShareSheet() {
+        let presenter = webView?.window?.rootViewController
+        if let sheet = presenter?.presentedViewController as? UIActivityViewController,
+            let file = FileSharePlugin.lastShared
+        {
+            guard let data = try? Data(contentsOf: file),
+                let backup = try? JSONDecoder().decode(Backup.self, from: data)
+            else {
+                report("FAIL share \(file.lastPathComponent) is not a backup")
+                return
+            }
+            report(
+                "share ok file=\(file.lastPathComponent) bytes=\(data.count)"
+                    + " schemaVersion=\(backup.schemaVersion)"
+                    + " attempts=\(backup.attempts.count)")
+            sheet.dismiss(animated: false) { [weak self] in
+                guard let self else { return }
+                self.steps.removeFirst()
+                self.next()
+            }
+            return
+        }
+        guard Date() < deadline else {
+            report(
+                "FAIL share no share sheet in time (presented: "
+                    + "\(String(describing: presenter?.presentedViewController)))")
+            return
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.pollInterval) {
+            self.pollShareSheet()
         }
     }
 

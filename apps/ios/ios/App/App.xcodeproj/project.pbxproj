@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		A1F7C0DE0000000000000016 /* CoreMidiPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1F7C0DE0000000000000005 /* CoreMidiPlugin.swift */; };
+		A1F7C0DE0000000000000017 /* FileSharePlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1F7C0DE0000000000000006 /* FileSharePlugin.swift */; };
 		A1F7C0DE0000000000000015 /* ShellSmoke.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1F7C0DE0000000000000004 /* ShellSmoke.swift */; };
 		A1F7C0DE0000000000000011 /* AppViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1F7C0DE0000000000000001 /* AppViewController.swift */; };
 		A1F7C0DE0000000000000012 /* StaticSiteRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1F7C0DE0000000000000002 /* StaticSiteRouter.swift */; };
@@ -26,6 +27,7 @@
 
 /* Begin PBXFileReference section */
 		A1F7C0DE0000000000000005 /* CoreMidiPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreMidiPlugin.swift; sourceTree = "<group>"; };
+		A1F7C0DE0000000000000006 /* FileSharePlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileSharePlugin.swift; sourceTree = "<group>"; };
 		A1F7C0DE0000000000000004 /* ShellSmoke.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShellSmoke.swift; sourceTree = "<group>"; };
 		A1F7C0DE0000000000000001 /* AppViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppViewController.swift; sourceTree = "<group>"; };
 		A1F7C0DE0000000000000002 /* StaticSiteRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StaticSiteRouter.swift; sourceTree = "<group>"; };
@@ -82,6 +84,7 @@
 				A1F7C0DE0000000000000001 /* AppViewController.swift */,
 				A1F7C0DE0000000000000002 /* StaticSiteRouter.swift */,
 				A1F7C0DE0000000000000005 /* CoreMidiPlugin.swift */,
+				A1F7C0DE0000000000000006 /* FileSharePlugin.swift */,
 				A1F7C0DE0000000000000004 /* ShellSmoke.swift */,
 				A1F7C0DE0000000000000003 /* web-midi-shim.js */,
 				504EC30B1FED79650016851F /* Main.storyboard */,
@@ -184,6 +187,7 @@
 				A1F7C0DE0000000000000012 /* StaticSiteRouter.swift in Sources */,
 				A1F7C0DE0000000000000015 /* ShellSmoke.swift in Sources */,
 				A1F7C0DE0000000000000016 /* CoreMidiPlugin.swift in Sources */,
+				A1F7C0DE0000000000000017 /* FileSharePlugin.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
