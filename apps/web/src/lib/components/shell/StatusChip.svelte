@@ -29,6 +29,7 @@
   class:pulse
   href={`${base}${href}`}
   aria-label={srLabel}
+  title={srLabel}
 >
   <span class="edge hud-cut">
     <span class="face hud-cut">
@@ -46,6 +47,7 @@
    */
   .chip {
     display: inline-block;
+    min-width: 0;
     height: calc(var(--topbar-h) - var(--space-5));
     color: var(--text-3);
     text-decoration: none;
@@ -54,12 +56,14 @@
   .edge {
     display: flex;
     height: 100%;
+    min-width: 0;
     background: var(--panel-border-hot);
   }
 
   .face {
     display: flex;
     flex: 1;
+    min-width: 0;
     align-items: center;
     gap: var(--space-2);
     margin: 1px;
@@ -92,6 +96,18 @@
     text-overflow: ellipsis;
     font-family: var(--font-display);
     letter-spacing: var(--track-hud);
+  }
+
+  /*
+   * Compact step 3 (≤ 1100 px — iPad portrait, small windows; TopBar has
+   * steps 1–2): the pill keeps its glyph, which differs per state, and drops
+   * the label. The state is still spelled out in the accessible name and
+   * the hover title, and the colour still pairs with the glyph (§8.1).
+   */
+  @media (max-width: 1100px) {
+    .label {
+      display: none;
+    }
   }
 
   .success {

@@ -807,6 +807,13 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
   `nav.ts`), `StatusChip` (top-bar status, never colour alone), `BannerStack`
   (`banners.svelte.ts`: non-blocking one-liners, max two, oldest wins) and `Placeholder` (skeleton
   screens). New global messages go through `banners.show(...)`, never through a dialog.
+  **The top bar never wraps** (bug ac6327a3): Chakra Petch is not self-hosted, so with a fallback
+  face its natural width is ~1340 px. Brand and nav are `nowrap` + `flex-shrink: 0`, and the bar
+  compacts in three literal-px steps instead — tighter spacing below 1366, the wordmark's mark alone
+  below 1280 (the word visually hidden, so the link keeps its name), glyph-only `StatusChip`s at
+  ≤ 1100 (the state stays in `aria-label` + `title`). The status column is the only part that may
+  shrink, as a last resort (labels ellipsise). `e2e/top-bar.spec.ts` measures 768–1440 px; a new nav
+  item or a longer chip label re-checks it. Below 768 px (phones, a non-goal) it is not guaranteed.
 - **UI**: all colours, sizes, spacing and durations come from `$lib/styles/tokens.css` (copied from
   [`docs/design/tokens.css`](docs/design/tokens.css)) — **no raw hex or magic px outside that file**.
   Dark-first. Correct/wrong/target states always pair colour with a glyph (never colour alone), and

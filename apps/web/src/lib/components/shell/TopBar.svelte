@@ -81,11 +81,22 @@
     box-shadow: var(--glow-panel);
   }
 
+  /*
+   * Responsive (bug ac6327a3): the bar never wraps. Its natural width is
+   * ~1340 px when Chakra Petch is not installed (it is not self-hosted, so
+   * that is most machines — iPad portrait, 1032 px, wrapped "PIANO-/TRAINER"
+   * and cut the sound chip off). The brand and the nav never shrink or break
+   * mid-word; the bar compacts in three steps instead (media queries below),
+   * and the status column is the one part that may shrink as a last resort
+   * (its labels ellipsise, StatusChip).
+   */
   .wordmark {
     display: inline-flex;
+    flex-shrink: 0;
     align-items: center;
     gap: var(--space-2);
     color: var(--text-1);
+    white-space: nowrap;
   }
 
   .wordmark:hover {
@@ -108,6 +119,10 @@
     text-transform: uppercase;
   }
 
+  nav {
+    flex-shrink: 0;
+  }
+
   nav ul {
     display: flex;
     gap: var(--space-2);
@@ -125,6 +140,7 @@
     letter-spacing: var(--track-hud);
     text-transform: uppercase;
     border-bottom: 2px solid transparent;
+    white-space: nowrap;
     transition: color var(--dur-fast) var(--ease);
   }
 
@@ -152,8 +168,46 @@
 
   .status {
     display: flex;
+    min-width: 0;
     align-items: center;
     gap: var(--space-2);
     margin-left: auto;
+  }
+
+  /*
+   * Compact step 1 (< 1366 px — laptops, iPad landscape): tighter spacing.
+   * Breakpoints are literal: a media query cannot read a token.
+   */
+  @media (max-width: 1365px) {
+    .topbar {
+      gap: var(--space-4);
+      padding-right: calc(var(--space-5) + var(--safe-right));
+      padding-left: calc(var(--space-5) + var(--safe-left));
+    }
+
+    nav a {
+      padding-right: var(--space-3);
+      padding-left: var(--space-3);
+    }
+
+    nav a.current::after {
+      right: var(--space-3);
+      left: var(--space-3);
+    }
+  }
+
+  /*
+   * Compact step 2 (< 1280 px): the wordmark keeps only its mark. The word
+   * stays in the accessibility tree (visually hidden), so the link is still
+   * named "piano-trainer". Step 3 (≤ 1100 px) is the chips', in StatusChip.
+   */
+  @media (max-width: 1279px) {
+    .word {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+    }
   }
 </style>
