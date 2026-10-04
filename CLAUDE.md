@@ -122,7 +122,9 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
   `StaticSiteRouter`), plus `BuiltSiteTests`, which runs it against the real build when
   `STATIC_SITE_ROOT` is set. `AppViewController` swaps in the router and injects the shim; the
   Debug-only `ShellSmoke` (`-smokeRoute <path>`) loads a route, reloads it and waits for
-  `#svelte-announcer` each time, driven by `scripts/simulator-smoke.sh`. CI is
+  `#svelte-announcer` each time, driven by `scripts/simulator-smoke.sh`; it reports through
+  `Library/Caches/shell-smoke.log` in the app's data container (`simctl get_app_container`),
+  because `simctl launch --stderr` never carried the app's stderr on CI. CI is
   `.github/workflows/ios.yml` on `macos-26` (Capacitor 8 needs Xcode 26): `swift test`, an unsigned
   simulator build, then that smoke on an iPad simulator — **not** a required check (path-filtered).
   `apps/ios` is workspace package `ios`.
