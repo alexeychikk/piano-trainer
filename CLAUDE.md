@@ -128,6 +128,18 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
   `.github/workflows/ios.yml` on `macos-26` (Capacitor 8 needs Xcode 26): `swift test`, an unsigned
   simulator build, then that smoke on an iPad simulator — **not** a required check (path-filtered).
   `apps/ios` is workspace package `ios`.
+  **ADR 0005 §9 ticket 4 has landed (the CoreMIDI plugin)**: `App/CoreMidiPlugin.swift`
+  (`jsName` `CoreMidi`, a `CAPBridgedPlugin`) is registered with `bridge?.registerPluginInstance`
+  in `capacitorDidLoad()` **before** the shim is injected, so its header script runs first. It is
+  glue over three ShellKit types, which is where native logic goes and what `swift test` covers:
+  `UniversalPackets` (UMP → MIDI 1.0 bytes, channel voice only, multi-word packets skipped whole),
+  `SourceConnections` (hot-plug: a source that left is forgotten so its return is reconnected) and
+  `BridgedMidiSource`. Plugin state and every `notifyListeners` live on the **main queue**; the
+  connection's `refCon` is the source's unique id, so CoreMIDI's thread never looks anything up.
+  The smoke's `midi` step calls `requestMIDIAccess()` in the shell (plugin + shim + bridge, no
+  piano). **A piano on an iPad is the owner's test**: ADR 0005 §10 is the checklist. No Swift
+  toolchain is declared for the sandbox; ShellKit's pure files compile with a swift.org Linux
+  tarball (`swiftc`, no SwiftPM needed) if one is wanted locally.
   `src/web-midi-shim.ts` is plain DOM behind an injected `CoreMidiPlugin` interface (ADR §4.2's
   `start`/`sourcesChanged`/`messages`) and is what Vitest tests (Node environment, fake plugin);
   `src/entry.ts` is the **only** file that touches Capacitor (`shouldInstall` → `registerPlugin`).
