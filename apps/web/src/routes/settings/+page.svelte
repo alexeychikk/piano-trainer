@@ -365,7 +365,7 @@
 
   section {
     /* The anchor must clear the sticky top bar when a chip deep-links here. */
-    scroll-margin-top: calc(var(--topbar-h) + var(--space-4));
+    scroll-margin-top: calc(var(--topbar-h) + var(--safe-top) + var(--space-4));
   }
 
   /* Prose sections keep their readable measure (§8.1). */

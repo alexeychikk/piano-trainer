@@ -61,6 +61,9 @@
    * The shell is unchanged (sci-fi visual language §6): same top bar, same six
    * routes, same copy — only the skin. It is a panel, but full-bleed, so it is
    * not chamfered; its glow points downward only.
+   *
+   * Its face runs up under the iOS status bar and its content starts below
+   * it (the safe-area insets, app.css — 0 outside the iOS shell).
    */
   .topbar {
     position: sticky;
@@ -69,8 +72,9 @@
     display: flex;
     align-items: center;
     gap: var(--space-5);
-    height: var(--topbar-h);
-    padding: 0 var(--space-6);
+    height: calc(var(--topbar-h) + var(--safe-top));
+    padding: var(--safe-top) calc(var(--space-6) + var(--safe-right)) 0
+      calc(var(--space-6) + var(--safe-left));
     background: var(--grad-panel);
     background-color: var(--bg-1);
     border-bottom: 1px solid var(--panel-border);
