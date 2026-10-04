@@ -15,12 +15,25 @@ import WebKit
 /// which is what Capacitor's default router does at `/settings/` (home's HTML,
 /// relative asset links resolved one level too deep).
 ///
-/// Each step writes one `SMOKE …` line to stderr (unbuffered, so the script
-/// sees it at once); the script fails on `SMOKE FAIL` or a missing
-/// `SMOKE DONE`. Debug builds only: nothing here ships in a release.
+/// Each step appends one `SMOKE …` line to `Library/Caches/shell-smoke.log` in
+/// the app's data container, which the script reads from the host through
+/// `simctl get_app_container` (`simctl launch --stderr` proved not to carry the
+/// app's stderr on CI), and to stderr for a developer at a console. The script
+/// fails on `SMOKE FAIL` or a missing `SMOKE DONE`. Debug builds only: nothing
+/// here ships in a release.
 final class ShellSmoke {
     static let argument = "-smokeRoute"
     static let stepTimeout: TimeInterval = 30
+    /// The first page of a cold launch on a freshly booted simulator pays for
+    /// WebKit's own start-up, which is not what this smoke measures.
+    static let firstStepTimeout: TimeInterval = 90
+    static let logName = "shell-smoke.log"
+
+    /// Where the lines go: the host reads this file, truncated at each start.
+    static var logURL: URL? {
+        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)
+            .first?.appendingPathComponent(logName)
+    }
     static let pollInterval: TimeInterval = 0.25
 
     /// The route asked for on the command line, if any.
@@ -66,6 +79,9 @@ final class ShellSmoke {
     }
 
     func start() {
+        if let url = Self.logURL {
+            try? FileManager.default.removeItem(at: url)
+        }
         report("start route=\(route)")
         next()
     }
@@ -75,7 +91,8 @@ final class ShellSmoke {
             report("DONE")
             return
         }
-        deadline = Date().addingTimeInterval(Self.stepTimeout)
+        deadline = Date().addingTimeInterval(
+            step == .home ? Self.firstStepTimeout : Self.stepTimeout)
         switch step {
         case .home:
             poll(step, expectedPath: "/")
@@ -131,7 +148,7 @@ final class ShellSmoke {
             }
             guard Date() < self.deadline else {
                 self.report(
-                    "FAIL \(step.name) not hydrated after \(Int(Self.stepTimeout)) s: \(result ?? "no document")"
+                    "FAIL \(step.name) not hydrated in time: \(result ?? "no document")"
                 )
                 return
             }
@@ -142,7 +159,16 @@ final class ShellSmoke {
     }
 
     private func report(_ line: String) {
-        FileHandle.standardError.write(Data("SMOKE \(line)\n".utf8))
+        let data = Data("SMOKE \(line)\n".utf8)
+        FileHandle.standardError.write(data)
+        guard let url = Self.logURL else { return }
+        if let handle = try? FileHandle(forWritingTo: url) {
+            handle.seekToEndOfFile()
+            handle.write(data)
+            try? handle.close()
+        } else {
+            try? data.write(to: url)
+        }
     }
 }
 #endif
