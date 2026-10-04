@@ -10,12 +10,12 @@
   },
   "scripts": {
     "dev": "pnpm --filter web dev",
-    "build": "pnpm --filter web build",
+    "build": "pnpm --filter web build && pnpm --filter ios build:shim",
     "preview": "pnpm --filter web preview",
-    "check": "pnpm --filter web check",
-    "test": "pnpm --filter web test",
-    "test:unit": "pnpm --filter web test:unit",
-    "test:e2e": "pnpm --filter web test:e2e",
+    "check": "pnpm --filter web check && pnpm --filter ios check",
+    "test": "pnpm --filter web test && pnpm --filter ios test",
+    "test:unit": "pnpm --filter web test:unit && pnpm --filter ios test:unit",
+    "test:e2e": "pnpm --filter ios build:shim && pnpm --filter web test:e2e",
     "lint": "eslint . && prettier --check .",
     "format": "prettier --write .",
     "prepare": "husky"

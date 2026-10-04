@@ -33,6 +33,7 @@ Anything below is the short version; the ADR wins on detail.
 | Path | What |
 | --- | --- |
 | `apps/web/` | The SvelteKit app (the rewrite). All new work goes here. |
+| `apps/ios/` | The iPadOS shell (ADR 0005). Today: the TS Web MIDI shim only, no native project yet. |
 | `apps/web/src/lib/{theory,audio,midi,exercises,practice,storage,components}` | Domain modules — see the layering rule below. |
 | `docs/decisions/` | ADRs. |
 | `docs/design/` | UX specs. |
@@ -98,7 +99,7 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
   never `Math.random()`.
 - Audio is scheduled on `AudioContext.currentTime` through the shared lookahead scheduler, never with
   `setTimeout`. The `AudioContext` starts on a user gesture.
-- **iPad / iOS ([ADR 0005](docs/decisions/0005-midi-on-ipados-capacitor-shell.md), not yet built)**:
+- **iPad / iOS ([ADR 0005](docs/decisions/0005-midi-on-ipados-capacitor-shell.md), tickets 1–2 built)**:
   WebKit has no Web MIDI, so iPadOS gets a **Capacitor shell in `apps/ios`** that ships the ordinary
   `pnpm build` output and reaches CoreMIDI through a local Swift plugin exposed as a
   **`navigator.requestMIDIAccess` shim** (a document-start `WKUserScript`). Rules: **`apps/web` never
@@ -108,6 +109,20 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
   `granted`); native code stays small and logic goes in the TS shim, because agents compile Swift
   only on macOS CI and only the owner can test on a device. The app is a separate origin
   (`capacitor://localhost`, never changed after the first build) — the backup JSON is the only bridge.
+  **ADR 0005 §9 ticket 2 has landed (the shim, TS only)**: `apps/ios` is workspace package `ios`
+  (`@capacitor/core` only — `@capacitor/ios`/`cli` and `capacitor.config.ts` come with ticket 3).
+  `src/web-midi-shim.ts` is plain DOM behind an injected `CoreMidiPlugin` interface (ADR §4.2's
+  `start`/`sourcesChanged`/`messages`) and is what Vitest tests (Node environment, fake plugin);
+  `src/entry.ts` is the **only** file that touches Capacitor (`shouldInstall` → `registerPlugin`).
+  `pnpm --filter ios build:shim` bundles it with esbuild to one IIFE, `apps/ios/dist/web-midi-shim.js`
+  (git-ignored); root `build` and `test:e2e` run it, and root `check`/`test`/`test:unit` cover the
+  package. The shim also drops anything that is not a 2–3 byte channel-voice message in JS, so "no
+  sysex" holds whatever the native side sends. **`e2e/web-midi-shim.spec.ts` injects the *built*
+  IIFE over a fake of Capacitor's native side** — `window.webkit.messageHandlers.bridge` (platform
+  `ios`), `Capacitor.PluginHeaders` and `nativePromise`/`nativeCallback`, which is all
+  `registerPlugin()` calls — with Chromium's own `requestMIDIAccess` deleted, and drives the fake
+  through `window.__coreMidi.{send,plug,calls}`. A native change to the plugin's contract changes
+  that fake and the Vitest fake together.
   **ADR 0005 §9 ticket 1 has landed (web-side iPad hardening)**: `isAppleMobile()`
   (`$lib/midi/platform.ts`, pure; iPadOS-as-Mac = `Mac` platform + `maxTouchPoints > 1`) changes
   **one sentence only** — `MIDI_COPY.unsupportedAppleMobile` (Web MIDI Browser app, never "use

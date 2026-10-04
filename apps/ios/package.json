@@ -1,0 +1,22 @@
+{
+  "name": "ios",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The iPadOS Capacitor shell (ADR 0005). For now: the Web MIDI shim over the CoreMidi plugin.",
+  "type": "module",
+  "scripts": {
+    "build:shim": "esbuild src/entry.ts --bundle --format=iife --target=safari15 --outfile=dist/web-midi-shim.js",
+    "check": "tsc --noEmit",
+    "test": "vitest run",
+    "test:unit": "vitest run"
+  },
+  "dependencies": {
+    "@capacitor/core": "^8.5.2"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "jsdom": "^25.0.1",
+    "typescript": "^5.7.3",
+    "vitest": "^3.2.7"
+  }
+}
