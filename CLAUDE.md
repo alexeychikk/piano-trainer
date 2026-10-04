@@ -152,6 +152,17 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
   `registerPlugin()` calls — with Chromium's own `requestMIDIAccess` deleted, and drives the fake
   through `window.__coreMidi.{send,plug,calls}`. A native change to the plugin's contract changes
   that fake and the Vitest fake together.
+  **ADR 0005 §9 ticket 5 has landed (in-app export)**: WKWebView drops `downloadText()`'s `blob:`
+  download, so the injected bundle also carries `src/file-share.ts`: it wraps
+  `URL.createObjectURL`/`revokeObjectURL` to remember blobs (capped at 32), cancels any
+  `<a download>` click on a `blob:`/`data:` URL from a **window capture-phase** listener and hands
+  `{ filename, text, mimeType, anchor }` to the local **`FileShare`** plugin
+  (`App/FileSharePlugin.swift`, registered beside `CoreMidi`), which writes a temp file and presents
+  the share sheet; name sanitising and the iPad popover anchor are ShellKit's `SharedFile`/
+  `ShareAnchor`. `apps/web` is untouched and still downloads in every browser. The e2e fake bridge
+  carries `FileShare.share` (`window.__fileShare.shared`), and the simulator smoke's `share` step
+  presses Export on `/settings/`. Import needs nothing: `<input type="file">` is WKWebView's
+  document picker.
   **Safe areas**: the shell keeps `contentInset: 'never'` and the page owns its insets —
   `viewport-fit=cover` in `app.html`, `--safe-top/right/bottom/left` (`env(safe-area-inset-*)`, 0
   outside iOS) on `:root` in `app.css`. The top bar runs its face under the status bar and owns the

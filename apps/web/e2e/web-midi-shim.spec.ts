@@ -25,6 +25,14 @@ const PIANO = { id: '1001', name: 'Test Piano', manufacturer: 'Acme' };
 const CONNECTED = `MIDI: connected to ${PIANO.name}`;
 const LOST = `${PIANO.name} disconnected — switched to the on-screen keyboard.`;
 
+/** What the shim hands the `FileShare` plugin (`apps/ios/src/file-share.ts`). */
+interface SharedFile {
+  filename: string;
+  text: string;
+  mimeType: string;
+  anchor?: { x: number; y: number; width: number; height: number };
+}
+
 interface FakeCoreMidi {
   calls: string[];
   plug(sources: (typeof PIANO)[]): void;
@@ -45,6 +53,7 @@ async function insideTheShell(page: Page): Promise<void> {
     let sources = [piano];
     let nextCallbackId = 1;
     const calls: string[] = [];
+    const shared: SharedFile[] = [];
 
     const win = window as unknown as Record<string, unknown>;
     // `getPlatform()` is `ios` when this handler exists.
@@ -60,11 +69,16 @@ async function insideTheShell(page: Page): Promise<void> {
             { name: 'removeAllListeners', rtype: 'promise' },
           ],
         },
+        { name: 'FileShare', methods: [{ name: 'share', rtype: 'promise' }] },
       ],
       nativePromise(plugin: string, method: string, options: unknown) {
         calls.push(`${plugin}.${method}`);
         if (plugin === 'CoreMidi' && method === 'start') {
           return Promise.resolve({ sources });
+        }
+        if (plugin === 'FileShare' && method === 'share') {
+          shared.push(options as SharedFile);
+          return Promise.resolve({ completed: true });
         }
         if (plugin === 'CoreMidi' && method === 'removeListener') {
           const { eventName, callbackId } = options as Record<string, string>;
@@ -100,6 +114,7 @@ async function insideTheShell(page: Page): Promise<void> {
       },
     };
     win.__coreMidi = fake;
+    win.__fileShare = { shared };
   }, PIANO);
   await page.addInitScript({ path: SHIM });
 }
@@ -243,4 +258,93 @@ test('outside the shell the shim stands down', async ({ page }) => {
       .includes('[native code]'),
   );
   expect(native).toBe(true);
+});
+
+/*
+ * In-app export (ADR 0005 §6, §9 ticket 5). WKWebView drops a `blob:`
+ * download, so in the shell the shim takes the click over and hands the file
+ * to the `FileShare` plugin, which presents the share sheet. The round trip is
+ * the same as `data-round-trip.spec.ts`'s: the file the share sheet was given
+ * is the file the import's picker takes back.
+ */
+test('Export hands the backup to the share sheet, and that file imports', async ({
+  page,
+}) => {
+  const consoleErrors = watchConsole(page);
+  const downloads: string[] = [];
+  page.on('download', (download) =>
+    downloads.push(download.suggestedFilename()),
+  );
+  await insideTheShell(page);
+
+  // One graded attempt from the piano. C4 — right or wrong, it is logged.
+  await page.goto('/practice/find-the-note/');
+  const prompt = page.getByTestId('prompt');
+  await expect(prompt).toHaveText('Ready?');
+  await expect(page.getByLabel(CONNECTED)).toBeVisible();
+  await page.keyboard.press('Space');
+  await expect(prompt).toHaveText('Which note?');
+  await expect(page.getByTestId('replay')).toBeEnabled();
+  await send(page, on(60));
+  await expect(page.getByTestId('answered')).toContainText('/1');
+  await send(page, off(60));
+
+  await page.getByRole('link', { name: /^settings$/i }).click();
+  await expect(page).toHaveURL(/\/settings\/$/);
+  await appIsListening(page);
+
+  const result = page.locator('#data [role="status"]');
+  await page.getByTestId('export-json').click();
+  await expect(result).toContainText('Exported 1 attempt and 1 skill.');
+  const shared = await page.evaluate(
+    () =>
+      (window as unknown as { __fileShare: { shared: SharedFile[] } })
+        .__fileShare.shared,
+  );
+  expect(shared).toHaveLength(1);
+  const [file] = shared;
+  expect(file.filename).toMatch(/^piano-trainer-\d{4}-\d{2}-\d{2}\.json$/);
+  expect(file.mimeType).toBe('application/json');
+  // The popover points at the button that was pressed.
+  expect(file.anchor?.width).toBeGreaterThan(0);
+  const payload = JSON.parse(file.text);
+  expect(payload.attempts).toHaveLength(1);
+  expect(payload.attempts[0].skillId).toMatch(/^find-the-note:/);
+  // WebKit never saw the download.
+  expect(downloads).toEqual([]);
+
+  await page.getByTestId('reset-data').click();
+  await page.getByTestId('reset-word').fill('RESET');
+  await page.getByTestId('reset-confirm').click();
+  await expect(result).toContainText('Reset 1 attempt and 1 skill.');
+
+  // Import goes through `<input type="file">`, which WKWebView turns into
+  // the document picker on its own; the shell adds nothing there.
+  await page.getByTestId('import-file').setInputFiles({
+    name: file.filename,
+    mimeType: file.mimeType,
+    buffer: Buffer.from(file.text),
+  });
+  await expect(result).toContainText('Imported 1 attempt, 1 skill.');
+
+  await page.goto('/progress/');
+  await appIsListening(page);
+  await expect(
+    page.getByRole('heading', { name: /^find the note$/i }),
+  ).toBeVisible();
+
+  expect(consoleErrors).toEqual([]);
+});
+
+test('outside the shell Export is an ordinary download', async ({ page }) => {
+  // No fake bridge: the shim is present but stands down, so the browser's
+  // own download path is untouched.
+  await page.addInitScript({ path: SHIM });
+  await page.goto('/settings/');
+  await appIsListening(page);
+  const downloading = page.waitForEvent('download');
+  await page.getByTestId('export-json').click();
+  expect((await downloading).suggestedFilename()).toMatch(
+    /^piano-trainer-\d{4}-\d{2}-\d{2}\.json$/,
+  );
 });
