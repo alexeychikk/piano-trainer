@@ -46,7 +46,7 @@ public enum SharedFile {
 }
 
 /// Where the share sheet's popover points, in the web view's points: the
-/// element the shim says was focused (the Export button), clipped to the
+/// control the shim says was last clicked (the Export button), clipped to the
 /// view. `nil` means "no usable anchor" and the plugin centres the popover.
 public struct ShareAnchor: Equatable {
     public let x: Double

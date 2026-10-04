@@ -199,6 +199,9 @@ describe('downloadOf', () => {
 });
 
 describe('anchorOf', () => {
+  const box = (x: number, y: number, width: number, height: number) => () =>
+    ({ x, y, width, height }) as DOMRect;
+
   it('points at the focused control, and at nothing without one', () => {
     expect(anchorOf(document)).toBeUndefined();
     const button = document.createElement('button');
@@ -206,13 +209,34 @@ describe('anchorOf', () => {
     button.focus();
     // jsdom lays nothing out: a zero box is no anchor.
     expect(anchorOf(document)).toBeUndefined();
-    button.getBoundingClientRect = () =>
-      ({ x: 10, y: 20, width: 120, height: 40 }) as DOMRect;
+    button.getBoundingClientRect = box(10, 20, 120, 40);
     expect(anchorOf(document)).toEqual({
       x: 10,
       y: 20,
       width: 120,
       height: 40,
+    });
+  });
+
+  it('prefers the control last clicked, while it is still in the page', () => {
+    const clicked = document.createElement('button');
+    clicked.getBoundingClientRect = box(1, 2, 3, 4);
+    const focused = document.createElement('input');
+    focused.getBoundingClientRect = box(5, 6, 7, 8);
+    document.body.append(clicked, focused);
+    focused.focus();
+    expect(anchorOf(document, clicked)).toEqual({
+      x: 1,
+      y: 2,
+      width: 3,
+      height: 4,
+    });
+    clicked.remove();
+    expect(anchorOf(document, clicked)).toEqual({
+      x: 5,
+      y: 6,
+      width: 7,
+      height: 8,
     });
   });
 });
@@ -236,13 +260,19 @@ describe('installFileShare', () => {
     expect(report).not.toHaveBeenCalled();
   });
 
-  it('anchors the popover on the button that was pressed', async () => {
+  it('anchors the popover on the button that was pressed, even once disabled', async () => {
     const { shared, downloadText } = shell();
     const button = document.createElement('button');
+    const label = document.createElement('span');
+    button.append(label);
     document.body.append(button);
     button.getBoundingClientRect = () =>
       ({ x: 40, y: 300, width: 160, height: 44 }) as DOMRect;
-    button.focus();
+    // The app's Export: a click, then the button disables itself (and
+    // drops focus) while the payload is built, then the download.
+    label.click();
+    button.disabled = true;
+    button.blur();
 
     downloadText('backup.json', '{}');
     await until(() => expect(shared).toHaveLength(1));

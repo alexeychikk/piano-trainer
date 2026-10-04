@@ -35,7 +35,7 @@ export interface SharedFile {
   mimeType: string;
   /**
    * Where the share sheet's popover points on iPad, in web-view points: the
-   * focused element (the Export button that was pressed). Absent → the
+   * control last clicked (the Export button). Absent → the
    * native side centres it.
    */
   anchor?: ShareAnchor;
@@ -143,13 +143,29 @@ export function downloadOf(event: Event): DownloadRequest | null {
   };
 }
 
-/** Where the popover should point: the focused element, if it has a box. */
-export function anchorOf(doc: Document): ShareAnchor | undefined {
-  const focused = doc.activeElement;
-  if (!focused || focused === doc.body) return undefined;
-  const rect = focused.getBoundingClientRect();
-  if (!(rect.width > 0 && rect.height > 0)) return undefined;
-  return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+/** The control a click landed in: what a popover should point at. */
+const CONTROL = 'button, a, input, select, [role="button"]';
+
+/**
+ * Where the popover should point: the control last clicked, else the focused
+ * element — whichever is still in the page with a box. The control comes
+ * first because the app disables Export while it runs, and a disabled button
+ * has already given its focus back to `<body>` by the time the file exists.
+ */
+export function anchorOf(
+  doc: Document,
+  lastClicked: Element | null = null,
+): ShareAnchor | undefined {
+  for (const candidate of [lastClicked, doc.activeElement]) {
+    if (!candidate || candidate === doc.body || !candidate.isConnected) {
+      continue;
+    }
+    const rect = candidate.getBoundingClientRect();
+    if (rect.width > 0 && rect.height > 0) {
+      return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+    }
+  }
+  return undefined;
 }
 
 export interface FileShareDeps {
@@ -174,13 +190,18 @@ export function installFileShare(
   },
 ): () => void {
   const { blobOf, restore } = trackObjectUrls(win.URL);
+  let lastClicked: Element | null = null;
   const onClick = (event: Event): void => {
     const download = downloadOf(event);
-    if (!download) return;
+    if (!download) {
+      const target = event.target as Element | null;
+      lastClicked = target?.closest?.(CONTROL) ?? target ?? null;
+      return;
+    }
     event.preventDefault();
     // Read now, synchronously: the URL may be revoked before a microtask.
     const tracked = blobOf(download.href);
-    const anchor = anchorOf(win.document);
+    const anchor = anchorOf(win.document, lastClicked);
     const reading = tracked
       ? Promise.resolve(tracked)
       : deps.fetch(download.href).then((response) => response.blob());
