@@ -1,6 +1,6 @@
 # ADR 0005 — MIDI on iPad: a Capacitor shell with a CoreMIDI-backed Web MIDI shim
 
-- **Status**: Accepted (ticket `60ec9cd2`, 2026-10-03). §9 tickets 1–3 implemented; 4–7 open.
+- **Status**: Accepted (ticket `60ec9cd2`, 2026-10-03). §9 tickets 1–4 implemented; 5–7 open.
 - **Date**: 2026-10-03
 - **Context**: owner report, 2026-10-03: MIDI does not work in Chrome on their iPad Pro. Adds a
   second deployment target beside GitHub Pages (ADR 0001 §1). It amends nothing in ADR 0001–0004:
@@ -309,15 +309,52 @@ CI only. Ticket 6 is blocked on §8 steps 2–5.
    - `AVAudioSession .playback`, iPad orientations, `ITSAppUsesNonExemptEncryption = NO`.
    - `ios.yml`: web build, `cap sync`, unsigned simulator build and tests on `macos-latest`.
    - With no plugin yet, the shim stays out of the way and the app shows the on-screen fallback.
-4. **CoreMIDI plugin (§4.2).**
+4. **CoreMIDI plugin (§4.2).** *Landed.*
    - Sources, hot-plug, channel-voice-only batched messages.
    - XCTest for UMP→bytes conversion and realtime filtering, in CI.
+   - As built: `App/CoreMidiPlugin.swift` is glue; the pure parts are in ShellKit and run under
+     `swift test` — `UniversalPackets` (UMP words → MIDI 1.0 bytes; a multi-word packet is
+     skipped whole by its declared size, so sysex payload is never misread as a note),
+     `SourceConnections` (which endpoints to connect on a setup change: a source that left is
+     forgotten, so the same piano plugged back in is connected again) and `BridgedMidiSource`
+     (the shim's `{ id, name, manufacturer }`). All plugin state and every `notifyListeners`
+     run on the main queue; `sourcesChanged` fires only when the list actually changed.
+     Offline endpoints are not listed. The simulator smoke's `midi` step calls
+     `requestMIDIAccess()` in the real shell, so CI proves the plugin is registered, the shim
+     installed and `start()` round-trips — everything but a piano (§10).
 5. **In-app export (§6).** Handle `blob:` downloads in `AppViewController` with the share sheet, and
    verify that import's file picker works.
 6. **Signed TestFlight pipeline (§7).** The archive/export/upload job. Blocked on the owner's
    secrets. The ticket closes when a build appears in TestFlight.
 7. *(Later, design first)* Bluetooth MIDI pairing button. Optionally, bundle the default piano's
    samples for offline sound.
+
+## 10. Verifying on a device (owner)
+
+CI cannot plug a piano into a simulator, so this checklist is the acceptance test for §9 ticket 4.
+Use a TestFlight build (§8), or run the `App` scheme from Xcode on a Mac with the iPad attached
+(free Apple ID, §7). A USB-C class-compliant piano needs no driver; a USB-B piano needs a
+USB-C-to-USB-B cable or Apple's camera adapter.
+
+1. **Launch with the piano plugged in.** The top-bar MIDI chip shows the piano's name **with no
+   tap** (`autoConnect()`: the shim reports the `midi` permission as `granted`).
+2. **Notes arrive.** On *Free Play*, a key lights the on-screen keyboard and the readout names it;
+   three keys held name a chord. The sustain pedal and pitch bend change nothing visible, which is
+   correct — they are delivered and ignored.
+3. **A chord drill grades a chord.** In *Chord quality*, play the chord back as one chord and lift:
+   it is graded on release (ADR 0004).
+4. **Hot-unplug.** On *Free Play*, pull the cable: the banner reads
+   `<piano> disconnected — switched to the on-screen keyboard.` and the chip changes.
+5. **Hot-plug.** Plug it back in with the app open: the chip shows the piano again and notes arrive
+   **without restarting the app** or tapping Connect.
+6. **Background and return.** Switch to another app for a minute, come back, play: notes still
+   arrive and the prompts still sound.
+7. **Quiet bridge.** Leave the piano idle on a screen for a minute (many pianos send active
+   sensing every 300 ms): nothing flickers, and the app stays responsive.
+
+Report what failed and on which screen. With the iPad on a Mac, Console.app (filter on the process
+`App`) shows Capacitor's `⚡️` lines, including `CoreMIDI could not connect source …` if a connect
+was refused.
 
 ## Consequences
 

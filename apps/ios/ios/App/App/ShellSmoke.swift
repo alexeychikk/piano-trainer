@@ -7,7 +7,8 @@ import WebKit
 /// scheme handler and `StaticSiteRouter` together — which no unit test can.
 ///
 /// Launched with `-smokeRoute /settings/`, the app waits for home to
-/// hydrate, navigates to the route, waits for it to hydrate, then calls
+/// hydrate, checks that Web MIDI reaches CoreMIDI through the plugin (`midi`),
+/// navigates to the route, waits for it to hydrate, then calls
 /// `webView.reload()` — exactly what Capacitor does after iOS kills the
 /// WebContent process — and waits again. "Hydrated" is SvelteKit's
 /// `#svelte-announcer`, which only the client renders (the e2e suite's
@@ -47,11 +48,12 @@ final class ShellSmoke {
     }
 
     private enum Step {
-        case home, load, reload
+        case home, midi, load, reload
 
         var name: String {
             switch self {
             case .home: return "home"
+            case .midi: return "midi"
             case .load: return "load"
             case .reload: return "reload"
             }
@@ -68,7 +70,7 @@ final class ShellSmoke {
     private weak var webView: WKWebView?
     private let route: String
     private let routeURL: URL
-    private var steps: [Step] = [.home, .load, .reload]
+    private var steps: [Step] = [.home, .midi, .load, .reload]
     private var deadline = Date()
 
     /// Kept alive by the view controller for the length of the run.
@@ -96,6 +98,8 @@ final class ShellSmoke {
         switch step {
         case .home:
             poll(step, expectedPath: "/")
+        case .midi:
+            checkMidi()
         case .load:
             markStale { [weak self] in
                 guard let self else { return }
@@ -107,6 +111,48 @@ final class ShellSmoke {
                 guard let self else { return }
                 self.webView?.reload()
                 self.poll(step, expectedPath: self.route)
+            }
+        }
+    }
+
+    /// ADR 0005 §9 ticket 4: the `CoreMidi` plugin is registered, the shim is
+    /// installed over it, the `midi` permission reads `granted`, and
+    /// `requestMIDIAccess()` resolves — i.e. `start()` went to Swift and came
+    /// back through the bridge. The simulator has no piano, so the number of
+    /// inputs is reported, not asserted.
+    private static let midiProbe = """
+        if (typeof navigator.requestMIDIAccess !== 'function') {
+          return 'FAIL no navigator.requestMIDIAccess (plugin '
+            + (window.Capacitor?.isPluginAvailable?.('CoreMidi') ? 'present' : 'missing') + ')';
+        }
+        const permission = await navigator.permissions.query({ name: 'midi' });
+        const access = await Promise.race([
+          navigator.requestMIDIAccess(),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('requestMIDIAccess timed out')), timeoutMs)),
+        ]);
+        const names = [...access.inputs.values()].map((input) => input.name).join(', ');
+        return `ok permission=${permission.state} inputs=${access.inputs.size} [${names}]`;
+        """
+
+    private func checkMidi() {
+        guard let webView else { return }
+        webView.callAsyncJavaScript(
+            Self.midiProbe,
+            arguments: ["timeoutMs": Self.stepTimeout * 1000],
+            in: nil,
+            in: .page
+        ) { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .success(let value as String) where value.hasPrefix("ok "):
+                self.report("midi \(value)")
+                self.steps.removeFirst()
+                self.next()
+            case .success(let value):
+                self.report("FAIL midi \(value)")
+            case .failure(let error):
+                self.report("FAIL midi \(error.localizedDescription)")
             }
         }
     }

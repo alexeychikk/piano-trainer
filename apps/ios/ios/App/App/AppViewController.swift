@@ -3,7 +3,8 @@ import UIKit
 import WebKit
 
 /// The shell's one view controller (ADR 0005 §3.3): Capacitor's bridge with
-/// a Pages-shaped router and the Web MIDI shim injected at document start.
+/// a Pages-shaped router, the local `CoreMidi` plugin, and the Web MIDI shim
+/// injected at document start.
 class AppViewController: CAPBridgeViewController {
     /// `apps/ios/dist/web-midi-shim.js`, copied into the bundle by
     /// `pnpm --filter ios sync`.
@@ -19,9 +20,11 @@ class AppViewController: CAPBridgeViewController {
 
     override func capacitorDidLoad() {
         super.capacitorDidLoad()
-        // The CoreMidi plugin is registered here once it exists (ADR §9
-        // ticket 4). Until then the shim finds no plugin and stays out of the
-        // way, so the app shows the on-screen keyboard fallback.
+        // Local plugin (ADR §3.1): registered here, not found by package
+        // scanning. Its header script is added now, so it runs before the
+        // shim's — `Capacitor.isPluginAvailable('CoreMidi')` is true by the
+        // time the shim asks.
+        bridge?.registerPluginInstance(CoreMidiPlugin())
         injectWebMidiShim()
         #if DEBUG
             startSmokeIfAsked()
