@@ -1,0 +1,70 @@
+name: iOS shell
+
+# ADR 0005 §7: the Capacitor shell, built unsigned for the iOS simulator. It is
+# NOT a required check — a path-filtered required check blocks every pull
+# request that skips it. Signing and TestFlight come with ADR 0005 §9 ticket 6.
+on:
+  pull_request:
+    paths:
+      - 'apps/ios/**'
+      - '.github/workflows/ios.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'apps/ios/**'
+      - 'apps/web/**'
+      - '.github/workflows/ios.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  simulator:
+    name: iOS simulator · build · test · smoke
+    # Capacitor 8 needs Xcode 26; pinned so a `-latest` migration cannot move
+    # the toolchain under us.
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # The same default build the shell ships (no BASE_PATH), plus the shim.
+      - run: pnpm build
+
+      # cap sync: web assets → App/App/public, capacitor.config.json, the SPM
+      # package list; then the shim into the bundle's resources.
+      - run: pnpm --filter ios sync
+
+      - run: xcodebuild -version
+
+      # The router (pure) and the router against the synced build: every route
+      # and every asset it links resolves to a file in the bundle.
+      - name: ShellKit tests
+        env:
+          STATIC_SITE_ROOT: ${{ github.workspace }}/apps/ios/ios/App/App/public
+        run: swift test --package-path apps/ios/ios/App/ShellKit
+
+      - name: Build for the simulator (unsigned)
+        run: >-
+          xcodebuild build
+          -project apps/ios/ios/App/App.xcodeproj
+          -scheme App
+          -configuration Debug
+          -sdk iphonesimulator
+          -destination 'generic/platform=iOS Simulator'
+          -derivedDataPath "$RUNNER_TEMP/DerivedData"
+          CODE_SIGNING_ALLOWED=NO

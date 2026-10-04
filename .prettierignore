@@ -5,6 +5,8 @@ apps/web/build/
 apps/web/playwright-report/
 apps/web/test-results/
 apps/ios/dist/
+# The Xcode project (Capacitor's template + Swift): Xcode owns its formatting.
+apps/ios/ios/
 
 # Authored by hand, kept verbatim: docs are the architect's/designer's source of
 # truth and tokens.css is a byte-for-byte copy of docs/design/tokens.css.

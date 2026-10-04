@@ -1,0 +1,20 @@
+App/build
+App/Pods
+App/output
+App/App/public
+DerivedData
+xcuserdata
+
+# Cordova plugins for Capacitor
+capacitor-cordova-ios-plugins
+
+# Generated Config files
+App/App/capacitor.config.json
+App/App/config.xml
+
+# Copied from apps/ios/dist by `pnpm --filter ios sync`
+App/App/web-midi-shim.js
+
+# SwiftPM
+App/ShellKit/.build
+App/ShellKit/.swiftpm
