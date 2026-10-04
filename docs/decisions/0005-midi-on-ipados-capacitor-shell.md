@@ -227,8 +227,8 @@ The engine needs no rewrite. These are the facts and their fixes:
     `blob:`/`data:` URL in a window capture listener, and passes `{ filename, text, mimeType,
     anchor }` to a local `FileShare` plugin (`FileSharePlugin.swift`), which writes
     `tmp/share-<uuid>/<name>` and presents `UIActivityViewController` (popover anchored on the
-    Export button on iPad, the control last clicked). Why: Capacitor's bridge owns the navigation delegate, and a
-    `blob:` URL is revoked right after the click, so a native download path would be fragile and
+    Export button on iPad, the control last clicked). Why: Capacitor's bridge owns the navigation
+    delegate, and a `blob:` URL is revoked right after the click, so a native download path would be fragile and
     testable only on a device; the shim path is tested through the fake bridge (Vitest + e2e),
     keeps native code to glue (CLAUDE.md), and `apps/web` is unchanged. The simulator smoke
     presses Export on `/settings/` and checks the sheet is up with a parseable backup.
