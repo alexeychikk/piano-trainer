@@ -68,3 +68,19 @@ jobs:
           -destination 'generic/platform=iOS Simulator'
           -derivedDataPath "$RUNNER_TEMP/DerivedData"
           CODE_SIGNING_ALLOWED=NO
+
+      # Deep routes in the real shell (WKWebView + scheme handler + router):
+      # each one loads, hydrates, reloads and hydrates again.
+      - name: Simulator smoke (deep routes load and reload)
+        run: >-
+          apps/ios/scripts/simulator-smoke.sh
+          "$RUNNER_TEMP/DerivedData/Build/Products/Debug-iphonesimulator/App.app"
+          "$RUNNER_TEMP/screenshots"
+
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-simulator-screenshots
+          path: ${{ runner.temp }}/screenshots/
+          if-no-files-found: ignore
+          retention-days: 7

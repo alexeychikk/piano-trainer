@@ -9,6 +9,10 @@ class AppViewController: CAPBridgeViewController {
     /// `pnpm --filter ios sync`.
     static let shimResource = "web-midi-shim"
 
+    #if DEBUG
+        private var smoke: ShellSmoke?
+    #endif
+
     override func router() -> Router {
         StaticSiteRouter()
     }
@@ -19,7 +23,22 @@ class AppViewController: CAPBridgeViewController {
         // ticket 4). Until then the shim finds no plugin and stays out of the
         // way, so the app shows the on-screen keyboard fallback.
         injectWebMidiShim()
+        #if DEBUG
+            startSmokeIfAsked()
+        #endif
     }
+
+    #if DEBUG
+        /// CI's `-smokeRoute` run (`ShellSmoke`); a no-op on a normal launch.
+        private func startSmokeIfAsked() {
+            guard let route = ShellSmoke.requestedRoute(),
+                let webView, let serverURL = bridge?.config.serverURL
+            else { return }
+            smoke = ShellSmoke(
+                webView: webView, serverURL: serverURL, route: route)
+            smoke?.start()
+        }
+    #endif
 
     /// Added after Capacitor's own bridge scripts, so `window.Capacitor`
     /// already exists when the shim runs. Main frame only.

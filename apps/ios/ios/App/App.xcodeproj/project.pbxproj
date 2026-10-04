@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A1F7C0DE0000000000000015 /* ShellSmoke.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1F7C0DE0000000000000004 /* ShellSmoke.swift */; };
 		A1F7C0DE0000000000000011 /* AppViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1F7C0DE0000000000000001 /* AppViewController.swift */; };
 		A1F7C0DE0000000000000012 /* StaticSiteRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1F7C0DE0000000000000002 /* StaticSiteRouter.swift */; };
 		A1F7C0DE0000000000000013 /* web-midi-shim.js in Resources */ = {isa = PBXBuildFile; fileRef = A1F7C0DE0000000000000003 /* web-midi-shim.js */; };
@@ -23,6 +24,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		A1F7C0DE0000000000000004 /* ShellSmoke.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShellSmoke.swift; sourceTree = "<group>"; };
 		A1F7C0DE0000000000000001 /* AppViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppViewController.swift; sourceTree = "<group>"; };
 		A1F7C0DE0000000000000002 /* StaticSiteRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StaticSiteRouter.swift; sourceTree = "<group>"; };
 		A1F7C0DE0000000000000003 /* web-midi-shim.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = "web-midi-shim.js"; sourceTree = "<group>"; };
@@ -77,6 +79,7 @@
 				504EC3071FED79650016851F /* AppDelegate.swift */,
 				A1F7C0DE0000000000000001 /* AppViewController.swift */,
 				A1F7C0DE0000000000000002 /* StaticSiteRouter.swift */,
+				A1F7C0DE0000000000000004 /* ShellSmoke.swift */,
 				A1F7C0DE0000000000000003 /* web-midi-shim.js */,
 				504EC30B1FED79650016851F /* Main.storyboard */,
 				504EC30E1FED79650016851F /* Assets.xcassets */,
@@ -176,6 +179,7 @@
 				9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */,
 				A1F7C0DE0000000000000011 /* AppViewController.swift in Sources */,
 				A1F7C0DE0000000000000012 /* StaticSiteRouter.swift in Sources */,
+				A1F7C0DE0000000000000015 /* ShellSmoke.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -1,6 +1,6 @@
 # ADR 0005 — MIDI on iPad: a Capacitor shell with a CoreMIDI-backed Web MIDI shim
 
-- **Status**: Accepted (ticket `60ec9cd2`, 2026-10-03). §9 tickets 1–2 implemented; 3–7 open.
+- **Status**: Accepted (ticket `60ec9cd2`, 2026-10-03). §9 tickets 1–3 implemented; 4–7 open.
 - **Date**: 2026-10-03
 - **Context**: owner report, 2026-10-03: MIDI does not work in Chrome on their iPad Pro. Adds a
   second deployment target beside GitHub Pages (ADR 0001 §1). It amends nothing in ADR 0001–0004:
