@@ -153,7 +153,7 @@ final class ShellSmoke {
             case .success(let value):
                 self.report("FAIL share \(value)")
             case .failure(let error):
-                self.report("FAIL share \(error.localizedDescription)")
+                self.report("FAIL share \(Self.describe(error))")
             }
         }
     }
@@ -203,23 +203,63 @@ final class ShellSmoke {
     /// `requestMIDIAccess()` resolves — i.e. `start()` went to Swift and came
     /// back through the bridge. The simulator has no piano, so the number of
     /// inputs is reported, not asserted.
+    ///
+    /// Anything the probe throws is caught **in the page** and returned as one
+    /// line naming the stage that threw, the error's name, message, `code`,
+    /// `data` and stack: WebKit's own failure for a thrown script is only
+    /// "A JavaScript exception occurred", which is all run 37230487297 said.
+    /// The plugin's native reason (`CoreMIDI could not start (OSStatus …)`)
+    /// reaches the page inside the shim's `InvalidStateError` message.
     private static let midiProbe = """
-        if (typeof navigator.requestMIDIAccess !== 'function') {
-          return 'FAIL no navigator.requestMIDIAccess (plugin '
-            + (window.Capacitor?.isPluginAvailable?.('CoreMidi') ? 'present' : 'missing') + ')';
+        const oneLine = (text) => String(text).replace(/\\s*\\n\\s*/g, ' | ');
+        const describe = (error) => {
+          if (!(error instanceof Object)) return `thrown ${typeof error}: ${oneLine(error)}`;
+          const parts = [`${error.name ?? error.constructor?.name ?? 'Error'}: ${oneLine(error.message ?? error)}`];
+          if (error.code !== undefined) parts.push(`code=${oneLine(error.code)}`);
+          if (error.data !== undefined) {
+            let data;
+            try { data = JSON.stringify(error.data); } catch { data = String(error.data); }
+            parts.push(`data=${oneLine(data)}`);
+          }
+          if (error.stack) parts.push(`stack=${oneLine(error.stack)}`);
+          return parts.join(' ');
+        };
+        let stage = 'shim';
+        try {
+          if (typeof navigator.requestMIDIAccess !== 'function') {
+            return 'FAIL no navigator.requestMIDIAccess (plugin '
+              + (window.Capacitor?.isPluginAvailable?.('CoreMidi') ? 'present' : 'missing') + ')';
+          }
+          stage = 'permissions.query';
+          const permission = await navigator.permissions.query({ name: 'midi' });
+          stage = 'requestMIDIAccess';
+          const access = await Promise.race([
+            navigator.requestMIDIAccess(),
+            new Promise((_, reject) =>
+              setTimeout(() => reject(new Error('requestMIDIAccess timed out')), timeoutMs)),
+          ]);
+          stage = 'inputs';
+          const names = [...access.inputs.values()].map((input) => input.name).join(', ');
+          return `ok permission=${permission.state} inputs=${access.inputs.size} [${names}]`;
+        } catch (error) {
+          return `FAIL at ${stage}: ${describe(error)}`;
         }
-        const permission = await navigator.permissions.query({ name: 'midi' });
-        const access = await Promise.race([
-          navigator.requestMIDIAccess(),
-          new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('requestMIDIAccess timed out')), timeoutMs)),
-        ]);
-        const names = [...access.inputs.values()].map((input) => input.name).join(', ');
-        return `ok permission=${permission.state} inputs=${access.inputs.size} [${names}]`;
         """
+
+    /// The one failure the `midi` step retries: the plugin's own `start()`
+    /// rejection (`CoreMidiPlugin.start`, through the shim's
+    /// `InvalidStateError`). A simulator's MIDI server can refuse a client
+    /// while it is still coming up after the previous launch was terminated;
+    /// the shim does not cache a failed start, so asking again is exactly what
+    /// a second `Connect MIDI` tap does in the app. Anything else fails at once.
+    static let midiRetryableFailure = "CoreMIDI could not start"
+    static let midiAttempts = 3
+    static let midiRetryDelay: TimeInterval = 2
+    private var midiAttempt = 0
 
     private func checkMidi() {
         guard let webView else { return }
+        midiAttempt += 1
         webView.callAsyncJavaScript(
             Self.midiProbe,
             arguments: ["timeoutMs": Self.stepTimeout * 1000],
@@ -232,12 +272,38 @@ final class ShellSmoke {
                 self.report("midi \(value)")
                 self.steps.removeFirst()
                 self.next()
+            case .success(let value as String)
+            where value.contains(Self.midiRetryableFailure)
+                && self.midiAttempt < Self.midiAttempts:
+                self.report(
+                    "midi retry \(self.midiAttempt)/\(Self.midiAttempts - 1) after \(value)")
+                DispatchQueue.main.asyncAfter(
+                    deadline: .now() + Self.midiRetryDelay
+                ) { [weak self] in
+                    self?.checkMidi()
+                }
             case .success(let value):
                 self.report("FAIL midi \(value)")
             case .failure(let error):
-                self.report("FAIL midi \(error.localizedDescription)")
+                self.report("FAIL midi \(Self.describe(error))")
             }
         }
+    }
+
+    /// A `WKWebView` script failure with everything WebKit attached to it —
+    /// the exception's message, line, column and source URL live in
+    /// `userInfo`, not in `localizedDescription`. One line, for the log.
+    static func describe(_ error: Error) -> String {
+        let nsError = error as NSError
+        var parts = [
+            "\(nsError.domain) \(nsError.code): \(nsError.localizedDescription)"
+        ]
+        for key in nsError.userInfo.keys.sorted()
+        where key != NSLocalizedDescriptionKey {
+            parts.append("\(key)=\(nsError.userInfo[key].map { "\($0)" } ?? "nil")")
+        }
+        return parts.joined(separator: " ")
+            .split(whereSeparator: \.isNewline).joined(separator: " | ")
     }
 
     /// Tags the current document, so a poll cannot mistake it for the next.
