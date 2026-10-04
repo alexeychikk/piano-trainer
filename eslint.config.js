@@ -16,6 +16,8 @@ export default ts.config(
       '**/dist/**',
       '**/playwright-report/**',
       '**/test-results/**',
+      // The Xcode project: `public/` and the shim copy are build output.
+      'apps/ios/ios/**',
     ],
   },
   js.configs.recommended,

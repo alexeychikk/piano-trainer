@@ -33,7 +33,7 @@ Anything below is the short version; the ADR wins on detail.
 | Path | What |
 | --- | --- |
 | `apps/web/` | The SvelteKit app (the rewrite). All new work goes here. |
-| `apps/ios/` | The iPadOS shell (ADR 0005). Today: the TS Web MIDI shim only, no native project yet. |
+| `apps/ios/` | The iPadOS Capacitor shell (ADR 0005): the TS Web MIDI shim (`src/`), the Xcode project (`ios/App/`) and its testable Swift (`ios/App/ShellKit/`). |
 | `apps/web/src/lib/{theory,audio,midi,exercises,practice,storage,components}` | Domain modules — see the layering rule below. |
 | `docs/decisions/` | ADRs. |
 | `docs/design/` | UX specs. |
@@ -109,8 +109,25 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
   `granted`); native code stays small and logic goes in the TS shim, because agents compile Swift
   only on macOS CI and only the owner can test on a device. The app is a separate origin
   (`capacitor://localhost`, never changed after the first build) — the backup JSON is the only bridge.
-  **ADR 0005 §9 ticket 2 has landed (the shim, TS only)**: `apps/ios` is workspace package `ios`
-  (`@capacitor/core` only — `@capacitor/ios`/`cli` and `capacitor.config.ts` come with ticket 3).
+  **ADR 0005 §9 ticket 3 has landed (the shell)**: `apps/ios/ios/App` is Capacitor 8's SPM
+  template (no CocoaPods), committed; `capacitor.config.ts` (`appId`
+  `io.github.alexeychikk.pianotrainer`, `webDir: '../web/build'`). `pnpm --filter ios sync` = shim
+  build + `cap sync ios` + copy `dist/web-midi-shim.js` into `App/App/` — run it after `pnpm build`;
+  `public/`, `capacitor.config.json`, `config.xml` and the shim copy are generated and git-ignored.
+  `cap sync` rewrites `CapApp-SPM/Package.swift` (hands off) but leaves `project.pbxproj` alone, so
+  files added to the app target are hand-edited into it (`A1F7C0DE…` ids). **Native logic that can
+  be pure goes in the local package `ios/App/ShellKit`** (Foundation only, builds for macOS too), so
+  it is tested with plain `swift test` — on macOS CI, or on a Linux sandbox with a swift.org
+  toolchain; the app target is glue. Today: `StaticSiteRoutes` (the Pages-shaped path logic behind
+  `StaticSiteRouter`), plus `BuiltSiteTests`, which runs it against the real build when
+  `STATIC_SITE_ROOT` is set. `AppViewController` swaps in the router and injects the shim; the
+  Debug-only `ShellSmoke` (`-smokeRoute <path>`) loads a route, reloads it and waits for
+  `#svelte-announcer` each time, driven by `scripts/simulator-smoke.sh`; it reports through
+  `Library/Caches/shell-smoke.log` in the app's data container (`simctl get_app_container`),
+  because `simctl launch --stderr` never carried the app's stderr on CI. CI is
+  `.github/workflows/ios.yml` on `macos-26` (Capacitor 8 needs Xcode 26): `swift test`, an unsigned
+  simulator build, then that smoke on an iPad simulator — **not** a required check (path-filtered).
+  `apps/ios` is workspace package `ios`.
   `src/web-midi-shim.ts` is plain DOM behind an injected `CoreMidiPlugin` interface (ADR §4.2's
   `start`/`sourcesChanged`/`messages`) and is what Vitest tests (Node environment, fake plugin);
   `src/entry.ts` is the **only** file that touches Capacitor (`shouldInstall` → `registerPlugin`).
