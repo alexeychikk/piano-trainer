@@ -137,7 +137,13 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
   `BridgedMidiSource`. Plugin state and every `notifyListeners` live on the **main queue**; the
   connection's `refCon` is the source's unique id, so CoreMIDI's thread never looks anything up.
   The smoke's `midi` step calls `requestMIDIAccess()` in the shell (plugin + shim + bridge, no
-  piano). **A piano on an iPad is the owner's test**: ADR 0005 §10 is the checklist. No Swift
+  piano). Its probe catches in the page and logs the stage that threw plus the error's name,
+  message, `code`, `data` and stack (WebKit alone says only "A JavaScript exception occurred"; a
+  failure that escapes the page is logged with WebKit's `userInfo`). It **retries only the
+  plugin's `CoreMIDI could not start` rejection**, at most twice, 2 s apart, each retry logged as
+  `SMOKE midi retry n/2 after …`: a simulator app relaunched with `--terminate-running-process` can
+  be refused a MIDI client for a moment, and the shim does not cache a failed start, so a retry is
+  a second `Connect MIDI` tap. Any other `midi` failure, and every other step, fails at once. **A piano on an iPad is the owner's test**: ADR 0005 §10 is the checklist. No Swift
   toolchain is declared for the sandbox; ShellKit's pure files compile with a swift.org Linux
   tarball (`swiftc`, no SwiftPM needed) if one is wanted locally.
   `src/web-midi-shim.ts` is plain DOM behind an injected `CoreMidiPlugin` interface (ADR §4.2's
