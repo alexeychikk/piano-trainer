@@ -37,6 +37,7 @@ Web MIDI needs a secure context: `localhost` and the deployed HTTPS site both qu
 | Path              | What                                                      |
 | ----------------- | --------------------------------------------------------- |
 | `apps/web/`       | The SvelteKit app — all new work goes here                |
+| `apps/ios/`       | iPadOS shell (ADR 0005) — for now the Web MIDI shim       |
 | `docs/decisions/` | ADRs (start with `0001-target-architecture-and-stack.md`) |
 | `docs/design/`    | UX specs and design tokens                                |
 
