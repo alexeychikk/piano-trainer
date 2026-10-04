@@ -122,11 +122,20 @@
    * A column that always fills the viewport, so a screen that must not scroll
    * (the exercise runner, UX §4.1) can simply take the space that is left —
    * including whatever a banner used up.
+   *
+   * It keeps clear of the home indicator, and of the status bar while focus
+   * mode hides the top bar (which otherwise owns the top inset). The insets
+   * are 0 outside the iOS shell — see app.css.
    */
   .app {
     display: flex;
     flex-direction: column;
     min-height: 100dvh;
+    padding-bottom: var(--safe-bottom);
+  }
+
+  .app:not(:has(> :global(.topbar))) {
+    padding-top: var(--safe-top);
   }
 
   main {
@@ -137,7 +146,8 @@
     width: 100%;
     max-width: var(--content-max);
     margin: 0 auto;
-    padding: var(--space-7) var(--space-6);
+    padding: var(--space-7) calc(var(--space-6) + var(--safe-right))
+      var(--space-7) calc(var(--space-6) + var(--safe-left));
   }
 
   main:focus {

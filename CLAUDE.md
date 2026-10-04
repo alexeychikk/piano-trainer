@@ -152,6 +152,12 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
   `registerPlugin()` calls — with Chromium's own `requestMIDIAccess` deleted, and drives the fake
   through `window.__coreMidi.{send,plug,calls}`. A native change to the plugin's contract changes
   that fake and the Vitest fake together.
+  **Safe areas**: the shell keeps `contentInset: 'never'` and the page owns its insets —
+  `viewport-fit=cover` in `app.html`, `--safe-top/right/bottom/left` (`env(safe-area-inset-*)`, 0
+  outside iOS) on `:root` in `app.css`. The top bar runs its face under the status bar and owns the
+  top + side insets, `.app` the bottom one (and the top one while focus mode hides the bar), banners
+  and `main` the sides; anything `sticky` under the bar adds `--safe-top`. `e2e/safe-area.spec.ts`
+  drives the insets through CDP's `Emulation.setSafeAreaInsetsOverride`.
   **ADR 0005 §9 ticket 1 has landed (web-side iPad hardening)**: `isAppleMobile()`
   (`$lib/midi/platform.ts`, pure; iPadOS-as-Mac = `Mac` platform + `maxTouchPoints > 1`) changes
   **one sentence only** — `MIDI_COPY.unsupportedAppleMobile` (Web MIDI Browser app, never "use

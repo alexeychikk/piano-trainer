@@ -16,6 +16,23 @@ body {
 }
 
 /*
+ * Safe areas (iOS shell, iPhone/iPad Safari). `viewport-fit=cover` in
+ * app.html lets the page run under the status bar and the home indicator —
+ * the Capacitor shell asks for exactly that (`contentInset: 'never'`) — so the
+ * shell clears them itself: the top bar owns the top and side insets, `.app`
+ * the bottom one (and the top one while focus mode hides the top bar). On
+ * every other screen `env()` resolves to 0 and nothing moves. These are
+ * platform values, not design values, which is why they are not in
+ * tokens.css.
+ */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+}
+
+/*
  * The HUD ground (spec §3.2): a vignette, a 2 %-opacity scanline and a 48 px
  * grid, all painted once and never animated. They live on <body> only —
  * panels are opaque, so texture never crosses text (spec §9.2).

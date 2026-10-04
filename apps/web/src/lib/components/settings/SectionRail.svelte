@@ -77,7 +77,7 @@
   .rail {
     position: sticky;
     /* §8.1: clear of the sticky top bar, by one step of the scale. */
-    top: calc(var(--topbar-h) + var(--space-5));
+    top: calc(var(--topbar-h) + var(--safe-top) + var(--space-5));
   }
 
   .edge {

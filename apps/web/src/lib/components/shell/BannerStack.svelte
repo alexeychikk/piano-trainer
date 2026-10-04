@@ -40,7 +40,9 @@
     display: flex;
     align-items: center;
     gap: var(--space-3);
-    padding: var(--space-3) var(--space-6);
+    /* Clear of a landscape iPhone's notch (safe-area insets, app.css). */
+    padding: var(--space-3) calc(var(--space-6) + var(--safe-right))
+      var(--space-3) calc(var(--space-6) + var(--safe-left));
     background: var(--bg-2);
     border-bottom: 1px solid var(--border);
     border-left: 4px solid var(--text-3);
