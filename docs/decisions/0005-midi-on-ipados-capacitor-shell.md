@@ -1,6 +1,9 @@
 # ADR 0005 — MIDI on iPad: a Capacitor shell with a CoreMIDI-backed Web MIDI shim
 
-- **Status**: Accepted (ticket `60ec9cd2`, 2026-10-03). §9 tickets 1–4 implemented; 5–7 open.
+- **Status**: Accepted (ticket `60ec9cd2`, 2026-10-03). §9 tickets 1–5 implemented; 7 open. The
+  TestFlight distribution (§7's signing/TestFlight bullets, §8 steps 2–7, §9 ticket 6) is
+  **superseded by [ADR 0006](0006-ipad-app-free-sideloading.md)**: an unsigned IPA from CI,
+  sideloaded with a free Apple ID.
 - **Date**: 2026-10-03
 - **Context**: owner report, 2026-10-03: MIDI does not work in Chrome on their iPad Pro. Adds a
   second deployment target beside GitHub Pages (ADR 0001 §1). It amends nothing in ADR 0001–0004:
@@ -235,6 +238,10 @@ The engine needs no rewrite. These are the facts and their fixes:
 
 ## 7. What it costs, honestly
 
+> **Superseded in part (2026-10-05)**: the archive/sign/TestFlight bullets and the $99/yr program
+> below are replaced by [ADR 0006](0006-ipad-app-free-sideloading.md) — no paid account, an unsigned
+> IPA from `ios-ipa.yml`, installed with Sideloadly. The simulator CI bullet still holds.
+
 - **A Mac is needed to build, but the owner does not need one.** Our sandboxes are Linux, so **no
   agent can compile Swift or run Xcode locally**: every native compile is a CI round-trip. CI runs
   on GitHub's macOS runners, which are **free for public repositories** (this one is public).
@@ -268,6 +275,9 @@ The engine needs no rewrite. These are the facts and their fixes:
   The last step, a piano on an iPad, is the owner's.
 
 ## 8. Owner-only steps
+
+> **Superseded (2026-10-05)**: steps 2–7 are replaced by [`docs/ios-install.md`](../ios-install.md)
+> (ADR 0006). Step 1 still holds.
 
 1. **Today, free**: install *Web MIDI Browser* on the iPad, open
    `https://alexeychikk.github.io/piano-trainer/`, tap **Connect MIDI** and report whether notes
@@ -335,15 +345,15 @@ CI only. Ticket 6 is blocked on §8 steps 2–5.
      installed and `start()` round-trips — everything but a piano (§10).
 5. **In-app export (§6).** Handle `blob:` downloads in `AppViewController` with the share sheet, and
    verify that import's file picker works.
-6. **Signed TestFlight pipeline (§7).** The archive/export/upload job. Blocked on the owner's
-   secrets. The ticket closes when a build appears in TestFlight.
+6. *(Superseded by ADR 0006: the unsigned IPA pipeline, ticket `f1c56406`.)* ~~**Signed TestFlight pipeline (§7).** The archive/export/upload job. Blocked on the owner's
+   secrets. The ticket closes when a build appears in TestFlight.~~
 7. *(Later, design first)* Bluetooth MIDI pairing button. Optionally, bundle the default piano's
    samples for offline sound.
 
 ## 10. Verifying on a device (owner)
 
 CI cannot plug a piano into a simulator, so this checklist is the acceptance test for §9 ticket 4.
-Use a TestFlight build (§8), or run the `App` scheme from Xcode on a Mac with the iPad attached
+Use a sideloaded build ([ADR 0006](0006-ipad-app-free-sideloading.md), `docs/ios-install.md`), or run the `App` scheme from Xcode on a Mac with the iPad attached
 (free Apple ID, §7). A USB-C class-compliant piano needs no driver; a USB-B piano needs a
 USB-C-to-USB-B cable or Apple's camera adapter.
 

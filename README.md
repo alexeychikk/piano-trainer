@@ -32,12 +32,22 @@ Other scripts, all from the repository root:
 
 Web MIDI needs a secure context: `localhost` and the deployed HTTPS site both qualify.
 
+## iPad app
+
+iPad browsers have no Web MIDI, so a small iPad app wraps the same site and talks to the piano
+through CoreMIDI ([ADR 0005](docs/decisions/0005-midi-on-ipados-capacitor-shell.md)). It is
+installed free, from a Windows PC, with a free Apple ID:
+**[docs/ios-install.md](docs/ios-install.md)**. The app file (`piano-trainer.ipa`) is attached to
+the [`ios-v*` releases](https://github.com/alexeychikk/piano-trainer/releases) and built by
+[`ios-ipa.yml`](.github/workflows/ios-ipa.yml)
+([ADR 0006](docs/decisions/0006-ipad-app-free-sideloading.md)).
+
 ## Layout
 
 | Path              | What                                                      |
 | ----------------- | --------------------------------------------------------- |
 | `apps/web/`       | The SvelteKit app — all new work goes here                |
-| `apps/ios/`       | iPadOS shell (ADR 0005) — for now the Web MIDI shim       |
+| `apps/ios/`       | iPadOS app (ADR 0005): Capacitor shell + CoreMIDI shim    |
 | `docs/decisions/` | ADRs (start with `0001-target-architecture-and-stack.md`) |
 | `docs/design/`    | UX specs and design tokens                                |
 
