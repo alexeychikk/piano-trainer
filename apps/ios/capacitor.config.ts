@@ -7,7 +7,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
  *
  * `appId` and the origin are the storage key of everything the user
  * practises in the app (ADR §6): neither may change after the first
- * TestFlight build.
+ * build installed on the iPad (ADR 0006).
  */
 const config: CapacitorConfig = {
   appId: 'io.github.alexeychikk.pianotrainer',

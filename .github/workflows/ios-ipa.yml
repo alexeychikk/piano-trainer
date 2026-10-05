@@ -1,0 +1,106 @@
+name: iOS IPA (unsigned, for sideloading)
+
+# ADR 0006: the owner installs the iPad app with a free Apple ID, so CI builds
+# an UNSIGNED Release IPA and Sideloadly/AltStore signs it on their machine.
+# No secrets. Not a required check.
+#
+# - Run it by hand (Actions → this workflow → Run workflow): the IPA is a
+#   workflow artifact.
+# - Push a tag `ios-v<major>[.<minor>[.<patch>]]`: the same build, and the IPA
+#   is attached to a GitHub Release of that tag (docs/ios-install.md sends the
+#   owner there). The tag's number is the app's version.
+# - A pull request that touches the native project builds it too, so a change
+#   that breaks the device build is caught before a tag is cut.
+on:
+  workflow_dispatch:
+  push:
+    tags: ['ios-v*']
+  pull_request:
+    paths:
+      - 'apps/ios/ios/**'
+      - 'apps/ios/scripts/build-ipa.sh'
+      - 'apps/ios/package.json'
+      - '.github/workflows/ios-ipa.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-ipa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ipa:
+    name: iOS device build · unsigned IPA
+    # Same pin as ios.yml: Capacitor 8 needs Xcode 26.
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # The default build the shell ships (no BASE_PATH), plus the shim.
+      - run: pnpm build
+
+      - run: pnpm --filter ios sync
+
+      - run: xcodebuild -version
+
+      # Bundle version = this workflow's run number, so every build is newer
+      # than the last. On a tag, the version is the tag (`ios-v1.2` → 1.2);
+      # otherwise the project's MARKETING_VERSION stands.
+      - name: Build, check and package the IPA
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          version=""
+          if [[ "$REF_TYPE" == tag ]]; then version="${REF_NAME#ios-v}"; fi
+          apps/ios/scripts/build-ipa.sh "${{ github.run_number }}" "$version" "$RUNNER_TEMP/ipa"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: piano-trainer-ipa-${{ github.run_number }}
+          path: ${{ runner.temp }}/ipa/piano-trainer.ipa
+          if-no-files-found: error
+          # An artifact is zipped once more by GitHub; the Release asset is
+          # the plain .ipa.
+          retention-days: 30
+
+  release:
+    name: Attach the IPA to the GitHub Release
+    needs: ipa
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: piano-trainer-ipa-${{ github.run_number }}
+
+      # A release the owner already drafted for this tag in the web UI gets
+      # the asset replaced; otherwise one is created.
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+          RUN: ${{ github.run_number }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" piano-trainer.ipa --clobber
+          else
+            gh release create "$TAG" piano-trainer.ipa \
+              --title "iPad app ${TAG#ios-v} (build $RUN)" \
+              --notes "Unsigned iPad app. Install it with a free Apple ID — see docs/ios-install.md. Real-device behaviour is verified by the owner." \
+              --latest
+          fi

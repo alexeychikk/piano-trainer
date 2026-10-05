@@ -169,6 +169,21 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
   carries `FileShare.share` (`window.__fileShare.shared`), and the simulator smoke's `share` step
   presses Export on `/settings/`. Import needs nothing: `<input type="file">` is WKWebView's
   document picker.
+  **Distribution is free sideloading ([ADR 0006](docs/decisions/0006-ipad-app-free-sideloading.md)),
+  not TestFlight** — the owner has no paid Apple account and no Mac. `.github/workflows/ios-ipa.yml`
+  builds an **unsigned** Release IPA (`apps/ios/scripts/build-ipa.sh`: `xcodebuild build`
+  `-sdk iphoneos` `CODE_SIGNING_ALLOWED=NO`, `Payload/App.app` → `piano-trainer.ipa`); the owner signs
+  and installs it from Windows with a free Apple ID via Sideloadly, following `docs/ios-install.md`.
+  **To cut an iOS build**: on `master`, `git tag ios-v<x.y.z> && git push origin ios-v<x.y.z>` —
+  the tag's number becomes `CFBundleShortVersionString` (1–3 integers, else the build fails),
+  `CFBundleVersion` is the workflow's `run_number`, and the IPA lands on a GitHub Release of that tag
+  (marked latest, which is the link the guide gives the owner). `Run workflow` (dispatch) builds the
+  same IPA as a 30-day artifact only, and pull requests touching `apps/ios/ios/**` build it without
+  publishing. No secrets, not a required check. Bump the tag's version when the app changes, never
+  re-push a tag. **The app must stay signable by a free Apple ID**: no `.entitlements`, no
+  `CODE_SIGN_ENTITLEMENTS`, no app extensions — `build-ipa.sh` fails on any of them; a capability
+  needs an ADR first. Never change the bundle id: WKWebView data is keyed by it, and a sideloaded
+  app with a new id is a new, empty app.
   **Safe areas**: the shell keeps `contentInset: 'never'` and the page owns its insets —
   `viewport-fit=cover` in `app.html`, `--safe-top/right/bottom/left` (`env(safe-area-inset-*)`, 0
   outside iOS) on `:root` in `app.css`. The top bar runs its face under the status bar and owns the
