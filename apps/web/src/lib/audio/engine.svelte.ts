@@ -19,6 +19,11 @@ import { settings } from '$lib/storage/settings.svelte';
 import type { Midi } from '$lib/theory';
 import {
   DEFAULT_VELOCITY,
+  LIMITER,
+  LIMITER_CROSSFADE_S,
+  LIMITER_SETTLE_S,
+  LIMITER_TRIM,
+  SOUNDFONT_OUTPUT_GAIN,
   clampVelocity,
   headroomScale,
   sampledVelocity,
@@ -67,6 +72,41 @@ function audioContextCtor(): AudioContextCtor | null {
   const candidate = (globalThis as { AudioContext?: AudioContextCtor })
     .AudioContext;
   return candidate ?? null;
+}
+
+/**
+ * The master bus: volume → limiter → make-up trim → speakers. Returns the
+ * volume gain, which is what every voice and click connects to, so nothing
+ * reaches the speakers without passing the limiter (`LIMITER` in `gain.ts`) —
+ * except during its first `LIMITER_SETTLE_S`, when a parallel bypass carries
+ * the master while the fresh compressor settles, then crossfades onto it.
+ */
+export function createOutputChain(ctx: BaseAudioContext): GainNode {
+  const master = ctx.createGain();
+  const limiter = ctx.createDynamicsCompressor();
+  limiter.threshold.value = LIMITER.thresholdDb;
+  limiter.knee.value = LIMITER.kneeDb;
+  limiter.ratio.value = LIMITER.ratio;
+  limiter.attack.value = LIMITER.attackS;
+  limiter.release.value = LIMITER.releaseS;
+
+  const settled = ctx.currentTime + LIMITER_SETTLE_S;
+  const crossfaded = settled + LIMITER_CROSSFADE_S;
+  const limited = ctx.createGain(); // the make-up trim, faded in
+  limited.gain.value = 0;
+  limited.gain.setValueAtTime(0, settled);
+  limited.gain.linearRampToValueAtTime(LIMITER_TRIM, crossfaded);
+  const bypass = ctx.createGain();
+  bypass.gain.value = 1;
+  bypass.gain.setValueAtTime(1, settled);
+  bypass.gain.linearRampToValueAtTime(0, crossfaded);
+
+  master.connect(limiter);
+  limiter.connect(limited);
+  limited.connect(ctx.destination);
+  master.connect(bypass);
+  bypass.connect(ctx.destination);
+  return master;
 }
 
 export class AudioEngine {
@@ -126,9 +166,8 @@ export class AudioEngine {
     requestPlaybackSession();
 
     const ctx = new Ctor({ latencyHint: 'interactive' });
-    const master = ctx.createGain();
+    const master = createOutputChain(ctx);
     master.gain.value = volumeGain(settings.value.volume, this.muted);
-    master.connect(ctx.destination);
 
     this.#ctx = ctx;
     this.#master = master;
@@ -185,6 +224,9 @@ export class AudioEngine {
       const instrument = Soundfont(ctx, {
         instrument: id,
         destination: master,
+        // The soundfonts are mastered around −24 dBFS; `smplr`'s default of 5
+        // left a note ~19 dB under the synth. See `SOUNDFONT_OUTPUT_GAIN`.
+        extraGain: SOUNDFONT_OUTPUT_GAIN,
       });
       await instrument.ready;
       if (this.#loading !== id) return; // A newer choice won the race.

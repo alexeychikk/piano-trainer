@@ -96,12 +96,23 @@ export interface FakeGain {
   disconnect(): void;
 }
 
+export interface FakeCompressor {
+  threshold: FakeParam;
+  knee: FakeParam;
+  ratio: FakeParam;
+  attack: FakeParam;
+  release: FakeParam;
+  connect(): void;
+  disconnect(): void;
+}
+
 export class FakeAudioContext {
   currentTime = 0;
   state: AudioContextState = 'suspended';
   destination = {} as AudioDestinationNode;
   oscillators: FakeOscillator[] = [];
   gains: FakeGain[] = [];
+  compressors: FakeCompressor[] = [];
   closed = false;
 
   constructor(public options?: AudioContextOptions) {}
@@ -114,6 +125,23 @@ export class FakeAudioContext {
     };
     this.gains.push(gain);
     return gain;
+  }
+
+  createDynamicsCompressor(): FakeCompressor {
+    const param = (initial: number) =>
+      new FakeParam(initial, () => this.currentTime);
+    // The spec's defaults, so an unset param reads as a real node's would.
+    const compressor: FakeCompressor = {
+      threshold: param(-24),
+      knee: param(30),
+      ratio: param(12),
+      attack: param(0.003),
+      release: param(0.25),
+      connect: () => {},
+      disconnect: () => {},
+    };
+    this.compressors.push(compressor);
+    return compressor;
   }
 
   createOscillator(): FakeOscillator {

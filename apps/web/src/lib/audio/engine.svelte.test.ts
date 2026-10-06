@@ -1,12 +1,25 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   AudioEngine,
+  createOutputChain,
   needsResume,
   requestPlaybackSession,
 } from './engine.svelte';
 import { DEFAULT_SETTINGS, settings } from '$lib/storage/settings.svelte';
-import { SUMMED_PEAK_CEILING, sampledVoiceGain, velocityGain } from './gain';
-import { installFakeAudioContext, type FakeAudioContext } from './testing';
+import {
+  LIMITER,
+  LIMITER_CROSSFADE_S,
+  LIMITER_SETTLE_S,
+  LIMITER_TRIM,
+  SUMMED_PEAK_CEILING,
+  sampledVoiceGain,
+  velocityGain,
+} from './gain';
+import {
+  FakeAudioContext as FakeContext,
+  installFakeAudioContext,
+  type FakeAudioContext,
+} from './testing';
 
 const ready = vi.hoisted(() => ({ fails: false }));
 // The engine always supplies a velocity — `velocity` is required here so the
@@ -174,7 +187,7 @@ describe('notes', () => {
     await engine.ensureStarted();
     engine.noteOn(60, 999);
     engine.noteOn(62, 127);
-    engine.noteOn(64, 100);
+    engine.noteOn(64, 70);
 
     const [tooLoud, loudest, normal] = sampled.started.map(
       (event) => event.velocity,
@@ -182,7 +195,7 @@ describe('notes', () => {
     // Junk in, the loudest MIDI velocity out — the clamp is what makes the
     // first two identical. What reaches `smplr` is that velocity *minus the
     // summed-gain headroom*, which is why neither of them is literally 127: a
-    // voice at full scale is already the whole budget.
+    // voice that loud is over the whole budget on its own.
     expect(tooLoud).toBe(loudest);
     expect(normal).toBeLessThan(loudest);
   });
@@ -338,10 +351,13 @@ describe('summed-gain headroom', () => {
   /**
    * What the synth path will peak at: every voice ramps linearly to its peak
    * during the attack, and that is the only linear automation the synth
-   * schedules (the release is exponential, the click is a step).
+   * schedules (the release is exponential, the click is a step). The first
+   * three gains are the output chain (master, trim, bypass), whose crossfade
+   * is linear too.
    */
   function synthPeak(ctx: FakeAudioContext): number {
     return ctx.gains
+      .slice(3)
       .flatMap((gain) => gain.gain.events)
       .filter((event) => event.kind === 'linear')
       .reduce((total, event) => total + event.value, 0);
@@ -367,7 +383,7 @@ describe('summed-gain headroom', () => {
       },
     );
 
-    it('leaves a single note at exactly the level it always had', async () => {
+    it('leaves a single note at exactly its calibrated level', async () => {
       ready.fails = fails;
       const engine = new AudioEngine();
       await engine.ensureStarted();
@@ -401,5 +417,32 @@ describe('summed-gain headroom', () => {
     // The ceiling is measured *before* the master, and `volumeGain` maxes at 1,
     // so a group that respects it respects it at every slider position.
     expect(SUMMED_PEAK_CEILING).toBeLessThanOrEqual(1);
+  });
+});
+
+describe('createOutputChain', () => {
+  it('limits the master, with the make-up trim after the compressor', () => {
+    const ctx = new FakeContext();
+    createOutputChain(ctx as unknown as BaseAudioContext);
+    const [limiter] = ctx.compressors;
+    expect(limiter.threshold.value).toBe(LIMITER.thresholdDb);
+    expect(limiter.knee.value).toBe(LIMITER.kneeDb);
+    expect(limiter.ratio.value).toBe(LIMITER.ratio);
+    expect(limiter.attack.value).toBe(LIMITER.attackS);
+    expect(limiter.release.value).toBe(LIMITER.releaseS);
+  });
+
+  it('bypasses the fresh limiter until it settles, then crossfades onto it', () => {
+    // A fresh compressor ducks its first ~50 ms, which is where the note
+    // that started the context sits.
+    const ctx = new FakeContext();
+    ctx.currentTime = 2;
+    createOutputChain(ctx as unknown as BaseAudioContext);
+    const [, limited, bypass] = ctx.gains;
+    expect(bypass.gain.valueAt(2)).toBe(1);
+    expect(limited.gain.valueAt(2)).toBe(0);
+    const done = 2 + LIMITER_SETTLE_S + LIMITER_CROSSFADE_S;
+    expect(bypass.gain.valueAt(done)).toBe(0);
+    expect(limited.gain.valueAt(done)).toBeCloseTo(LIMITER_TRIM, 12);
   });
 });

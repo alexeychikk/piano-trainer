@@ -4,8 +4,17 @@ import {
   DEFAULT_VOLUME,
   MAX_VELOCITY,
   MIN_VELOCITY,
+  LIMITER,
+  LIMITER_TRIM,
+  NOTE_PEAK_TARGET,
+  SOUNDFONT_OUTPUT_GAIN,
   SUMMED_PEAK_CEILING,
   clampGainScale,
+  compressorMakeupGain,
+  dbToGain,
+  gainToDb,
+  limiterStaticPeak,
+  smplrVelocityGain,
   clampVelocity,
   clampVolume,
   headroomScale,
@@ -43,8 +52,17 @@ describe('volumeGain', () => {
 });
 
 describe('velocityGain', () => {
+  it('puts a voice at the app’s own velocity on the target level', () => {
+    expect(velocityGain(DEFAULT_VELOCITY)).toBeCloseTo(NOTE_PEAK_TARGET, 12);
+    expect(gainToDb(velocityGain(DEFAULT_VELOCITY))).toBeCloseTo(-3, 6);
+  });
+
   it('is loudest at velocity 127', () => {
-    expect(velocityGain(MAX_VELOCITY)).toBe(1);
+    expect(velocityGain(MAX_VELOCITY)).toBeGreaterThan(velocityGain(126));
+    expect(velocityGain(MAX_VELOCITY)).toBeCloseTo(
+      NOTE_PEAK_TARGET * (MAX_VELOCITY / DEFAULT_VELOCITY) ** 1.5,
+      12,
+    );
   });
 
   it('rises monotonically and stays audible when played softly', () => {
@@ -58,7 +76,7 @@ describe('velocityGain', () => {
   it('clamps out-of-range velocities', () => {
     expect(clampVelocity(0)).toBe(1);
     expect(clampVelocity(999)).toBe(MAX_VELOCITY);
-    expect(velocityGain(999)).toBe(1);
+    expect(velocityGain(999)).toBe(velocityGain(MAX_VELOCITY));
   });
 
   it('falls back to the default velocity for junk, never to the loudest', () => {
@@ -67,7 +85,7 @@ describe('velocityGain', () => {
       DEFAULT_VELOCITY,
     );
     expect(clampVelocity(Number.POSITIVE_INFINITY)).toBe(DEFAULT_VELOCITY);
-    expect(velocityGain(Number.NaN)).toBeLessThan(1);
+    expect(velocityGain(Number.NaN)).toBe(velocityGain(DEFAULT_VELOCITY));
   });
 });
 
@@ -113,8 +131,19 @@ describe('clampGainScale', () => {
 
 describe('the sampled path', () => {
   it('models smplr’s squared velocity curve', () => {
-    expect(sampledVoiceGain(MAX_VELOCITY)).toBe(1);
-    expect(sampledVoiceGain(64)).toBeCloseTo((64 / 127) ** 2, 12);
+    expect(smplrVelocityGain(MAX_VELOCITY)).toBe(1);
+    expect(smplrVelocityGain(64)).toBeCloseTo((64 / 127) ** 2, 12);
+    expect(sampledVoiceGain(64) / sampledVoiceGain(32)).toBeCloseTo(4, 12);
+  });
+
+  it('puts a typical sample at the app’s own velocity on the target level', () => {
+    expect(sampledVoiceGain(DEFAULT_VELOCITY)).toBeCloseTo(
+      NOTE_PEAK_TARGET,
+      12,
+    );
+    // What that took: smplr's default `extraGain` is 5.
+    expect(SOUNDFONT_OUTPUT_GAIN).toBeGreaterThan(40);
+    expect(SOUNDFONT_OUTPUT_GAIN).toBeLessThan(50);
   });
 
   it('hands smplr the velocity that reaches the scaled gain', () => {
@@ -137,5 +166,30 @@ describe('the sampled path', () => {
 
   it('never scales a voice all the way to silence', () => {
     expect(sampledVelocity(88, 0)).toBe(MIN_VELOCITY);
+  });
+});
+
+describe('the master limiter', () => {
+  it('cancels the compressor’s make-up gain, so it is transparent below threshold', () => {
+    // Spec: (1 / curve(0 dBFS)) ^ 0.6. A −2 dB hard knee at 20:1 maps 0 dBFS
+    // to −1.9 dB, so the node adds 1.14 dB to everything.
+    expect(gainToDb(compressorMakeupGain(-2, 20))).toBeCloseTo(1.14, 6);
+    expect(
+      LIMITER_TRIM * compressorMakeupGain(LIMITER.thresholdDb, LIMITER.ratio),
+    ).toBeCloseTo(1, 12);
+    expect(limiterStaticPeak(NOTE_PEAK_TARGET)).toBe(NOTE_PEAK_TARGET);
+  });
+
+  it('keeps a sustained overload under full scale', () => {
+    for (const db of [0, 3, 6, 9, 12, 18]) {
+      const out = limiterStaticPeak(dbToGain(db));
+      expect(out).toBeLessThan(1);
+      expect(out).toBeGreaterThanOrEqual(dbToGain(LIMITER.thresholdDb));
+    }
+  });
+
+  it('sits above a single note and at most at the headroom ceiling', () => {
+    expect(dbToGain(LIMITER.thresholdDb)).toBeGreaterThan(NOTE_PEAK_TARGET);
+    expect(SUMMED_PEAK_CEILING).toBeLessThan(1);
   });
 });
