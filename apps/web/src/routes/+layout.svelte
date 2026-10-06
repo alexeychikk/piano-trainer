@@ -12,6 +12,7 @@
   import { onNavigate } from '$app/navigation';
   import { deviceLostMessage } from '$lib/midi/status';
   import { createNoteEcho } from '$lib/midi/echo';
+  import { isReservedNextQuestionNote } from '$lib/midi/next-key';
   import { isTypingTarget } from '$lib/midi/keymap';
   import { audio } from '$lib/audio/engine.svelte';
   import { isMuteShortcut } from '$lib/audio/shortcuts';
@@ -62,7 +63,12 @@
     // Straight from the event — no effects, no awaits in between: ADR §2
     // budgets 30 ms from key-press to sound.
     const unsubscribe = midiInput.subscribe(
-      createNoteEcho(audio, () => settings.value.playMidiNotes),
+      createNoteEcho(
+        audio,
+        () => settings.value.playMidiNotes,
+        // A drill's next-question key (C1) is a control, never a sound.
+        isReservedNextQuestionNote,
+      ),
     );
 
     const startAudio = () => void audio.ensureStarted();

@@ -1,11 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { NEXT_QUESTION_MIDI_NOTE } from '$lib/midi/next-key';
 import {
-  ADVANCE_LOCKOUT_MS,
+  answerableRange,
   CHORD_RELEASE_MS,
   CHORD_SETTLE_MS,
   ExerciseRunner,
-  FEEDBACK_CORRECT_MS,
-  FEEDBACK_STREAK_MS,
   IDLE_PAUSE_MS,
   REVEAL_DELAY_MS,
   SEQUENCE_GAP_MS,
@@ -198,39 +197,207 @@ describe('ExerciseRunner · presenting', () => {
   });
 });
 
+const C1 = NEXT_QUESTION_MIDI_NOTE;
+
 describe('ExerciseRunner · correct answers', () => {
-  it('scores, shows feedback and auto-advances after 650 ms', async () => {
+  it('scores, shows feedback and stays on it — no auto-advance', async () => {
     const h = await started(harness());
     h.runner.noteOn(h.answer, 'midi');
 
     expect(h.runner.phase).toBe('feedback');
     expect(h.runner.outcome).toBe('correct');
     expect(h.runner.feedback?.headline).toBe('Correct');
+    expect(h.runner.feedback?.detail).toBe(
+      `note ${h.answer} · Press C1 or Enter for next`,
+    );
     expect(h.runner.answered).toBe(1);
     expect(h.runner.correctCount).toBe(1);
     expect(h.runner.streak).toBe(1);
     expect(h.runner.accuracy).toBe(100);
 
-    h.tick(FEEDBACK_CORRECT_MS - 1);
+    // The old 650 ms is long gone, and so is anything short of the idle pause.
+    h.tick(IDLE_PAUSE_MS - 1);
     expect(h.runner.phase).toBe('feedback');
-    h.tick(1);
-    expect(h.runner.phase).toBe('presenting');
+    expect(h.plays).toHaveLength(1);
   });
 
-  it('speeds up to 450 ms at a streak of five', async () => {
+  it('lets the user play freely after a correct answer: nothing is graded', async () => {
+    const h = await started(harness());
+    const question = h.runner.question;
+    h.runner.noteOn(h.answer, 'midi');
+
+    for (const midi of [h.answer + 1, h.answer, 40, 90]) {
+      h.runner.noteOn(midi, 'midi');
+      h.runner.noteOff(midi, 'midi');
+    }
+    h.runner.noteOn(h.answer + 3, 'onscreen');
+    h.runner.noteOn(h.answer + 4, 'computer-keyboard');
+
+    expect(h.runner.phase).toBe('feedback');
+    expect(h.runner.question).toBe(question);
+    expect(h.runner.outcome).toBe('correct');
+    expect(h.runner.answerNotes).toEqual([h.answer]);
+    expect(h.attempts).toHaveLength(1);
+    expect(h.runner.answered).toBe(1);
+    expect(h.runner.correctCount).toBe(1);
+  });
+
+  it('keeps a drill that is being played on awake', async () => {
+    const h = await started(harness());
+    h.runner.noteOn(h.answer, 'midi');
+    h.tick(IDLE_PAUSE_MS - 1);
+    h.runner.noteOn(h.answer + 2, 'midi');
+    h.tick(IDLE_PAUSE_MS - 1);
+    expect(h.runner.phase).toBe('feedback');
+    h.tick(1);
+    expect(h.runner.phase).toBe('paused');
+  });
+
+  it('advances on the piano C1 (MIDI note 24) from the success state', async () => {
+    const h = await started(harness());
+    h.runner.noteOn(h.answer, 'midi');
+    h.runner.noteOn(C1, 'midi');
+
+    expect(C1).toBe(24);
+    expect(h.runner.phase).toBe('presenting');
+    expect(h.runner.outcome).toBeNull();
+    expect(h.runner.feedback).toBeNull();
+    // The press itself is not an answer to the next question either.
+    h.runner.noteOff(C1, 'midi');
+    h.tick(PLAYBACK_MS);
+    expect(h.runner.phase).toBe('awaiting');
+    expect(h.runner.answerNotes).toEqual([]);
+    expect(h.attempts).toHaveLength(1);
+  });
+
+  it('advances on Enter and on Space from the success state', async () => {
+    const h = await started(harness());
+    h.runner.noteOn(h.answer, 'midi');
+    h.runner.enter();
+    expect(h.runner.phase).toBe('presenting');
+
+    h.tick(PLAYBACK_MS);
+    h.runner.noteOn(h.answer, 'midi');
+    h.runner.space();
+    expect(h.runner.phase).toBe('presenting');
+
+    h.tick(PLAYBACK_MS);
+    h.runner.noteOn(h.answer, 'midi');
+    h.runner.advance();
+    expect(h.runner.phase).toBe('presenting');
+    expect(h.runner.answered).toBe(3);
+  });
+
+  it('still calls a streak of five out', async () => {
     const h = await started(harness());
     for (let i = 0; i < 4; i += 1) {
       h.runner.noteOn(h.answer, 'midi');
-      h.tick(FEEDBACK_CORRECT_MS);
+      h.runner.noteOn(C1, 'midi');
       h.tick(PLAYBACK_MS);
     }
     expect(h.runner.streak).toBe(4);
 
     h.runner.noteOn(h.answer, 'midi');
     expect(h.runner.feedback?.headline).toBe('Correct · 5 in a row');
-    h.tick(FEEDBACK_STREAK_MS);
-    expect(h.runner.phase).toBe('presenting');
+    expect(h.runner.phase).toBe('feedback');
     expect(h.runner.bestStreak).toBe(5);
+  });
+});
+
+describe('ExerciseRunner · the C1 next-question key', () => {
+  it('is consumed, never graded, while a question is open', async () => {
+    const h = await started(harness());
+    const question = h.runner.question;
+    h.runner.noteOn(C1, 'midi');
+    h.runner.noteOff(C1, 'midi');
+
+    expect(h.runner.phase).toBe('awaiting');
+    expect(h.runner.question).toBe(question);
+    expect(h.runner.outcome).toBeNull();
+    expect(h.runner.answerNotes).toEqual([]);
+    expect(h.attempts).toHaveLength(0);
+    expect(h.runner.answered).toBe(0);
+  });
+
+  it('is consumed during a retry, and does not clear the miss', async () => {
+    const h = await started(harness());
+    h.runner.noteOn(h.answer + 1, 'midi');
+    h.runner.noteOn(C1, 'midi');
+    expect(h.runner.phase).toBe('awaiting');
+    expect(h.runner.outcome).toBe('wrong');
+    expect(h.attempts).toHaveLength(1);
+  });
+
+  it('is consumed while the question plays', async () => {
+    const h = harness();
+    await h.runner.start();
+    h.runner.noteOn(C1, 'midi');
+    expect(h.runner.phase).toBe('presenting');
+    h.tick(PLAYBACK_MS);
+    expect(h.runner.answerNotes).toEqual([]);
+  });
+
+  it('never joins a sequence answer', async () => {
+    const h = await started(harness(sequenceStub));
+    h.runner.noteOn(62, 'midi');
+    h.runner.noteOn(C1, 'midi');
+    expect(h.runner.answerNotes).toEqual([62]);
+    h.runner.noteOn(69, 'midi');
+    expect(h.runner.outcome).toBe('correct');
+  });
+
+  it('never joins a chord answer', async () => {
+    const h = await started(harness(chordStub as AnyExercise));
+    press(h, [60, 64, C1, 67, 71]);
+    h.tick(CHORD_SETTLE_MS);
+    lift(h, [60, 64, C1, 67, 71]);
+    h.tick(CHORD_RELEASE_MS);
+    expect(h.runner.outcome).toBe('correct');
+    expect(h.runner.answerNotes).toEqual([60, 64, 67, 71]);
+  });
+
+  it('is an ordinary note from the on-screen and computer keys', async () => {
+    const h = await started(harness());
+    h.runner.noteOn(C1, 'onscreen');
+    expect(h.runner.outcome).toBe('wrong');
+    h.runner.noteOn(h.answer, 'midi');
+    h.runner.noteOn(C1, 'computer-keyboard');
+    expect(h.runner.phase).toBe('feedback');
+  });
+
+  it('starts an idle drill and resumes a paused one, like any key', async () => {
+    const h = harness();
+    h.runner.noteOn(C1, 'midi');
+    await Promise.resolve();
+    expect(h.runner.phase).toBe('presenting');
+    h.tick(PLAYBACK_MS);
+    h.runner.pause();
+    h.runner.noteOn(C1, 'midi');
+    expect(h.runner.phase).toBe('presenting');
+  });
+
+  it('advances from a reveal, which is a closed question too', async () => {
+    const h = await started(harness());
+    h.runner.skip();
+    h.runner.noteOn(h.answer, 'midi');
+    expect(h.runner.phase).toBe('feedback');
+    h.runner.noteOn(C1, 'midi');
+    expect(h.runner.phase).toBe('presenting');
+  });
+
+  it('keeps itself out of the range a question is asked on', () => {
+    expect(answerableRange({ low: 21, high: 108 })).toEqual({
+      low: 25,
+      high: 108,
+    });
+    expect(answerableRange({ low: 24, high: 96 })).toEqual({
+      low: 25,
+      high: 96,
+    });
+    expect(answerableRange({ low: 36, high: 96 })).toEqual({
+      low: 36,
+      high: 96,
+    });
   });
 });
 
@@ -259,12 +426,12 @@ describe('ExerciseRunner · misses (retry until correct)', () => {
     expect(h.runner.phase).toBe('awaiting');
     expect(h.runner.question).toBe(question);
 
-    // Right on the next try, from another source: correct, then on as today.
+    // Right on the next try, from another source: correct, and it waits.
     h.runner.noteOn(expected, 'midi');
     expect(h.runner.phase).toBe('feedback');
     expect(h.runner.outcome).toBe('correct');
     expect(h.runner.feedback?.headline).toBe('Correct');
-    h.tick(FEEDBACK_CORRECT_MS);
+    h.runner.enter();
     expect(h.runner.phase).toBe('presenting');
   });
 
@@ -324,7 +491,9 @@ describe('ExerciseRunner · misses (retry until correct)', () => {
 
     expect(h.runner.outcome).toBe('skipped');
     expect(h.runner.feedback?.headline).toBe(`note ${expected}`);
-    expect(h.runner.feedback?.detail).toBe('Skipped · Space to continue');
+    expect(h.runner.feedback?.detail).toBe(
+      'Skipped · Press C1 or Enter for next',
+    );
     expect(h.runner.revealNotes).toEqual([expected]);
     expect(h.runner.answered).toBe(1);
     expect(h.runner.correctCount).toBe(0);
@@ -352,18 +521,19 @@ describe('ExerciseRunner · misses (retry until correct)', () => {
     expect(h.runner.revealNotes).toEqual([]);
   });
 
-  it('ignores a note-on until the reveal has been heard, then continues', async () => {
+  it('lets the reveal be played along with, and moves on only when asked', async () => {
     const h = await started(harness());
     h.runner.skip();
+    h.tick(REVEAL_DELAY_MS);
 
-    h.tick(ADVANCE_LOCKOUT_MS - 1);
     h.runner.noteOn(h.answer, 'midi');
+    h.runner.noteOn(h.answer + 1, 'onscreen');
     expect(h.runner.phase).toBe('feedback');
+    expect(h.runner.outcome).toBe('skipped');
 
-    h.tick(1);
-    h.runner.noteOn(h.answer, 'midi');
+    h.runner.enter();
     expect(h.runner.phase).toBe('presenting');
-    // Answering the *next* question is a fresh attempt, not a double count.
+    // Playing along with the reveal was not an attempt at anything.
     expect(h.runner.answered).toBe(1);
   });
 });
@@ -403,7 +573,7 @@ describe('ExerciseRunner · only the first try is the attempt', () => {
     const h = await started(harness());
     h.runner.noteOn(h.answer + 1, 'onscreen');
     h.runner.noteOn(h.answer, 'midi');
-    h.tick(FEEDBACK_CORRECT_MS);
+    h.runner.noteOn(C1, 'midi');
     h.tick(PLAYBACK_MS);
 
     h.runner.noteOn(h.answer, 'midi');
@@ -579,7 +749,7 @@ describe('ExerciseRunner · note-sequence answers', () => {
     const h = await started(harness(sequenceStub));
     h.runner.noteOn(62, 'midi');
     h.runner.noteOn(69, 'midi');
-    h.tick(FEEDBACK_CORRECT_MS);
+    h.runner.enter();
     h.tick(PLAYBACK_MS);
     expect(h.runner.phase).toBe('awaiting');
     expect(h.runner.answerNotes).toEqual([]);
@@ -884,7 +1054,7 @@ describe('ExerciseRunner · a mixed session (slice 9b)', () => {
     await h.runner.start();
     expect(h.runner.definition.id).toBe('stub');
     h.runner.noteOn(h.answer, 'onscreen');
-    h.tick(FEEDBACK_CORRECT_MS);
+    h.runner.advance();
     expect(h.runner.definition.id).toBe('stub');
     expect(h.runner.phase).toBe('presenting');
   });
@@ -1264,7 +1434,8 @@ describe('ExerciseRunner · chord capture (ADR 0004)', () => {
     press(h, [60, 64, 67, 71]);
     h.tick(CHORD_SETTLE_MS);
     lift(h, [60, 64, 67, 71]);
-    h.tick(CHORD_RELEASE_MS + FEEDBACK_CORRECT_MS);
+    h.tick(CHORD_RELEASE_MS);
+    h.runner.advance();
     expect(h.runner.capture).toBeNull();
     expect(h.runner.capturedChords).toEqual([]);
     // The next answer may take either path.

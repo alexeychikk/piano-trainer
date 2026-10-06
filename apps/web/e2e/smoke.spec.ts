@@ -245,7 +245,7 @@ test('the find-the-note drill is playable with the computer keys alone', async (
   // so the drill is usable with the sound off (a11y §8.6).
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('feedback')).toContainText(
-    'Skipped · Space to continue',
+    'Skipped · Press C1 or Enter for next',
   );
   await expect(
     page.locator('[data-piano-keyboard] button', { hasText: '◆' }),
@@ -313,7 +313,7 @@ test('a miss keeps the same question until it is answered right', async ({
   await expect(prompt).toHaveText('Which note?');
 
   // `A` is C4. It is wrong unless the question happens to be C4 (1 in 61);
-  // then the drill moves on by itself and the next question is asked instead.
+  // then the drill waits on the success state, and Enter asks the next one.
   let missLine = '';
   for (let tries = 0; tries < 4 && !missLine; tries += 1) {
     await expect(feedback).toBeEmpty();
@@ -322,6 +322,7 @@ test('a miss keeps the same question until it is answered right', async ({
     await expect(feedback).toContainText(/try again|correct/i);
     if (/try again/i.test((await feedback.textContent()) ?? ''))
       missLine = (await feedback.textContent()) ?? '';
+    else await page.keyboard.press('Enter');
   }
   expect(missLine).not.toBe('');
   const before = (await answered.textContent()) ?? '';
@@ -344,16 +345,23 @@ test('a miss keeps the same question until it is answered right', async ({
   await expect(feedback).toContainText(/try again/i);
   await expect(answered).toHaveText(before);
 
-  // The right key: correct, and the drill moves on as it always has — but the
-  // question was already counted as missed, so the score does not change.
+  // The right key: correct — but the question was already counted as missed,
+  // so the score does not change. The drill stays on the success state, and
+  // further notes are free play, until the user asks for the next question.
   const step = (unit === 'octave' ? 12 : 1) * Number(distance);
   const expected = 60 + (direction === 'high' ? -step : step);
   await page
     .getByRole('button', { name: spoken(expected), exact: true })
     .click();
   await expect(feedback).toContainText(/correct/i);
+  await expect(feedback).toContainText('Press C1 or Enter for next');
   await expect(answered).toHaveText(before);
+  await page.keyboard.press('a');
+  await expect(feedback).toContainText(/correct/i);
+  await expect(answered).toHaveText(before);
+  await page.getByTestId('next').click();
   await expect(feedback).toBeEmpty();
+  await expect(prompt).toHaveText('Which note?');
 
   expect(consoleErrors).toEqual([]);
 });
