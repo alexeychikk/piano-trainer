@@ -24,7 +24,7 @@ describe('feedbackLines', () => {
     ).toBe('Correct · 7 in a row');
   });
 
-  it('names the answer and what went wrong, and waits for space', () => {
+  it('says what went wrong and asks for another try, never naming the answer', () => {
     expect(
       feedbackLines({
         outcome: 'wrong',
@@ -34,17 +34,17 @@ describe('feedbackLines', () => {
       }),
     ).toEqual({
       glyph: '✗',
-      headline: 'Eb4',
-      detail: 'You played E4 — 1 semitone too high · Space to continue',
+      headline: 'Try again',
+      detail: 'You played E4 — 1 semitone too high · Enter to reveal',
       tone: 'danger',
     });
   });
 
-  it('still prompts to continue when the exercise has no explanation', () => {
+  it('still offers the reveal when the exercise has no explanation', () => {
     expect(
       feedbackLines({ outcome: 'wrong', expectedLabel: 'Eb4', streak: 0 })
         .detail,
-    ).toBe('Space to continue');
+    ).toBe('Enter to reveal');
   });
 
   it('marks a skip with its own glyph', () => {
@@ -70,9 +70,7 @@ describe('feedbackAnnouncement', () => {
         expectedLabel: 'C4',
         detail: 'You played E4 — 4 semitones too high',
       }),
-    ).toBe(
-      'Incorrect. You played E4 — 4 semitones too high. The answer was C4.',
-    );
+    ).toBe('Incorrect. You played E4 — 4 semitones too high. Try again.');
     expect(
       feedbackAnnouncement({ outcome: 'skipped', expectedLabel: 'C4' }),
     ).toBe('Skipped. The answer was C4.');

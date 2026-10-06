@@ -149,7 +149,12 @@ export interface Grade {
   score: number;
   /** One short line, e.g. `You played a perfect 5th`. */
   feedback?: string;
-  /** What to show on the keyboard after a miss. */
+  /**
+   * What to show on the keyboard after a miss. Unread since retry until
+   * correct (2026-10-06): a miss keeps the question open, and a skip reveals
+   * `Question.expected`. Kept as ADR §5's contract, and so a later "show me"
+   * affordance can use it without touching seven exercises.
+   */
   revealed?: { notes?: Midi[]; label?: string };
 }
 

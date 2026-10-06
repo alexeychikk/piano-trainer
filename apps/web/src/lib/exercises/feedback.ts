@@ -9,7 +9,10 @@ export type Outcome = 'correct' | 'wrong' | 'skipped';
 export interface FeedbackLines {
   /** Never colour alone (§8.1): every state carries a glyph. */
   glyph: string;
-  /** 32 px line: `Correct` or the answer's name. */
+  /**
+   * 32 px line: `Correct`, the answer's name (a skip) or `Try again` (a miss,
+   * which never names the answer — the question is still open).
+   */
   headline: string;
   /** The second line, including the "Space to continue" prompt. */
   detail: string;
@@ -30,6 +33,10 @@ export interface FeedbackInput {
 export const STREAK_CALLOUT = 5;
 
 const CONTINUE = 'Space to continue';
+/** A miss keeps the question open (retry until correct); this is the way out. */
+const REVEAL = 'Enter to reveal';
+/** A miss's headline: the question is still open, so it is not the answer. */
+export const TRY_AGAIN = 'Try again';
 
 export function feedbackLines({
   outcome,
@@ -56,8 +63,8 @@ export function feedbackLines({
   }
   return {
     glyph: '✗',
-    headline: expectedLabel,
-    detail: detail ? `${detail} · ${CONTINUE}` : CONTINUE,
+    headline: TRY_AGAIN,
+    detail: detail ? `${detail} · ${REVEAL}` : REVEAL,
     tone: 'danger',
   };
 }
@@ -74,7 +81,8 @@ export function feedbackAnnouncement({
   if (outcome === 'correct') return `Correct. ${expectedLabel}.`;
   const played = detail ? `${detail}. ` : '';
   if (outcome === 'skipped') return `Skipped. The answer was ${expectedLabel}.`;
-  return `Incorrect. ${played}The answer was ${expectedLabel}.`;
+  // A miss keeps the question open, so it must not speak the answer either.
+  return `Incorrect. ${played}${TRY_AGAIN}.`;
 }
 
 /**

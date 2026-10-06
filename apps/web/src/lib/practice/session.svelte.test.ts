@@ -168,6 +168,9 @@ describe('SessionRun · through the real runner', () => {
         }
         vi.advanceTimersByTime((question?.answerGapMs ?? SEQUENCE_GAP_MS) + 1);
         clock += afterMs;
+        // A miss keeps the question open (retry until correct): give up on it
+        // the way a user does, `Enter` to reveal — which logs nothing more.
+        if (runner.outcome === 'wrong') runner.skip();
         if (runner.phase === 'feedback') runner.advance();
         vi.advanceTimersByTime(0);
       },

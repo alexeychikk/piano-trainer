@@ -472,7 +472,9 @@
     {:else if sequenceMode || chordMode}
       <!-- The note slots of a sequence answer (§4.4) — or one per chord while
            a MIDI chord is captured (ADR 0004 §4) — in the slot that is
-           reserved and empty for exactly as long as an answer is open. -->
+           reserved and empty for exactly as long as an answer is open. A miss
+           re-opens the question (retry until correct) with its ✗ line still
+           up; the next try's first note clears it, and the slots return. -->
       <p class="slots" data-testid="slots">
         <MicroLabel>answer</MicroLabel>
         {#each slots as slot (slot.index)}
