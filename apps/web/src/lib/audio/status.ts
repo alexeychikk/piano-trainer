@@ -95,6 +95,9 @@ export function soundChip({ status, muted }: SoundChipInput): SoundChip {
 export const AUDIO_COPY = {
   notStarted: `Click or press a key to enable sound`,
   soundfontFailed: `Soundfont unavailable — using the built-in synth.`,
+  /** Settings → Sound: the `playMidiNotes` checkbox (owner request, 2026-10-06). */
+  playMidiNotes: `Play my MIDI notes through the app`,
+  playMidiNotesHint: `Turn off to hear only your piano. Questions, replays, the metronome and the on-screen keys still sound.`,
 } as const;
 
 /**

@@ -21,7 +21,7 @@
   import SectionRail from '$lib/components/settings/SectionRail.svelte';
   import { audio } from '$lib/audio/engine.svelte';
   import { INSTRUMENTS } from '$lib/audio/instruments';
-  import { audioExplanation } from '$lib/audio/status';
+  import { AUDIO_COPY, audioExplanation } from '$lib/audio/status';
   import { midiInput } from '$lib/midi/input.svelte';
   import { deviceAction, deviceSelect, deviceValue } from '$lib/midi/status';
   import {
@@ -274,6 +274,23 @@
           </label>
           <span class="note small">
             Press <Chip variant="key">M</Chip> anywhere to mute.
+          </span>
+        </div>
+
+        <div class="row">
+          <label class="choice" for="play-midi-notes">
+            <input
+              id="play-midi-notes"
+              type="checkbox"
+              aria-describedby="play-midi-notes-hint"
+              checked={settings.value.playMidiNotes}
+              onchange={(event) =>
+                settings.patch({ playMidiNotes: event.currentTarget.checked })}
+            />
+            {AUDIO_COPY.playMidiNotes}
+          </label>
+          <span id="play-midi-notes-hint" class="note small">
+            {AUDIO_COPY.playMidiNotesHint}
           </span>
         </div>
 

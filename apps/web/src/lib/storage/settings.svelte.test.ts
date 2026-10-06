@@ -70,6 +70,17 @@ describe('parseSettings', () => {
     expect(parsed.soundEnabled).toBe(DEFAULT_SETTINGS.soundEnabled);
     expect(parsed.tempoBpm).toBe(DEFAULT_SETTINGS.tempoBpm);
   });
+
+  it('plays MIDI notes through the app unless told not to', () => {
+    expect(DEFAULT_SETTINGS.playMidiNotes).toBe(true);
+    expect(parseSettings(JSON.stringify({})).playMidiNotes).toBe(true);
+    expect(
+      parseSettings(JSON.stringify({ playMidiNotes: false })).playMidiNotes,
+    ).toBe(false);
+    expect(
+      parseSettings(JSON.stringify({ playMidiNotes: 'no' })).playMidiNotes,
+    ).toBe(true);
+  });
 });
 
 describe('SettingsStore', () => {

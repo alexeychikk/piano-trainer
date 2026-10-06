@@ -11,6 +11,7 @@
   import { attachFlushOnLeave } from '$lib/practice/leave';
   import { onNavigate } from '$app/navigation';
   import { deviceLostMessage } from '$lib/midi/status';
+  import { createNoteEcho } from '$lib/midi/echo';
   import { isTypingTarget } from '$lib/midi/keymap';
   import { audio } from '$lib/audio/engine.svelte';
   import { isMuteShortcut } from '$lib/audio/shortcuts';
@@ -42,7 +43,9 @@
    * Audio is wired here, not per screen: the `AudioContext` may only be
    * created from a user gesture, so the *first* click or keypress anywhere
    * starts it, and every note — MIDI port, on-screen keys, computer keys —
-   * reaches the engine through the one `midiInput` subscription.
+   * reaches the engine through the one `midiInput` subscription. That
+   * subscription goes through `createNoteEcho`, which drops a MIDI port's
+   * notes when `playMidiNotes` is off (the user hears their own piano).
    */
   onMount(() => {
     settings.hydrate();
@@ -58,10 +61,9 @@
 
     // Straight from the event — no effects, no awaits in between: ADR §2
     // budgets 30 ms from key-press to sound.
-    const unsubscribe = midiInput.subscribe((event) => {
-      if (event.type === 'on') audio.noteOn(event.midi, event.velocity);
-      else audio.noteOff(event.midi);
-    });
+    const unsubscribe = midiInput.subscribe(
+      createNoteEcho(audio, () => settings.value.playMidiNotes),
+    );
 
     const startAudio = () => void audio.ensureStarted();
     const onKeyDown = (event: KeyboardEvent) => {
