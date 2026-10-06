@@ -401,6 +401,14 @@ test('the interval drill takes a two-note answer from the computer keys', async 
   await expect(page.getByTestId('answered')).toContainText('/1');
   // A miss never blocks: no dialog anywhere in the drill.
   await expect(page.getByRole('dialog')).toHaveCount(0);
+  // A right answer (a major 2nd was asked) waits on its ✓; Enter moves on,
+  // so the bar below is the open question's again.
+  const feedback = page.getByTestId('feedback');
+  await expect(feedback).toContainText(/try again|correct/i);
+  if (/correct/i.test((await feedback.textContent()) ?? '')) {
+    await page.keyboard.press('Enter');
+    await expect(feedback).toBeEmpty();
+  }
 
   // The runner never scrolls, note slots and all (§4.1) — and this is the
   // tallest the frame ever gets: a *sequence* drill with no MIDI device wears
