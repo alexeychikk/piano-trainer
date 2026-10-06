@@ -174,7 +174,7 @@ describe('notes', () => {
     await engine.ensureStarted();
     engine.noteOn(60, 999);
     engine.noteOn(62, 127);
-    engine.noteOn(64, 100);
+    engine.noteOn(64, 70);
 
     const [tooLoud, loudest, normal] = sampled.started.map(
       (event) => event.velocity,
@@ -182,7 +182,7 @@ describe('notes', () => {
     // Junk in, the loudest MIDI velocity out — the clamp is what makes the
     // first two identical. What reaches `smplr` is that velocity *minus the
     // summed-gain headroom*, which is why neither of them is literally 127: a
-    // voice at full scale is already the whole budget.
+    // voice that loud is over the whole budget on its own.
     expect(tooLoud).toBe(loudest);
     expect(normal).toBeLessThan(loudest);
   });
@@ -367,7 +367,7 @@ describe('summed-gain headroom', () => {
       },
     );
 
-    it('leaves a single note at exactly the level it always had', async () => {
+    it('leaves a single note at exactly its calibrated level', async () => {
       ready.fails = fails;
       const engine = new AudioEngine();
       await engine.ensureStarted();

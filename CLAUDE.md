@@ -211,16 +211,30 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
   `requestAnimationFrame` — the light may lag, the click may not. All audio wording lives in
   `$lib/audio/status.ts`. `audio` and `midi` are sibling layers: neither imports the other (which is
   why the played-back `DEFAULT_VELOCITY` is deliberately restated in `audio/gain.ts`).
-- **Level policy lives in `$lib/audio/gain.ts`, never in an exercise.** Voices mix by addition and
-  there is no limiter on the master, so **every group the engine starts in one call shares a summed
-  peak budget**: `headroomScale(voiceGains)` scales them so their peaks sum to at most
-  `SUMMED_PEAK_CEILING` (0.85, measured *before* the master gain — and `volumeGain` maxes at 1, so
-  respecting it at the ceiling means no slider position can clip). A group already under the ceiling
-  is untouched, so a single note keeps exactly the level it always had *up to the velocity at which
-  one voice alone reaches the ceiling* (≈113 sampled, ≈117 synth — above that even a group of one is
-  scaled, which is the ceiling doing its job); `1 / sqrt(n)` was rejected
-  because it still clips (four voices at 88 reach 1.15). `SUMMED_PEAK_CEILING` is **the one constant
-  to tweak** if the owner's listen-through says the app is too loud or too quiet.
+- **Level policy lives in `$lib/audio/gain.ts`, never in an exercise** ([ADR 0007](docs/decisions/0007-output-level-and-master-limiter.md)).
+  **`NOTE_PEAK_TARGET` (−3 dBFS) is the one constant to tweak** if the owner's listen-through says
+  the app is too loud or too quiet: one voice at `DEFAULT_VELOCITY` (80) peaks there at 100 % volume
+  on **both** paths. The synth curve is anchored on it (`velocityGain` = target × (v/80)^1.5), and so
+  is the soundfont: the MusyngKite samples are mastered quietly (per-sample peaks 0.024–0.096,
+  grand median `SOUNDFONT_TYPICAL_PEAK` 0.064, measured 2026-10-06), so the engine hands
+  `Soundfont()` a derived `extraGain` (`SOUNDFONT_OUTPUT_GAIN` ≈ 45; `smplr`'s default 5 left a note
+  at −22 dBFS, 16 dB under the synth). Two stages keep that from clipping:
+  - **Groups**: voices mix by addition, so **every group the engine starts in one call shares a
+    summed peak budget** — `headroomScale(voiceGains)` scales them to at most `SUMMED_PEAK_CEILING`
+    (0.95, before the master gain, which maxes at 1). A single note under it is untouched; above
+    ~velocity 92 even a group of one is scaled, so the top of the velocity range is flat — the cost
+    of a loud default, and the limiter would flatten it anyway. `1 / sqrt(n)` was rejected because
+    it still clips. The sampled budget uses the *typical* sample: the loudest ones sit up to 3.5 dB
+    above, and that residue is the limiter's.
+  - **The master limiter** (`createOutputChain` in the engine: volume → `DynamicsCompressorNode` →
+    trim → destination; values in `LIMITER`): hard knee at −2 dBFS, 20:1, 1 ms attack, for what no
+    budget sees — **held keys** (a chord from a MIDI piano is four `noteOn`s, ~+9 dBFS at the
+    target). A compressor applies spec-defined make-up gain to *everything*; `LIMITER_TRIM` cancels
+    it (`compressorMakeupGain`), so below the threshold the chain is unity. Every voice, sample and
+    click connects to `audio.destination` (the volume gain), so nothing bypasses it.
+  - Measured, not assumed: `level.test.ts` renders the scheduled voices sample by sample (no
+    `OfflineAudioContext` in jsdom) and `e2e/output-level.spec.ts` swaps Chromium's real
+    `OfflineAudioContext` in for the engine's `AudioContext` on `/play` and reads the rendered peak.
   - **A group is one call at one time** — `playChord` (a `PlaybackPlan` event), or `playNote`/
     `noteOn` as the group of one. Held keys are *not* a group: they arrive one `noteOn` at a time and
     a sounding voice cannot be turned down without a shared node that would duck it audibly. Each
@@ -234,9 +248,10 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
   - Consequence: **an exercise never sets a velocity for headroom reasons** — a velocity is a
     musical choice (play-the-voicing's root reference sits under its shell on purpose) and nothing
     else. Slice 10's velocity-80 stop-gap is gone: both chord drills are on slice 7's 88 again.
-  - Still outside the budget, deliberately: the metronome click (`scheduleClick`, peak 0.5, ~50 ms)
-    goes straight to the master, so a click landing exactly on a chord attack can sum past unity for
-    a transient. It is a single short voice and lowering it would defeat "audible under playing".
+  - Still outside the group budget, deliberately: the metronome click (`scheduleClick`, peak 0.5,
+    ~50 ms, −6 dBFS — 3 dB under a note now, where it used to be 16 dB over the soundfont) goes to
+    the master like everything else, so the limiter catches a click landing on a chord attack. It is
+    a single short voice and lowering it would defeat "audible under playing".
 - **Sound settings** (`instrument`, `volume`, `soundEnabled`, `tempoBpm`, `beatsPerBar`) live in the
   same `settings` store, but UI changes them through `audio.setVolume/setMuted/setInstrument` and
   `metronome.setTempo/setBeatsPerBar` — never by patching `settings` directly, because the engine
