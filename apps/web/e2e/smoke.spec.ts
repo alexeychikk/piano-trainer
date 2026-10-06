@@ -280,6 +280,84 @@ test('the find-the-note drill is playable with the computer keys alone', async (
   expect(consoleErrors).toEqual([]);
 });
 
+/** `spokenNoteName()`'s register — the on-screen keys' accessible names. */
+const SPOKEN = [
+  'C',
+  'C sharp',
+  'D',
+  'D sharp',
+  'E',
+  'F',
+  'F sharp',
+  'G',
+  'G sharp',
+  'A',
+  'A sharp',
+  'B',
+];
+const spoken = (midi: number) =>
+  `${SPOKEN[midi % 12]} ${Math.floor(midi / 12) - 1}`;
+
+test('a miss keeps the same question until it is answered right', async ({
+  page,
+}) => {
+  const consoleErrors = watchConsole(page);
+
+  await page.goto('/practice/find-the-note/');
+  const prompt = page.getByTestId('prompt');
+  const replay = page.getByTestId('replay');
+  const feedback = page.getByTestId('feedback');
+  const answered = page.getByTestId('answered');
+  await expect(prompt).toHaveText('Ready?');
+  await page.keyboard.press('Space');
+  await expect(prompt).toHaveText('Which note?');
+
+  // `A` is C4. It is wrong unless the question happens to be C4 (1 in 61);
+  // then the drill moves on by itself and the next question is asked instead.
+  let missLine = '';
+  for (let tries = 0; tries < 4 && !missLine; tries += 1) {
+    await expect(feedback).toBeEmpty();
+    await expect(replay).toBeEnabled();
+    await page.keyboard.press('a');
+    await expect(feedback).toContainText(/try again|correct/i);
+    if (/try again/i.test((await feedback.textContent()) ?? ''))
+      missLine = (await feedback.textContent()) ?? '';
+  }
+  expect(missLine).not.toBe('');
+  const before = (await answered.textContent()) ?? '';
+
+  // The miss names what was played, never the answer, and the question stays.
+  const [, distance, unit, direction] =
+    /You played C4 — (?:the right note, )?(\d+) (semitone|octave)s? too (high|low)/.exec(
+      missLine,
+    ) ?? [];
+  expect(distance).toBeDefined();
+  await expect(feedback).toContainText('Enter to reveal');
+  await expect(prompt).toHaveText('Which note?');
+  await expect(
+    page.locator('[data-piano-keyboard] button', { hasText: '◆' }),
+  ).toHaveCount(0);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+
+  // Another wrong try is still the same question, and logs nothing more.
+  await page.keyboard.press('a');
+  await expect(feedback).toContainText(/try again/i);
+  await expect(answered).toHaveText(before);
+
+  // The right key: correct, and the drill moves on as it always has — but the
+  // question was already counted as missed, so the score does not change.
+  const step = (unit === 'octave' ? 12 : 1) * Number(distance);
+  const expected = 60 + (direction === 'high' ? -step : step);
+  await page
+    .getByRole('button', { name: spoken(expected), exact: true })
+    .click();
+  await expect(feedback).toContainText(/correct/i);
+  await expect(answered).toHaveText(before);
+  await expect(feedback).toBeEmpty();
+
+  expect(consoleErrors).toEqual([]);
+});
+
 test('the interval drill takes a two-note answer from the computer keys', async ({
   page,
 }) => {

@@ -43,7 +43,11 @@ import type {
 export const FEEDBACK_CORRECT_MS = 650;
 /** Correct at a streak of `STREAK_CALLOUT` or more — the drill speeds up. */
 export const FEEDBACK_STREAK_MS = 450;
-/** Wrong → auto-replay the answer, while the wrong one is still in memory. */
+/**
+ * Skip → auto-replay the answer, while the question is still in memory. A
+ * miss no longer reveals (retry until correct, 2026-10-06): it re-arms the
+ * same question, and the answer is heard only when the user asks for it.
+ */
 export const REVEAL_DELAY_MS = 250;
 /** No input for this long → `paused`, audio stopped. */
 export const IDLE_PAUSE_MS = 90_000;
@@ -226,6 +230,12 @@ export class ExerciseRunner {
    * reveal back — not silently skip to the next question.
    */
   #pausedInFeedback = false;
+  /**
+   * Whether this question's attempt has been emitted. Retry until correct: a
+   * wrong answer re-arms the same question, and only the **first** answer to
+   * it — right, wrong or skipped — is the attempt (score, streak, the log).
+   */
+  #attempted = false;
   #recent: SkillId[] = [];
   #askedAt = 0;
   #feedbackAt = 0;
@@ -324,6 +334,9 @@ export class ExerciseRunner {
 
     const question = this.question;
     if (!question) return;
+    // The first note of another try takes the miss off the screen: its ✗
+    // keys and its line give way to the new answer's slots.
+    if (this.outcome === 'wrong') this.#clearMiss();
     if (question.answerMode === 'chord-released') {
       // The path is chosen per answer, from its first note's source (ADR 0004
       // §1): a MIDI port is captured as a chord, everything else as today's
@@ -364,7 +377,6 @@ export class ExerciseRunner {
       [midi],
       source,
       grade.feedback,
-      grade.revealed?.notes,
     );
   }
 
@@ -528,7 +540,6 @@ export class ExerciseRunner {
       order,
       source,
       grade.feedback,
-      grade.revealed?.notes,
     );
   }
 
@@ -660,7 +671,6 @@ export class ExerciseRunner {
       notes,
       'midi',
       grade.feedback,
-      grade.revealed?.notes,
     );
   }
 
@@ -739,6 +749,7 @@ export class ExerciseRunner {
     this.question = question;
     this.outcome = null;
     this.feedback = null;
+    this.#attempted = false;
     this.#resetSequence();
     this.answerNotes = [];
     this.revealNotes = [];
@@ -845,7 +856,6 @@ export class ExerciseRunner {
     notes: Midi[],
     source: NoteSource,
     detail?: string,
-    revealed?: Midi[],
   ): void {
     const question = this.question;
     if (!question) return;
@@ -857,15 +867,24 @@ export class ExerciseRunner {
 
     this.answerNotes = notes;
     this.outcome = outcome;
-    this.answered += 1;
-    if (grade.correct) {
-      this.correctCount += 1;
-      this.streak += 1;
-      this.bestStreak = Math.max(this.bestStreak, this.streak);
-    } else {
-      this.streak = 0;
-      this.revealNotes = revealed ?? expectedNotes(question.expected);
+    // Only the first answer to a question counts (retry until correct): a
+    // right answer after a miss is not a correct one, and a skip after a miss
+    // is not a second wrong one.
+    const first = !this.#attempted;
+    if (first) {
+      this.#attempted = true;
+      this.answered += 1;
+      if (grade.correct) {
+        this.correctCount += 1;
+        this.streak += 1;
+        this.bestStreak = Math.max(this.bestStreak, this.streak);
+      } else {
+        this.streak = 0;
+      }
     }
+    // Only a skip reveals; a miss keeps the question (and its answer) open.
+    if (outcome === 'skipped')
+      this.revealNotes = expectedNotes(question.expected);
 
     const expectedLabel = question.expected.label;
     this.feedback = feedbackLines({
@@ -880,7 +899,16 @@ export class ExerciseRunner {
       detail,
     });
 
-    this.#emit(question, grade, source);
+    if (first) this.#emit(question, grade, source);
+
+    if (outcome === 'wrong') {
+      // Retry until correct: the same question stays up and takes another
+      // answer at once. Nothing is revealed or replayed — that would hand over
+      // the answer; `Enter` (skip & reveal) is how the user asks for it.
+      this.phase = 'awaiting';
+      this.#armIdleTimer();
+      return;
+    }
 
     this.phase = 'feedback';
     this.#feedbackAt = this.#now();
@@ -899,8 +927,15 @@ export class ExerciseRunner {
       this.#setTimer(() => this.advance(), delay);
       return;
     }
-    // A miss waits for the user — but hears the right answer first.
+    // A skip waits for the user — but hears the right answer first.
     this.#setTimer(() => this.#replayReveal(), REVEAL_DELAY_MS);
+  }
+
+  /** Another try has begun: the miss leaves the screen, the question stays. */
+  #clearMiss(): void {
+    this.outcome = null;
+    this.feedback = null;
+    this.answerNotes = [];
   }
 
   #emit(

@@ -366,7 +366,8 @@ state strip inside the reserved space:
   `--track-heading`, in the state colour (`--success` 12.05 / `--danger` 7.02 / `--hint` 7.40 on
   `--bg-1`).
 - Detail: `FeedbackLines.detail` — 18 px `--font-sans`, sentence case, `--text-2`. It carries
-  `Space to continue`, verbatim.
+  `Space to continue` (a skip) or `Enter to reveal` (a miss, which keeps the question open —
+  core-practice-ux.md §4.3, 2026-10-06), verbatim.
 - Glyph: `✓` / `✗` / `⤳` inside a `GlyphBadge` with the matching tone. The glyph is the signal; keep
   it even though the headline is also coloured.
 - Entry: 120 ms fade + 4 px rise (UX §4.2), unchanged, and **nothing else in the answer path

@@ -234,34 +234,127 @@ describe('ExerciseRunner · correct answers', () => {
   });
 });
 
-describe('ExerciseRunner · misses', () => {
-  it('reveals, replays the answer after 250 ms and waits for the user', async () => {
+describe('ExerciseRunner · misses (retry until correct)', () => {
+  it('keeps the same question and takes another answer at once', async () => {
+    const h = await started(harness());
+    const expected = h.answer;
+    const question = h.runner.question;
+    h.runner.noteOn(expected + 1, 'onscreen');
+
+    expect(h.runner.phase).toBe('awaiting');
+    expect(h.runner.question).toBe(question);
+    expect(h.runner.outcome).toBe('wrong');
+    expect(h.runner.streak).toBe(0);
+    expect(h.runner.answerNotes).toEqual([expected + 1]);
+    expect(h.runner.feedback?.headline).toBe('Try again');
+    expect(h.runner.feedback?.detail).toBe(
+      `You played ${expected + 1} · Enter to reveal`,
+    );
+    expect(h.runner.announcement).toBe(
+      `Incorrect. You played ${expected + 1}. Try again.`,
+    );
+
+    // No timeout of its own, and still the same question (§4.3).
+    h.tick(10_000);
+    expect(h.runner.phase).toBe('awaiting');
+    expect(h.runner.question).toBe(question);
+
+    // Right on the next try, from another source: correct, then on as today.
+    h.runner.noteOn(expected, 'midi');
+    expect(h.runner.phase).toBe('feedback');
+    expect(h.runner.outcome).toBe('correct');
+    expect(h.runner.feedback?.headline).toBe('Correct');
+    h.tick(FEEDBACK_CORRECT_MS);
+    expect(h.runner.phase).toBe('presenting');
+  });
+
+  it('neither reveals nor plays the answer on a miss', async () => {
+    const h = await started(harness());
+    h.runner.noteOn(h.answer + 1, 'onscreen');
+    h.tick(REVEAL_DELAY_MS * 4);
+
+    expect(h.runner.revealNotes).toEqual([]);
+    expect(h.runner.feedback?.headline).not.toContain(`${h.answer}`);
+    expect(h.runner.announcement).not.toContain(`note ${h.answer}`);
+    expect(h.plays).toHaveLength(1);
+  });
+
+  it('takes the miss off the screen when the next try begins', async () => {
+    const h = await started(harness(sequenceStub));
+    h.runner.noteOn(60, 'midi');
+    h.runner.noteOn(64, 'midi');
+    expect(h.runner.outcome).toBe('wrong');
+
+    h.runner.noteOn(62, 'midi');
+    expect(h.runner.outcome).toBeNull();
+    expect(h.runner.feedback).toBeNull();
+    expect(h.runner.answerNotes).toEqual([62]);
+    h.runner.noteOn(69, 'midi');
+    expect(h.runner.outcome).toBe('correct');
+  });
+
+  it('replays the question on Space while retrying', async () => {
+    const h = await started(harness());
+    h.runner.noteOn(h.answer + 1, 'onscreen');
+    h.runner.space();
+
+    expect(h.runner.phase).toBe('presenting');
+    expect(h.plays).toHaveLength(2);
+    expect(h.plays[1].notes).toEqual(h.plays[0].notes);
+    h.tick(PLAYBACK_MS);
+    expect(h.runner.phase).toBe('awaiting');
+  });
+
+  it('pauses on an abandoned retry, like any open question', async () => {
+    const h = await started(harness());
+    h.runner.noteOn(h.answer + 1, 'onscreen');
+    h.tick(IDLE_PAUSE_MS);
+    expect(h.runner.phase).toBe('paused');
+    h.runner.space();
+    h.tick(PLAYBACK_MS);
+    expect(h.runner.phase).toBe('awaiting');
+    h.runner.noteOn(h.answer, 'midi');
+    expect(h.runner.outcome).toBe('correct');
+  });
+
+  it('skips and reveals on Enter', async () => {
+    const h = await started(harness());
+    const expected = h.answer;
+    h.runner.skip();
+
+    expect(h.runner.outcome).toBe('skipped');
+    expect(h.runner.feedback?.headline).toBe(`note ${expected}`);
+    expect(h.runner.feedback?.detail).toBe('Skipped · Space to continue');
+    expect(h.runner.revealNotes).toEqual([expected]);
+    expect(h.runner.answered).toBe(1);
+    expect(h.runner.correctCount).toBe(0);
+    expect(h.runner.accuracy).toBe(0);
+
+    // The answer is heard after the reveal delay, and the drill waits.
+    expect(h.plays).toHaveLength(1);
+    h.tick(REVEAL_DELAY_MS);
+    expect(h.plays).toHaveLength(2);
+    h.tick(10_000);
+    expect(h.runner.phase).toBe('feedback');
+  });
+
+  it('reveals on Enter after a miss, and then continues', async () => {
     const h = await started(harness());
     const expected = h.answer;
     h.runner.noteOn(expected + 1, 'onscreen');
+    h.runner.skip();
 
-    expect(h.runner.outcome).toBe('wrong');
-    expect(h.runner.streak).toBe(0);
+    expect(h.runner.outcome).toBe('skipped');
     expect(h.runner.revealNotes).toEqual([expected]);
-    expect(h.runner.feedback?.headline).toBe(`note ${expected}`);
-    expect(h.runner.feedback?.detail).toContain('Space to continue');
-    expect(h.plays).toHaveLength(1);
-
-    h.tick(REVEAL_DELAY_MS);
-    expect(h.plays).toHaveLength(2);
-
-    // No timeout of its own: a miss is where learning happens (§4.3).
-    h.tick(10_000);
-    expect(h.runner.phase).toBe('feedback');
-
     h.runner.space();
     expect(h.runner.phase).toBe('presenting');
     expect(h.runner.outcome).toBeNull();
+    expect(h.runner.revealNotes).toEqual([]);
   });
 
   it('ignores a note-on until the reveal has been heard, then continues', async () => {
     const h = await started(harness());
-    h.runner.noteOn(h.answer + 1, 'onscreen');
+    h.runner.skip();
 
     h.tick(ADVANCE_LOCKOUT_MS - 1);
     h.runner.noteOn(h.answer, 'midi');
@@ -273,18 +366,51 @@ describe('ExerciseRunner · misses', () => {
     // Answering the *next* question is a fresh attempt, not a double count.
     expect(h.runner.answered).toBe(1);
   });
+});
 
-  it('skips and reveals on Enter', async () => {
+describe('ExerciseRunner · only the first try is the attempt', () => {
+  it('records a miss, and neither the retries nor the right answer', async () => {
     const h = await started(harness());
-    const expected = h.answer;
-    h.runner.skip();
+    h.tick(300);
+    h.runner.noteOn(h.answer + 1, 'onscreen');
+    h.runner.noteOn(h.answer + 2, 'onscreen');
+    h.runner.noteOn(h.answer, 'midi');
 
-    expect(h.runner.outcome).toBe('skipped');
-    expect(h.runner.feedback?.detail).toBe('Skipped · Space to continue');
-    expect(h.runner.revealNotes).toEqual([expected]);
+    expect(h.attempts).toHaveLength(1);
+    expect(h.attempts[0]).toMatchObject({
+      correct: false,
+      score: 0,
+      answerSource: 'onscreen',
+      responseMs: 300,
+    });
+    // The score and the streak read the first try too.
     expect(h.runner.answered).toBe(1);
     expect(h.runner.correctCount).toBe(0);
+    expect(h.runner.streak).toBe(0);
+    expect(h.runner.bestStreak).toBe(0);
     expect(h.runner.accuracy).toBe(0);
+  });
+
+  it('records nothing more for a skip after a miss', async () => {
+    const h = await started(harness());
+    h.runner.noteOn(h.answer + 1, 'onscreen');
+    h.runner.skip();
+    expect(h.attempts).toHaveLength(1);
+    expect(h.runner.answered).toBe(1);
+  });
+
+  it('starts counting afresh on the next question', async () => {
+    const h = await started(harness());
+    h.runner.noteOn(h.answer + 1, 'onscreen');
+    h.runner.noteOn(h.answer, 'midi');
+    h.tick(FEEDBACK_CORRECT_MS);
+    h.tick(PLAYBACK_MS);
+
+    h.runner.noteOn(h.answer, 'midi');
+    expect(h.attempts.map((attempt) => attempt.correct)).toEqual([false, true]);
+    expect(h.runner.answered).toBe(2);
+    expect(h.runner.correctCount).toBe(1);
+    expect(h.runner.streak).toBe(1);
   });
 });
 
@@ -336,8 +462,7 @@ describe('ExerciseRunner · pausing', () => {
     // The reveal waits for the user, so it is where a drill gets abandoned —
     // and until slice 9a nothing re-armed the idle timer there.
     const h = await started(harness());
-    h.setNextAnswer(61);
-    h.runner.noteOn(62, 'midi');
+    h.runner.skip();
     expect(h.runner.phase).toBe('feedback');
     h.tick(REVEAL_DELAY_MS);
     const playsBefore = h.plays.length;
@@ -351,9 +476,8 @@ describe('ExerciseRunner · pausing', () => {
     expect(h.runner.phase).toBe('feedback');
     expect(h.plays.length).toBe(playsBefore + 1);
     expect(h.attempts).toHaveLength(1);
-    // And it is the *same* reveal: the wrong key the user played still carries
-    // its ✗ highlight, so they come back to the screen they walked away from.
-    expect(h.runner.answerNotes).toEqual([62]);
+    // And it is the *same* reveal the user walked away from.
+    expect(h.runner.outcome).toBe('skipped');
     expect(h.runner.revealNotes).toEqual([60]);
 
     // And it can be abandoned twice.
@@ -391,10 +515,10 @@ describe('ExerciseRunner · note-sequence answers', () => {
     expect(h.runner.phase).toBe('awaiting');
 
     h.tick(1);
-    expect(h.runner.phase).toBe('feedback');
     expect(h.runner.outcome).toBe('wrong');
-    // The miss is revealed, seen and heard, like any other (§4.3).
-    expect(h.runner.revealNotes).toEqual([60, 67]);
+    // A miss like any other: the question stays open for another try.
+    expect(h.runner.phase).toBe('awaiting');
+    expect(h.runner.revealNotes).toEqual([]);
   });
 
   it('backspace takes back the last note and keeps the answer open', async () => {
@@ -403,10 +527,8 @@ describe('ExerciseRunner · note-sequence answers', () => {
     h.runner.noteOn(63, 'midi');
     // Two notes already closed a two-note answer, so take one back *before*
     // the second: a fumbled first key must be recoverable.
-    expect(h.runner.phase).toBe('feedback');
+    expect(h.runner.outcome).toBe('wrong');
 
-    h.runner.advance();
-    h.tick(PLAYBACK_MS);
     h.runner.noteOn(63, 'midi');
     h.runner.backspace();
     expect(h.runner.answerNotes).toEqual([]);
@@ -450,7 +572,6 @@ describe('ExerciseRunner · note-sequence answers', () => {
     expect(h.runner.phase).toBe('awaiting');
 
     h.tick(1);
-    expect(h.runner.phase).toBe('feedback');
     expect(h.runner.outcome).toBe('wrong');
   });
 
@@ -489,7 +610,6 @@ describe('ExerciseRunner · note-sequence answers', () => {
     expect(h.runner.answerNotes).toEqual([62]);
 
     h.tick(1);
-    expect(h.runner.phase).toBe('feedback');
     expect(h.runner.outcome).toBe('wrong');
   });
 
@@ -504,7 +624,7 @@ describe('ExerciseRunner · note-sequence answers', () => {
     const h = await started(harness(broken as AnyExercise));
     h.runner.noteOn(62, 'midi');
     h.tick(SEQUENCE_GAP_MS);
-    expect(h.runner.phase).toBe('feedback');
+    expect(h.runner.outcome).toBe('wrong');
   });
 
   it('drops a half-played answer when the drill pauses', async () => {
@@ -561,10 +681,10 @@ describe('ExerciseRunner · a question that is read, not heard', () => {
     expect(h.plays[1].notes).toEqual([[h.answer]]);
   });
 
-  it('plays the answer, not the question, when the miss is revealed', async () => {
+  it('plays the answer, not the question, when it is revealed', async () => {
     const h = await started(harness(readStub));
     const expected = h.answer;
-    h.runner.noteOn(expected + 1, 'onscreen');
+    h.runner.skip();
     h.tick(REVEAL_DELAY_MS);
     expect(h.plays[1].notes).toEqual([[expected, expected + 4, expected + 10]]);
 
@@ -726,7 +846,7 @@ describe('ExerciseRunner · a mixed session (slice 9b)', () => {
     await open(runner);
     expect(runner.definition.id).toBe('stub');
     // Answer it: the attempt is logged against the exercise that asked.
-    runner.noteOn(0, 'onscreen');
+    runner.skip();
     runner.advance();
     expect(runner.definition.id).toBe('stub-two');
     expect(picked).toEqual(['stub', 'stub-two']);
@@ -739,7 +859,7 @@ describe('ExerciseRunner · a mixed session (slice 9b)', () => {
     expect(runner.phase).toBe('awaiting');
     // The time ran out while this question was on screen: it is still
     // answerable, and only the *next* question is refused.
-    runner.noteOn(0, 'onscreen');
+    runner.skip();
     expect(runner.phase).toBe('feedback');
     runner.advance();
     expect(runner.phase).toBe('summary');
@@ -839,6 +959,51 @@ function lastAnswer(): Extract<Answer, { kind: 'notes' }> {
 describe('ExerciseRunner · chord capture (ADR 0004)', () => {
   beforeEach(() => {
     graded.length = 0;
+  });
+
+  it('re-arms chord capture after a missed chord, and records only the miss', async () => {
+    const h = await started(harness(chordStub as AnyExercise));
+    press(h, [60, 63, 67, 70]);
+    h.tick(CHORD_SETTLE_MS);
+    lift(h, [60, 63, 67, 70]);
+    h.tick(CHORD_RELEASE_MS);
+    expect(h.runner.outcome).toBe('wrong');
+    expect(h.runner.phase).toBe('awaiting');
+    expect(h.runner.capture).toBeNull();
+    expect(h.runner.capturedChords).toEqual([]);
+
+    // The next try is a fresh capture of the same question.
+    press(h, [60, 64, 67, 71]);
+    expect(h.runner.outcome).toBeNull();
+    expect(h.runner.capture).toBe('chord');
+    h.tick(CHORD_SETTLE_MS);
+    lift(h, [60, 64, 67, 71]);
+    h.tick(CHORD_RELEASE_MS);
+    expect(h.runner.outcome).toBe('correct');
+    expect(lastAnswer().chords).toEqual([[60, 64, 67, 71]]);
+    expect(h.attempts.map((attempt) => attempt.correct)).toEqual([false]);
+  });
+
+  it('restarts a multi-chord answer from its first chord after a miss', async () => {
+    const h = await started(harness(multiChordStub));
+    for (let i = 0; i < 2; i += 1) {
+      press(h, [60, 64, 67, 71]);
+      h.tick(CHORD_SETTLE_MS);
+      lift(h, [60, 64, 67, 71]);
+      h.tick(CHORD_RELEASE_MS);
+    }
+    h.tick(SEQUENCE_GAP_MS);
+    expect(h.runner.outcome).toBe('wrong');
+    expect(lastAnswer().chords).toHaveLength(2);
+
+    for (let i = 0; i < 3; i += 1) {
+      press(h, [60, 64, 67, 71]);
+      h.tick(CHORD_SETTLE_MS);
+      lift(h, [60, 64, 67, 71]);
+      h.tick(CHORD_RELEASE_MS);
+    }
+    expect(h.runner.outcome).toBe('correct');
+    expect(lastAnswer().chords).toHaveLength(3);
   });
 
   it('closes a two-hand chord with a doubling on release, and grades it right', async () => {
@@ -968,7 +1133,7 @@ describe('ExerciseRunner · chord capture (ADR 0004)', () => {
     h.tick(SEQUENCE_GAP_MS - 1);
     expect(h.runner.phase).toBe('awaiting');
     h.tick(1);
-    expect(h.runner.phase).toBe('feedback');
+    expect(h.runner.outcome).toBe('wrong');
     expect(lastAnswer().chords).toHaveLength(1);
   });
 

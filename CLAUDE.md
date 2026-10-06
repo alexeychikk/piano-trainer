@@ -301,6 +301,21 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
   deliberately **not** a shortcut: `F` is a note key and §4.6 keeps that mapping live — the `⤢`
   button is the keyboard path. The runner sizes itself to the space the shell leaves (`.app` is a
   full-height flex column in `+layout.svelte`) and clips: it must never scroll.
+  **Retry until correct (owner request, 2026-10-06)**: a wrong answer **keeps the question**.
+  `#finish('wrong')` goes straight back to `awaiting` on the same `Question` (no `feedback` phase,
+  no timer, unlimited tries); the ✗ line (`✗ Try again` / `… · Enter to reveal`, `feedback.ts`)
+  and the ✗ keys stay up until the next try's first note-on clears them (`#clearMiss`). **A miss
+  reveals nothing** — no `revealNotes`, no reveal audio, and the announcement does not speak the
+  answer — or the retry would be copying; `Enter` (skip & reveal) is the way out, and is the only
+  path to `feedback:reveal`. `Grade.revealed` is therefore unread (kept as ADR §5's contract).
+  **Multi-step answers restart from step 1**: grading is whole-answer, so the runner cannot know
+  which chord of a ii-V-I or which note of a sequence failed; a miss resets the capture and the
+  next try is the whole answer again. **Only the first answer to a question is the attempt**
+  (`#attempted`, reset per question): it alone is emitted through `onAttempt`, and it alone moves
+  `answered`/`correctCount`/`streak` — a right answer after a miss is not a correct one, a skip
+  after a miss logs nothing, so mastery and the SRS schedule see exactly one miss. No
+  `PRACTICE_SCHEMA_VERSION` change. A correct answer still auto-advances (`FEEDBACK_CORRECT_MS`).
+  The UX source is core-practice-ux.md §4.2/§4.3.
   **The shortcut bar is the manual (§5.7) and carries the *whole* computer mapping when no MIDI
   device is connected** — `A W S E D F T G Y H U J K` **and** the `Z` / `X` octave shift (§4.6;
   with the root at the bottom of a voicing most answers need the shift between notes). Its wording

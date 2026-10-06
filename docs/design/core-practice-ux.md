@@ -33,7 +33,8 @@ consequences, applied everywhere in this document:
 | Eyes on hands | State must be readable **peripherally**: position + colour + shape, big blocks, no tooltips, no toasts in the corner. |
 | Drill, not quiz | Correct answers advance automatically; nothing waits for a click that the user cannot reach. |
 | No interruptions | **No modal dialogs, no confirm boxes, no popovers while an exercise is running.** Warnings are one-line banners under the top bar; settings that matter mid-session are on-screen controls, not dialogs. |
-| Sound is the content | The screen never carries information that was only audible — after a miss, the answer is shown *and* replayed. |
+| Sound is the content | The screen never carries information that was only audible — when the answer is revealed (`Enter`), it is shown *and* replayed. |
+| Try until right | A miss keeps the question: the user answers again, as many times as it takes (owner request, 2026-10-06). Only the first try is scored. |
 
 ---
 
@@ -227,7 +228,7 @@ The runner state machine (ADR §5) maps 1:1 to visual states. `t` is millisecond
 | `awaiting` | question prompt | active | live: pressed keys light `--accent`; a subtle 2 px `--accent` progress line under the status strip counts the settling window for chord answers | empty | answer captured → `grading` |
 | `grading` | unchanged | unchanged | keys freeze in the played state | empty | synchronous; ≤ 1 frame, no spinner |
 | `feedback:correct` | unchanged | dimmed | played keys turn `--success` | ✓ **Correct** + the answer name | auto after **650 ms** |
-| `feedback:wrong` | unchanged | active | played keys turn `--danger`; expected keys turn `--hint` outlined | ✗ **Minor 6th** + `You played a perfect 5th` + `Space to continue` | **waits** for space / Enter / any MIDI note-on |
+| `awaiting` after a miss (*retry*) | unchanged — the **same** question | active | played keys turn `--danger`; nothing is revealed | ✗ **Try again** + `You played a perfect 5th` + `Enter to reveal` | another answer straight away; its first note clears the ✗ keys and the line (the note slots return). Space replays the question, Enter reveals (→ `feedback:reveal`) |
 | `feedback:reveal` (skipped) | unchanged | active | expected keys `--hint`, filled | ⤳ **Minor 6th** + `Skipped` | waits for space |
 | `paused` | `Paused` | dimmed | keyboard dimmed 40 % | `Space to resume` | space |
 | `summary` (session end) | see §4.8 | — | — | — | — |
@@ -243,9 +244,10 @@ the musical reveal.
 | Answer captured → feedback shown | immediate (same frame). Grading is pure and synchronous. |
 | Correct → next question **presenting** | **650 ms**. Long enough to register ✓, too short to break flow. |
 | Correct in a streak ≥ 5 | **450 ms** — the drill speeds up as you get sharper. |
-| Wrong → reveal audio | after **250 ms**, auto-replay the correct answer once (the user must *hear* the right thing while the wrong one is still in memory). |
-| Wrong → next question | **only on user input** (space / Enter / MIDI note). No timeout: a miss is where learning happens. |
-| Skip (Enter) | reveal + audio immediately, then same as wrong. |
+| Wrong → retry | immediate (same frame): the runner is back in `awaiting` on the **same** question and takes another answer at once — unlimited tries, no timeout. Nothing is revealed or replayed, which would hand the answer over. A multi-note or multi-chord answer (a sequence, the ii-V-I) restarts from its first note/chord: grading is whole-answer, so the runner cannot tell which step failed. |
+| Wrong → next question | only by answering right (then as *Correct*), or `Enter` to reveal and then space / Enter / MIDI note. A miss is where learning happens. |
+| Skip (Enter, also after a miss) | reveal shown at once, the answer's audio after **250 ms**; then **waits** for space / Enter / any MIDI note-on (after the 500 ms lockout). |
+| Scoring a retried question | only the **first** answer is the attempt (logged, scored, streak). Later tries, the eventual right answer and a skip after a miss log nothing — mastery and the SRS schedule see one miss. |
 | Replay (space during `awaiting`) | immediate, restarts the `PlaybackPlan`. |
 | Chord answer settling | `CHORD_SETTLE_MS` (default 90 ms, ADR §3), visualised as the thin progress line. |
 | Note-sequence answer | closes after `SEQUENCE_GAP_MS` 1200 ms of silence or at expected length. |
@@ -676,11 +678,12 @@ initial focus on the replay button, and the skip/reveal path is reachable by tab
    keyboard traps; the `?` sheet and the range wizard are dismissible with `Esc`.
 4. **Screen reader**: the runner exposes a `role="status" aria-live="polite"` region that announces
    the prompt on each new question and the outcome once per answer (`Correct. Minor sixth.` /
-   `Incorrect. You played a perfect fifth. The answer was a minor sixth.`). The keyboard does not
+   `Incorrect. You played a perfect fifth. Try again.` — a miss never speaks the answer, the question
+   is still open; `Skipped. The answer was a minor sixth.` reveals it). The keyboard does not
    announce per-key events (§5.5).
 5. **Motion**: `prefers-reduced-motion` honoured (§7.5).
-6. **No audio-only information**: after every miss, the expected answer is both displayed on the
-   keyboard and named in text — the app is usable (if not enjoyable) with the sound off, which also
+6. **No audio-only information**: whenever the answer is revealed (`Enter`, also after a miss), it
+   is both displayed on the keyboard and named in text — the app is usable (if not enjoyable) with the sound off, which also
    makes Playwright tests trivial.
 7. **Zoom/reflow**: usable at 200 % browser zoom on a 1440 px screen — the keyboard shrinks (§5.2),
    the prompt wraps, nothing is clipped.
@@ -702,8 +705,8 @@ no apologies. Musical terms spelled out in feedback (`minor 6th`, not `m6`), abb
 | Presenting | `Listen…` (only when the exercise has no prompt title) |
 | Correct | `✓ Correct` + the answer name, e.g. `Minor 6th` |
 | Correct, streak ≥ 5 | `✓ Correct · 7 in a row` |
-| Wrong | `✗ Minor 6th` / `You played a perfect 5th · Space to continue` |
-| Wrong, partial credit | `✗ 3 of 4 tones — missing the 7th · Space to continue` |
+| Wrong (the question stays) | `✗ Try again` / `You played a perfect 5th · Enter to reveal` |
+| Wrong, partial credit | `✗ Try again` / `3 of 4 tones — missing the 7th · Enter to reveal` |
 | Skipped | `⤳ Minor 6th` / `Skipped · Space to continue` |
 | Paused | `Paused` / `Space to resume` |
 | No MIDI | `No MIDI keyboard — answer with the on-screen keys or A W S E D F T G Y H U J K` |
