@@ -231,7 +231,11 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
     budget sees — **held keys** (a chord from a MIDI piano is four `noteOn`s, ~+9 dBFS at the
     target). A compressor applies spec-defined make-up gain to *everything*; `LIMITER_TRIM` cancels
     it (`compressorMakeupGain`), so below the threshold the chain is unity. Every voice, sample and
-    click connects to `audio.destination` (the volume gain), so nothing bypasses it.
+    click connects to `audio.destination` (the volume gain), so nothing bypasses it — **except
+    the first `LIMITER_SETTLE_S` (250 ms)**: a fresh compressor's detector starts at zero and ducks
+    what it hears first (−16 dB over 10 ms, measured in Chromium), which is exactly where the note
+    whose key press created the context sits. A parallel bypass carries the master until then and
+    crossfades onto the limiter over 50 ms.
   - Measured, not assumed: `level.test.ts` renders the scheduled voices sample by sample (no
     `OfflineAudioContext` in jsdom) and `e2e/output-level.spec.ts` swaps Chromium's real
     `OfflineAudioContext` in for the engine's `AudioContext` on `/play` and reads the rendered peak.

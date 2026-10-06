@@ -104,7 +104,7 @@ function renderSynth(): number {
   const voices = ctx.oscillators
     .filter((osc) => osc.type === 'triangle')
     .map((osc, index) => {
-      const gain = ctx.gains[index + 2]; // after the master and the trim
+      const gain = ctx.gains[index + 3]; // after the master, trim and bypass
       const peak = gain.gain.events.find((e) => e.kind === 'linear')!.value;
       return {
         start: osc.startedAt ?? 0,

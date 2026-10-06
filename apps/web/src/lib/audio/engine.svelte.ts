@@ -20,6 +20,8 @@ import type { Midi } from '$lib/theory';
 import {
   DEFAULT_VELOCITY,
   LIMITER,
+  LIMITER_CROSSFADE_S,
+  LIMITER_SETTLE_S,
   LIMITER_TRIM,
   SOUNDFONT_OUTPUT_GAIN,
   clampVelocity,
@@ -75,7 +77,9 @@ function audioContextCtor(): AudioContextCtor | null {
 /**
  * The master bus: volume → limiter → make-up trim → speakers. Returns the
  * volume gain, which is what every voice and click connects to, so nothing
- * reaches the speakers without passing the limiter (`LIMITER` in `gain.ts`).
+ * reaches the speakers without passing the limiter (`LIMITER` in `gain.ts`) —
+ * except during its first `LIMITER_SETTLE_S`, when a parallel bypass carries
+ * the master while the fresh compressor settles, then crossfades onto it.
  */
 export function createOutputChain(ctx: BaseAudioContext): GainNode {
   const master = ctx.createGain();
@@ -85,11 +89,23 @@ export function createOutputChain(ctx: BaseAudioContext): GainNode {
   limiter.ratio.value = LIMITER.ratio;
   limiter.attack.value = LIMITER.attackS;
   limiter.release.value = LIMITER.releaseS;
-  const trim = ctx.createGain();
-  trim.gain.value = LIMITER_TRIM;
+
+  const settled = ctx.currentTime + LIMITER_SETTLE_S;
+  const crossfaded = settled + LIMITER_CROSSFADE_S;
+  const limited = ctx.createGain(); // the make-up trim, faded in
+  limited.gain.value = 0;
+  limited.gain.setValueAtTime(0, settled);
+  limited.gain.linearRampToValueAtTime(LIMITER_TRIM, crossfaded);
+  const bypass = ctx.createGain();
+  bypass.gain.value = 1;
+  bypass.gain.setValueAtTime(1, settled);
+  bypass.gain.linearRampToValueAtTime(0, crossfaded);
+
   master.connect(limiter);
-  limiter.connect(trim);
-  trim.connect(ctx.destination);
+  limiter.connect(limited);
+  limited.connect(ctx.destination);
+  master.connect(bypass);
+  bypass.connect(ctx.destination);
   return master;
 }
 

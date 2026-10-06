@@ -232,6 +232,18 @@ export const LIMITER_TRIM =
   1 / compressorMakeupGain(LIMITER.thresholdDb, LIMITER.ratio);
 
 /**
+ * A fresh `DynamicsCompressorNode` is not at rest: its detector starts from
+ * zero, so it ducks whatever it hears first (measured in Chromium: −16 dB over
+ * its first 10 ms, still −3 dB at 50 ms, settled by 250 ms). The first note of
+ * a session is played at the very moment the context is created, so the master
+ * bypasses the limiter for `LIMITER_SETTLE_S`, then crossfades onto it over
+ * `LIMITER_CROSSFADE_S` — a one-off at start-up, after which every note passes
+ * the limiter.
+ */
+export const LIMITER_SETTLE_S = 0.25;
+export const LIMITER_CROSSFADE_S = 0.05;
+
+/**
  * The limiter's steady-state curve (hard knee, trim included): what a sustained
  * peak `input` leaves the master at. Its attack and release are the browser's
  * — this is the static half, the one a unit test can hold it to.

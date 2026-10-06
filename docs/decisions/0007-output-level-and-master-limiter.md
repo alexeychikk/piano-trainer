@@ -25,6 +25,11 @@
    the synth (+6.8 dBFS) and only escaped on the soundfont by being 20 dB too quiet. The compressor's
    spec-defined make-up gain (`(1 / curve(0 dBFS)) ^ 0.6`, +1.14 dB here) is cancelled by the trim,
    so below the threshold the chain is exactly unity and the calibration holds.
+4. **A start-up bypass.** A fresh `DynamicsCompressorNode` is not at rest: its detector starts at
+   zero, so it ducks its first sound (Chromium: −16 dB over the first 10 ms, still about −3 dB at
+   50 ms, settled by 250 ms). The note whose key press creates the context sits right there, so a
+   parallel unity bypass carries the master for `LIMITER_SETTLE_S` (250 ms), then crossfades onto
+   the limiter over 50 ms. That one-off quarter-second is unlimited.
 
 ## Measured (100 % volume, peak dBFS; `level.test.ts` renders, limiter at its static curve)
 
