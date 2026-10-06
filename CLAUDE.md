@@ -256,6 +256,14 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
     ~50 ms, −6 dBFS — 3 dB under a note now, where it used to be 16 dB over the soundfont) goes to
     the master like everything else, so the limiter catches a click landing on a chord attack. It is
     a single short voice and lowering it would defeat "audible under playing".
+- **Echo of played notes (`$lib/midi/echo.ts`)**: the layout's one subscription is
+  `createNoteEcho(audio, () => settings.value.playMidiNotes)`. With `playMidiNotes` off (Settings →
+  Sound, owner request 2026-10-06) a **MIDI port's** note-ons — and the offs of those swallowed
+  pitches — never reach the engine, so the user hears only their piano; on-screen and computer keys
+  always sound, and prompts/replays/the metronome never pass through it. It is the **only** place
+  downstream of `midiInput` that branches on `source`, and it decides sound only — highlights and
+  grading read the same events. `playMidiNotes` has no engine owner, so it is a plain
+  `settings.patch` (and import restores it the same way). Settings only: the top bar has no room.
 - **Sound settings** (`instrument`, `volume`, `soundEnabled`, `tempoBpm`, `beatsPerBar`) live in the
   same `settings` store, but UI changes them through `audio.setVolume/setMuted/setInstrument` and
   `metronome.setTempo/setBeatsPerBar` — never by patching `settings` directly, because the engine

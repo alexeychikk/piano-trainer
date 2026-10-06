@@ -270,7 +270,11 @@ describe('Settings → Data, a file that would empty the log', () => {
    * deliberately left alone. `sessionLengthMin` was missed once.
    */
   it('restores the preferences a backup carries, session length included', async () => {
-    settings.patch({ sessionLengthMin: 5, countIn: 'off' });
+    settings.patch({
+      sessionLengthMin: 5,
+      countIn: 'off',
+      playMidiNotes: true,
+    });
 
     const { container } = render(DataSection);
     pick(
@@ -278,7 +282,11 @@ describe('Settings → Data, a file that would empty the log', () => {
       JSON.stringify({
         schemaVersion: PRACTICE_SCHEMA_VERSION,
         exportedAt: 1_700_000_000_000,
-        settings: { sessionLengthMin: 20, countIn: '1-bar' },
+        settings: {
+          sessionLengthMin: 20,
+          countIn: '1-bar',
+          playMidiNotes: false,
+        },
         skills: [],
         attempts: [{ ...attempt, ts: 1 }],
       }),
@@ -287,6 +295,7 @@ describe('Settings → Data, a file that would empty the log', () => {
 
     expect(settings.value.sessionLengthMin).toBe(20);
     expect(settings.value.countIn).toBe('1-bar');
+    expect(settings.value.playMidiNotes).toBe(false);
   });
 
   it('a file that carries something still imports without a question', async () => {

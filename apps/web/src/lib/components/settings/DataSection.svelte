@@ -234,6 +234,8 @@
       countIn: imported.countIn,
       focusMode: imported.focusMode,
       sessionLengthMin: imported.sessionLengthMin,
+      // Read per note by the echo router; no engine owns it.
+      playMidiNotes: imported.playMidiNotes,
     });
     midiInput.select(imported.midiDeviceKey);
     audio.setVolume(imported.volume);

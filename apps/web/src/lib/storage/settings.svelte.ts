@@ -32,6 +32,13 @@ export interface AppSettings {
   volume: number;
   /** Master mute. `false` keeps the app completely silent. */
   soundEnabled: boolean;
+  /**
+   * Sound the notes played on a **MIDI device** through the app (owner
+   * request, 2026-10-06). Off = hear only the piano itself; the on-screen and
+   * computer keys, prompts, replays and the metronome still sound. Read per
+   * note by `$lib/midi/echo.ts`, so no engine owns it.
+   */
+  playMidiNotes: boolean;
   /** Metronome tempo in BPM. */
   tempoBpm: number;
   /** Metronome beats per bar; beat 1 is the accented downbeat. */
@@ -70,6 +77,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   instrument: 'acoustic_grand_piano',
   volume: 0.72,
   soundEnabled: true,
+  playMidiNotes: true,
   tempoBpm: 90,
   beatsPerBar: 4,
   // C2–C7: the 61-key piano the keyboard component defaults to, until the
@@ -141,6 +149,10 @@ export function parseSettingsValue(parsed: unknown): AppSettings {
       typeof record.soundEnabled === 'boolean'
         ? record.soundEnabled
         : DEFAULT_SETTINGS.soundEnabled,
+    playMidiNotes:
+      typeof record.playMidiNotes === 'boolean'
+        ? record.playMidiNotes
+        : DEFAULT_SETTINGS.playMidiNotes,
     tempoBpm: boundedNumber(
       record.tempoBpm,
       TEMPO_RANGE,
