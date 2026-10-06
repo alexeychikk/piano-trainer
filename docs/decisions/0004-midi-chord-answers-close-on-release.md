@@ -108,7 +108,8 @@ progress:
      stuck key is cleared by `midiInput.releaseAll()` on disconnect, or by the idle pause.
 6. **Not affected:** `replay` (the answer survives it, as a sequence does), `pause` (drops the
    answer in progress, as for a sequence), `skip`, the idle timer (re-armed on every counted on/off),
-   `ADVANCE_LOCKOUT_MS`. `Backspace` is a no-op in chord capture.
+   `ADVANCE_LOCKOUT_MS` (since removed: a closed question no longer advances on a note at all — the
+   piano's C1, `Enter`, `Space` or `Next` moves on, 2026-10-06). `Backspace` is a no-op in chord capture.
 7. **The sustain pedal is not read.** `parseMidiMessage` ignores CC 64, and that stays. The pedal
    changes what sounds, not which keys are down, and chord boundaries are made with the hands. A
    rolled chord whose early keys are released *without* the pedal is still one chord in a

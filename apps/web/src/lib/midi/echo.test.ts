@@ -108,3 +108,24 @@ describe('createNoteEcho', () => {
     expect(h.calls).toEqual(['on 64 80', 'off 64']);
   });
 });
+
+describe('createNoteEcho · control notes', () => {
+  it('never sounds a control note, nor its release, whatever the setting', () => {
+    const calls: string[] = [];
+    const route = createNoteEcho(
+      {
+        noteOn: (midi) => calls.push(`on ${midi}`),
+        noteOff: (midi) => calls.push(`off ${midi}`),
+      },
+      () => true,
+      (midi, source) => source === 'midi' && midi === 24,
+    );
+    route(on(24, 'midi'));
+    route(off(24, 'midi'));
+    route(on(24, 'onscreen'));
+    route(off(24, 'onscreen'));
+    route(on(60, 'midi'));
+    route(off(60, 'midi'));
+    expect(calls).toEqual(['on 24', 'off 24', 'on 60', 'off 60']);
+  });
+});

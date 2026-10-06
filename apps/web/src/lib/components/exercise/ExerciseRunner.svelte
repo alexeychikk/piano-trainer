@@ -33,6 +33,10 @@
   import type { AnyExercise } from '$lib/exercises/types';
   import { midiToName, type Midi } from '$lib/theory';
   import { midiInput } from '$lib/midi/input.svelte';
+  import {
+    NEXT_QUESTION_KEY_NAME,
+    reserveNextQuestionNote,
+  } from '$lib/midi/next-key';
   import { buildPlan, targetSkillsFor } from '$lib/practice/planner';
   import type { SessionRun } from '$lib/practice/session.svelte';
   import { practice } from '$lib/practice/store.svelte';
@@ -315,13 +319,20 @@
       return;
     }
     if (event.key === 'Enter') {
+      // Skip & reveal while a question is open, next once it is closed.
       event.preventDefault();
-      runner.skip();
+      runner.enter();
       return;
     }
   }
 
+  /** A closed question (correct or revealed) waits for the user to move on. */
+  const closed = $derived(runner.phase === 'feedback');
+
   onMount(() => {
+    // While a drill is on screen the piano's C1 is the next-question control:
+    // the echo stops sounding it, and the runner never grades it.
+    const releaseNextKey = reserveNextQuestionNote();
     // Answers arrive as note events, whatever the source — MIDI port,
     // on-screen keys or computer keys (ADR §3): the runner cannot tell.
     const unsubscribe = midiInput.subscribe((event) => {
@@ -333,6 +344,7 @@
     window.addEventListener('keydown', onKeyDown);
     return () => {
       unsubscribe();
+      releaseNextKey();
       window.removeEventListener('keydown', onKeyDown);
       runner.destroy();
     };
@@ -467,6 +479,23 @@
           </GlyphBadge>
           <p class="feedback-line">{runner.feedback.headline}</p>
           <p class="feedback-detail">{runner.feedback.detail}</p>
+          {#if closed}
+            <!-- The pointer's way on (a closed question no longer advances by
+                 itself): the same action as `Enter` and the piano's C1. -->
+            <span class="next">
+              <Button
+                variant="primary"
+                testId="next"
+                onclick={(event: MouseEvent) => {
+                  // §4.5: a clicked button must not keep focus.
+                  (event.currentTarget as HTMLElement).blur();
+                  runner.advance();
+                }}
+              >
+                Next
+              </Button>
+            </span>
+          {/if}
         </div>
       </div>
     {:else if sequenceMode || chordMode}
@@ -506,13 +535,20 @@
 
   {#if !focusMode}
     <p class="shortcuts" data-testid="shortcuts">
-      <Chip variant="key">Space</Chip> replay ·
-      <Chip variant="key">Enter</Chip> skip &amp; reveal ·
-      {#if sequenceMode}
+      {#if closed}
+        <!-- A closed question waits: the piano's C1 or Enter moves on, and
+             anything else played is free play. -->
+        Press <Chip variant="key">{NEXT_QUESTION_KEY_NAME}</Chip> or
+        <Chip variant="key">Enter</Chip> for next ·
+      {:else}
+        <Chip variant="key">Space</Chip> replay ·
+        <Chip variant="key">Enter</Chip> skip &amp; reveal ·
+      {/if}
+      {#if sequenceMode && !closed}
         <Chip variant="key">⌫</Chip> clear last ·
       {/if}
       <Chip variant="key">Esc</Chip> end
-      {#if chordReleased && midiInput.connected}
+      {#if chordReleased && midiInput.connected && !closed}
         · {RELEASE_TO_ANSWER_HINT}
       {/if}
       {#if !midiInput.connected}
@@ -791,13 +827,18 @@
     color: var(--tone-color);
   }
 
-  /* Sentence case, sans: it carries `Space to continue` verbatim (§5.5). */
+  /* Sentence case, sans: it carries `Press C1 or Enter for next` verbatim
+     (§5.5). */
   .feedback-detail {
     margin-left: auto;
     padding-left: var(--space-4);
     color: var(--text-2);
     font-size: var(--fs-body-lg);
     text-align: right;
+  }
+
+  .next {
+    flex-shrink: 0;
   }
 
   /* The answer slots (§4.4): the sunken HUD readout treatment the prompt well

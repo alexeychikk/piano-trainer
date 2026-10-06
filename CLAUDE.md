@@ -319,8 +319,8 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
     asserts the rule for whatever is registered.
 - **The runner** is `$lib/exercises/runner.svelte.ts` (state machine, score, streak) plus
   `$lib/components/exercise/ExerciseRunner.svelte` (the §4 frame). **Every drill-rhythm constant
-  lives in the runner module** — `FEEDBACK_CORRECT_MS`, `FEEDBACK_STREAK_MS`, `REVEAL_DELAY_MS`,
-  `IDLE_PAUSE_MS`, `ADVANCE_LOCKOUT_MS` — never in a component. Audio reaches it through the
+  lives in the runner module** — `REVEAL_DELAY_MS`, `IDLE_PAUSE_MS`, `CHORD_SETTLE_MS`,
+  `CHORD_RELEASE_MS`, `SEQUENCE_GAP_MS` — never in a component. Audio reaches it through the
   injectable `PlaybackApi` (`playback.ts`, `createAudioPlayback()`), which is also how the state
   machine is tested with fake timers and no Web Audio. Answers arrive as `midiInput` events, so the
   runner cannot tell a MIDI piano from the computer keys. Copy is in `feedback.ts`; keyboard
@@ -341,8 +341,24 @@ only previews) and sets `forbidOnly` + 2 retries; locally `pnpm test:e2e` still 
   (`#attempted`, reset per question): it alone is emitted through `onAttempt`, and it alone moves
   `answered`/`correctCount`/`streak` — a right answer after a miss is not a correct one, a skip
   after a miss logs nothing, so mastery and the SRS schedule see exactly one miss. No
-  `PRACTICE_SCHEMA_VERSION` change. A correct answer still auto-advances (`FEEDBACK_CORRECT_MS`).
-  The UX source is core-practice-ux.md §4.2/§4.3.
+  `PRACTICE_SCHEMA_VERSION` change. The UX source is core-practice-ux.md §4.2/§4.3.
+  **No auto-advance (owner request, 2026-10-06)**: a closed question — correct, or revealed by a
+  skip — **stays in `feedback`** until the user asks; there is no feedback timer and no advance
+  lockout any more (`FEEDBACK_CORRECT_MS`/`FEEDBACK_STREAK_MS`/`ADVANCE_LOCKOUT_MS` are gone). In
+  `feedback` every note is **free play**: it sounds and lights the keyboard, and is never graded,
+  captured or logged (it only re-arms the idle timer, so a drill being played on is not paused).
+  The way on is `runner.advance()`, reached by `Enter` (`runner.enter()`: skip & reveal while
+  open, next once closed), `Space`, the strip's `Next` button and **the piano's C1**.
+  `NEXT_QUESTION_MIDI_NOTE = 24` (C1, the lowest C of an 88-key piano) is the **one constant** for
+  it, in `$lib/midi/next-key.ts` with its copy (`NEXT_QUESTION_HINT` `Press C1 or Enter for next`,
+  key name derived with `midiToName`). It is a **control, MIDI-port only** (`isNextQuestionNote`;
+  an on-screen or computer-key C1 is an ordinary note): in every phase the runner routes it before
+  grading — `idle` starts, `paused` resumes, `feedback` advances, anything else **consumes** it —
+  so it never joins an answer, and `answerableRange()` clamps `GenerateContext.range` above it so
+  no question can need it. It also never **sounds**: the frame `reserveNextQuestionNote()`s while
+  mounted and the layout's echo takes `isReservedNextQuestionNote` as `createNoteEcho`'s third
+  argument (`isControl`; a swallowed on swallows its off), so Free Play still plays a low C.
+  `/session` is the same frame and inherits all of it; `Esc` still ends a session into its summary.
   **The shortcut bar is the manual (§5.7) and carries the *whole* computer mapping when no MIDI
   device is connected** — `A W S E D F T G Y H U J K` **and** the `Z` / `X` octave shift (§4.6;
   with the root at the bottom of a voicing most answers need the shift between notes). Its wording

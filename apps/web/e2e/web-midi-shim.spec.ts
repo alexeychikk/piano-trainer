@@ -225,6 +225,69 @@ test('a chord drill grades a chord played on the piano (ADR 0004 capture)', asyn
   expect(consoleErrors).toEqual([]);
 });
 
+test('a correct answer waits; the piano C1 moves on and is never graded', async ({
+  page,
+}) => {
+  const consoleErrors = watchConsole(page);
+  await insideTheShell(page);
+
+  await page.goto('/practice/find-the-note/');
+  const prompt = page.getByTestId('prompt');
+  const feedback = page.getByTestId('feedback');
+  const answered = page.getByTestId('answered');
+  await expect(prompt).toHaveText('Ready?');
+  await expect(page.getByLabel(CONNECTED)).toBeVisible();
+  await page.keyboard.press('Space');
+  await expect(prompt).toHaveText('Which note?');
+  await expect(page.getByTestId('replay')).toBeEnabled();
+
+  // C1 while a question is open is consumed: the C4 after it is the answer
+  // (a miss names C4, never C1). C4 is right 1 time in 61 — then C1 moves on
+  // and the next question is tried.
+  let missLine = '';
+  for (let tries = 0; tries < 4 && !missLine; tries += 1) {
+    await expect(feedback).toBeEmpty();
+    await send(page, [...on(24), ...off(24), ...on(60), ...off(60)]);
+    await expect(feedback).toContainText(/try again|correct/i);
+    const text = (await feedback.textContent()) ?? '';
+    if (/try again/i.test(text)) missLine = text;
+    else await send(page, [...on(24), ...off(24)]);
+  }
+  expect(missLine).toContain('You played C4');
+  const [, distance, unit, direction] =
+    /You played C4 — (?:the right note, )?(\d+) (semitone|octave)s? too (high|low)/.exec(
+      missLine,
+    ) ?? [];
+  const step = (unit === 'octave' ? 12 : 1) * Number(distance);
+  const expected = 60 + (direction === 'high' ? -step : step);
+  const before = (await answered.textContent()) ?? '';
+
+  // The right note: the success state stays, with the hint, on the piano too.
+  await send(page, [...on(expected), ...off(expected)]);
+  await expect(feedback).toContainText(/correct/i);
+  await expect(feedback).toContainText('Press C1 or Enter for next');
+  await expect(page.getByTestId('shortcuts')).toContainText(
+    'Press C1 or Enter for next',
+  );
+
+  // Free play: lit and heard, never graded.
+  await send(page, on(expected + 1));
+  await expect(
+    page.locator('[data-piano-keyboard] button[aria-pressed="true"]'),
+  ).toHaveCount(1);
+  await send(page, off(expected + 1));
+  await expect(feedback).toContainText(/correct/i);
+  await expect(answered).toHaveText(before);
+
+  // C1 moves on, and is not an answer to the next question either.
+  await send(page, [...on(24), ...off(24)]);
+  await expect(feedback).toBeEmpty();
+  await expect(prompt).toHaveText('Which note?');
+  await expect(answered).toHaveText(before);
+
+  expect(consoleErrors).toEqual([]);
+});
+
 test('unplugging says so, and the same piano comes back on replug', async ({
   page,
 }) => {

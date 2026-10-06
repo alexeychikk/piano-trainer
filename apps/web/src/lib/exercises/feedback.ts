@@ -1,3 +1,5 @@
+import { NEXT_QUESTION_HINT } from '$lib/midi/next-key';
+
 /**
  * What the feedback slot says (UX spec §4.2 states and the §9 copy deck) and
  * what a screen reader hears (§8.4). Pure, so the wording lives in one place
@@ -14,7 +16,7 @@ export interface FeedbackLines {
    * which never names the answer — the question is still open).
    */
   headline: string;
-  /** The second line, including the "Space to continue" prompt. */
+  /** The second line, including the "Press C1 or Enter for next" prompt. */
   detail: string;
   tone: 'success' | 'danger' | 'hint';
 }
@@ -32,7 +34,11 @@ export interface FeedbackInput {
 /** The streak at which the drill speeds up and says so (§4.3, §9). */
 export const STREAK_CALLOUT = 5;
 
-const CONTINUE = 'Space to continue';
+/**
+ * A closed question — correct or revealed — waits for the user (owner request,
+ * 2026-10-06), who may play on freely until they ask for the next one.
+ */
+const CONTINUE = NEXT_QUESTION_HINT;
 /** A miss keeps the question open (retry until correct); this is the way out. */
 const REVEAL = 'Enter to reveal';
 /** A miss's headline: the question is still open, so it is not the answer. */
@@ -49,7 +55,7 @@ export function feedbackLines({
       glyph: '✓',
       headline:
         streak >= STREAK_CALLOUT ? `Correct · ${streak} in a row` : 'Correct',
-      detail: expectedLabel,
+      detail: `${expectedLabel} · ${CONTINUE}`,
       tone: 'success',
     };
   }

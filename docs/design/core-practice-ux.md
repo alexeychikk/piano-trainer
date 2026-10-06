@@ -31,7 +31,7 @@ consequences, applied everywhere in this document:
 | Read at ~1 m | Prompt type ≥ 56 px, feedback words ≥ 32 px, no body copy below 15 px anywhere. |
 | Hands on keys | Every in-exercise action is on the **space bar**, **Enter**, **1–9**, or the MIDI keyboard. The mouse is optional for the whole practice loop. |
 | Eyes on hands | State must be readable **peripherally**: position + colour + shape, big blocks, no tooltips, no toasts in the corner. |
-| Drill, not quiz | Correct answers advance automatically; nothing waits for a click that the user cannot reach. |
+| Drill, not quiz | A correct answer waits on its ✓ while the user plays on freely; the next question is one key away — the piano's **C1**, `Enter` or `Space` — so nothing waits for a click that the user cannot reach (owner request, 2026-10-06). |
 | No interruptions | **No modal dialogs, no confirm boxes, no popovers while an exercise is running.** Warnings are one-line banners under the top bar; settings that matter mid-session are on-screen controls, not dialogs. |
 | Sound is the content | The screen never carries information that was only audible — when the answer is revealed (`Enter`), it is shown *and* replayed. |
 | Try until right | A miss keeps the question: the user answers again, as many times as it takes (owner request, 2026-10-06). Only the first try is scored. |
@@ -227,9 +227,9 @@ The runner state machine (ADR §5) maps 1:1 to visual states. `t` is millisecond
 | `presenting` | question prompt | active, shows `▶ Playing…`, spinner-free | keys inert; if the exercise reveals a root, it glows `--hint` | empty | auto → `awaiting` when playback ends |
 | `awaiting` | question prompt | active | live: pressed keys light `--accent`; a subtle 2 px `--accent` progress line under the status strip counts the settling window for chord answers | empty | answer captured → `grading` |
 | `grading` | unchanged | unchanged | keys freeze in the played state | empty | synchronous; ≤ 1 frame, no spinner |
-| `feedback:correct` | unchanged | dimmed | played keys turn `--success` | ✓ **Correct** + the answer name | auto after **650 ms** |
+| `feedback:correct` | unchanged | active | played keys turn `--success`; further notes are **free play** — they sound and light `--accent`, and are never graded or logged | ✓ **Correct** + the answer name + `Press C1 or Enter for next`, and a primary `Next` button at the strip's end | **waits**: MIDI C1 / Enter / Space / `Next` → `presenting` |
 | `awaiting` after a miss (*retry*) | unchanged — the **same** question | active | played keys turn `--danger`; nothing is revealed | ✗ **Try again** + `You played a perfect 5th` + `Enter to reveal` | another answer straight away; its first note clears the ✗ keys and the line (the note slots return). Space replays the question, Enter reveals (→ `feedback:reveal`) |
-| `feedback:reveal` (skipped) | unchanged | active | expected keys `--hint`, filled | ⤳ **Minor 6th** + `Skipped` | waits for space |
+| `feedback:reveal` (skipped) | unchanged | active | expected keys `--hint`, filled; further notes are free play, as after a correct answer | ⤳ **Minor 6th** + `Skipped · Press C1 or Enter for next`, and `Next` | **waits**: MIDI C1 / Enter / Space / `Next` → `presenting` |
 | `paused` | `Paused` | dimmed | keyboard dimmed 40 % | `Space to resume` | space |
 | `summary` (session end) | see §4.8 | — | — | — | — |
 
@@ -242,11 +242,11 @@ the musical reveal.
 | Event | Timing |
 | --- | --- |
 | Answer captured → feedback shown | immediate (same frame). Grading is pure and synchronous. |
-| Correct → next question **presenting** | **650 ms**. Long enough to register ✓, too short to break flow. |
-| Correct in a streak ≥ 5 | **450 ms** — the drill speeds up as you get sharper. |
+| Correct → next question **presenting** | **waits for the user** (owner request, 2026-10-06): the ✓ stays up and the user may play on — echo the answer, try a voicing, play along — without grading. The piano's **C1** (MIDI note 24, `NEXT_QUESTION_MIDI_NOTE`), `Enter`, `Space` or the `Next` button moves on. There is no timer and no lockout, because no ordinary note advances. |
+| The piano's C1 | a **control, never a note**, from a MIDI port only: it advances from `feedback`, starts an idle drill, resumes a paused one, and is **consumed** (not graded, not part of an answer) while a question is open. It never sounds through the app while a drill is on screen, and no question is asked on it (the runner clamps the generation range above C1). An on-screen or computer-key C1 is an ordinary note. |
 | Wrong → retry | immediate (same frame): the runner is back in `awaiting` on the **same** question and takes another answer at once — unlimited tries, no timeout. Nothing is revealed or replayed, which would hand the answer over. A multi-note or multi-chord answer (a sequence, the ii-V-I) restarts from its first note/chord: grading is whole-answer, so the runner cannot tell which step failed. |
-| Wrong → next question | only by answering right (then as *Correct*), or `Enter` to reveal and then space / Enter / MIDI note. A miss is where learning happens. |
-| Skip (Enter, also after a miss) | reveal shown at once, the answer's audio after **250 ms**; then **waits** for space / Enter / any MIDI note-on (after the 500 ms lockout). |
+| Wrong → next question | only by answering right (then as *Correct*), or `Enter` to reveal and then C1 / Enter / Space / `Next`. A miss is where learning happens. |
+| Skip (Enter, also after a miss) | reveal shown at once, the answer's audio after **250 ms**; then **waits** for C1 / Enter / Space / `Next` — other notes are free play, so the reveal can be played along with. |
 | Scoring a retried question | only the **first** answer is the attempt (logged, scored, streak). Later tries, the eventual right answer and a skip after a miss log nothing — mastery and the SRS schedule see one miss. |
 | Replay (space during `awaiting`) | immediate, restarts the `PlaybackPlan`. |
 | Chord answer settling | `CHORD_SETTLE_MS` (default 90 ms, ADR §3), visualised as the thin progress line. |
@@ -254,8 +254,9 @@ the musical reveal.
 | Session auto-pause | after **90 s** with no input: state `paused`, audio stopped. |
 
 Values live in one place: `$lib/exercises/runner.svelte.ts` as exported constants
-(`FEEDBACK_CORRECT_MS = 650`, `FEEDBACK_STREAK_MS = 450`, `REVEAL_DELAY_MS = 250`,
-`IDLE_PAUSE_MS = 90_000`), so tuning is a one-line change.
+(`REVEAL_DELAY_MS = 250`, `IDLE_PAUSE_MS = 90_000`), so tuning is a one-line change; the advance
+key is `NEXT_QUESTION_MIDI_NOTE = 24` in `$lib/midi/next-key.ts`. Free play in `feedback` re-arms the
+idle timer, so a user playing on is never paused.
 
 ### 4.4 Answer input per `answerMode`
 
@@ -279,7 +280,8 @@ of the piano; a mouse is not.
 | Key | Action | Where |
 | --- | --- | --- |
 | `Space` | replay the question / continue after feedback / start when idle / resume when paused | runner |
-| `Enter` | skip & reveal | runner (`awaiting` only) |
+| `Enter` | skip & reveal while a question is open; next question once it is closed (correct or revealed) | runner |
+| MIDI **C1** | next question (from `feedback`); start / resume; consumed otherwise | runner, MIDI port only |
 | `1`–`9` | pick choice *n* | `choice` mode |
 | `Backspace` | clear the answer in progress | `note-sequence` |
 | `Esc` | end the session → summary (`/session`) or back to `/` | runner |
@@ -703,11 +705,12 @@ no apologies. Musical terms spelled out in feedback (`minor 6th`, not `m6`), abb
 | Home empty state | `Sit at your piano. Connect it, or use the on-screen keyboard. You answer by playing — space replays the sound.` |
 | Runner idle | `Ready?` / `Press space to start` |
 | Presenting | `Listen…` (only when the exercise has no prompt title) |
-| Correct | `✓ Correct` + the answer name, e.g. `Minor 6th` |
+| Correct | `✓ Correct` + the answer name, e.g. `Minor 6th · Press C1 or Enter for next` |
+| Shortcut bar, question closed | `Press C1 or Enter for next · Esc end` (+ the computer mapping with no MIDI device) |
 | Correct, streak ≥ 5 | `✓ Correct · 7 in a row` |
 | Wrong (the question stays) | `✗ Try again` / `You played a perfect 5th · Enter to reveal` |
 | Wrong, partial credit | `✗ Try again` / `3 of 4 tones — missing the 7th · Enter to reveal` |
-| Skipped | `⤳ Minor 6th` / `Skipped · Space to continue` |
+| Skipped | `⤳ Minor 6th` / `Skipped · Press C1 or Enter for next` |
 | Paused | `Paused` / `Space to resume` |
 | No MIDI | `No MIDI keyboard — answer with the on-screen keys or A W S E D F T G Y H U J K` |
 | MIDI unsupported | `This browser has no Web MIDI. Chrome, Edge and Opera do — or play on-screen.` |

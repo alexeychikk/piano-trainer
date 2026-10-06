@@ -40,15 +40,24 @@ export function soundsInApp(
  *
  * `playMidiNotes` is read per note-on, so the setting applies to the very next
  * key without re-wiring anything.
+ *
+ * `isControl` names note-ons that are controls rather than notes — the
+ * drill's next-question key (`next-key.ts`) while a drill is on screen. They
+ * are never sounded, whatever the setting, and their release is swallowed the
+ * same way.
  */
 export function createNoteEcho(
   sink: NoteSink,
   playMidiNotes: () => boolean,
+  isControl: (midi: Midi, source: NoteSource) => boolean = () => false,
 ): (event: NoteEvent) => void {
   const silenced = new Set<Midi>();
   return (event) => {
     if (event.type === 'on') {
-      if (soundsInApp(event.source, playMidiNotes())) {
+      if (
+        !isControl(event.midi, event.source) &&
+        soundsInApp(event.source, playMidiNotes())
+      ) {
         silenced.delete(event.midi);
         sink.noteOn(event.midi, event.velocity);
       } else {

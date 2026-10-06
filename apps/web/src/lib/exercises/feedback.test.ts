@@ -2,13 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { feedbackAnnouncement, feedbackLines } from './feedback';
 
 describe('feedbackLines', () => {
-  it('says Correct, with the answer named (copy deck §9)', () => {
+  it('says Correct, with the answer named and the way on (copy deck §9)', () => {
     expect(
       feedbackLines({ outcome: 'correct', expectedLabel: 'C4', streak: 1 }),
     ).toEqual({
       glyph: '✓',
       headline: 'Correct',
-      detail: 'C4',
+      detail: 'C4 · Press C1 or Enter for next',
       tone: 'success',
     });
   });
@@ -53,7 +53,7 @@ describe('feedbackLines', () => {
     ).toEqual({
       glyph: '⤳',
       headline: 'G3',
-      detail: 'Skipped · Space to continue',
+      detail: 'Skipped · Press C1 or Enter for next',
       tone: 'hint',
     });
   });

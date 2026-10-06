@@ -15,12 +15,15 @@
 
 import { metronome } from '$lib/audio/metronome.svelte';
 import type { NoteSource } from '$lib/midi/events';
+import {
+  isNextQuestionNote,
+  NEXT_QUESTION_MIDI_NOTE,
+} from '$lib/midi/next-key';
 import { settings } from '$lib/storage/settings.svelte';
 import type { Midi } from '$lib/theory';
 import {
   feedbackAnnouncement,
   feedbackLines,
-  STREAK_CALLOUT,
   type FeedbackLines,
   type Outcome,
 } from './feedback';
@@ -39,10 +42,6 @@ import type {
 
 // ---- drill rhythm (UX spec §4.3) ----------------------------------------
 
-/** Correct → next question. */
-export const FEEDBACK_CORRECT_MS = 650;
-/** Correct at a streak of `STREAK_CALLOUT` or more — the drill speeds up. */
-export const FEEDBACK_STREAK_MS = 450;
 /**
  * Skip → auto-replay the answer, while the question is still in memory. A
  * miss no longer reveals (retry until correct, 2026-10-06): it re-arms the
@@ -51,12 +50,6 @@ export const FEEDBACK_STREAK_MS = 450;
 export const REVEAL_DELAY_MS = 250;
 /** No input for this long → `paused`, audio stopped. */
 export const IDLE_PAUSE_MS = 90_000;
-/**
- * How long feedback ignores note-ons before one may advance the drill. Not in
- * the spec: without it the key that was just graded — or the second note of a
- * fumbled answer — would skip past the reveal before it has been heard.
- */
-export const ADVANCE_LOCKOUT_MS = 500;
 /**
  * `note-sequence` (ADR §3, UX §4.3): the answer closes after this much silence
  * — or as soon as it is the expected length, which is the usual way it ends.
@@ -238,7 +231,6 @@ export class ExerciseRunner {
   #attempted = false;
   #recent: SkillId[] = [];
   #askedAt = 0;
-  #feedbackAt = 0;
 
   constructor(definition: AnyExercise, options: RunnerOptions = {}) {
     this.definition = definition;
@@ -306,7 +298,17 @@ export class ExerciseRunner {
     }
   }
 
-  /** `Enter` — skip and reveal (UX spec §4.3). */
+  /**
+   * `Enter` (UX spec §4.5): skip and reveal while a question is open, next
+   * question once it is closed (a correct answer or a reveal). One entry
+   * point, like `space()`, so the shortcut and the `Next` button agree.
+   */
+  enter(): void {
+    if (this.phase === 'feedback') this.advance();
+    else this.skip();
+  }
+
+  /** Skip and reveal (UX spec §4.3). */
   skip(): void {
     if (this.phase !== 'awaiting' || !this.question) return;
     this.#finish('skipped', { correct: false, score: 0 }, [], 'onscreen');
@@ -314,6 +316,13 @@ export class ExerciseRunner {
 
   /** A note from any source (UX spec §4.4 `single-note`: first note commits). */
   noteOn(midi: Midi, source: NoteSource): void {
+    // The piano's next-question key is a control, not a note: it never
+    // reaches an answer. It moves on from a closed question and is consumed
+    // everywhere else, so a stray low C can never be graded as a miss.
+    if (isNextQuestionNote(midi, source)) {
+      this.#nextQuestionKey();
+      return;
+    }
     switch (this.phase) {
       case 'idle':
         void this.start();
@@ -322,9 +331,11 @@ export class ExerciseRunner {
         this.resume();
         return;
       case 'feedback':
-        // Any note-on continues, once the reveal has had time to be heard.
-        if (this.#now() - this.#feedbackAt >= ADVANCE_LOCKOUT_MS)
-          this.advance();
+        // Free play: the question is closed, so what is played now sounds and
+        // lights (the layout and the frame read the same event) but is graded
+        // and logged nowhere. Only the next-question key, `Enter`, `Space` or
+        // `Next` moves on. Playing is activity, so it keeps the drill awake.
+        this.#armIdleTimer();
         return;
       case 'awaiting':
         break;
@@ -381,6 +392,27 @@ export class ExerciseRunner {
   }
 
   /**
+   * `NEXT_QUESTION_MIDI_NOTE` from a MIDI port. Like any key it starts an idle
+   * drill and resumes a paused one; on a closed question it advances; while a
+   * question is open or playing it is swallowed — not an answer, not a miss.
+   */
+  #nextQuestionKey(): void {
+    switch (this.phase) {
+      case 'idle':
+        void this.start();
+        return;
+      case 'paused':
+        this.resume();
+        return;
+      case 'feedback':
+        this.advance();
+        return;
+      default:
+        return;
+    }
+  }
+
+  /**
    * A key went up. Only chord capture listens (ADR 0004 §2): a sequence answer
    * is made of note-ons, and a key that was already down when the answer began
    * — held from the reveal, or the note that advanced the drill — was never
@@ -390,6 +422,9 @@ export class ExerciseRunner {
   noteOff(midi: Midi, source: NoteSource): void {
     if (this.phase !== 'awaiting' && this.phase !== 'presenting') return;
     if (this.capture !== 'chord' || source !== 'midi') return;
+    // The next-question key never joined the capture; its release is not
+    // part of the answer either (`#held` would not have it — this says why).
+    if (isNextQuestionNote(midi, source)) return;
     if (!this.#held.delete(midi)) return;
     this.#offSinceMoment = true;
     if (this.phase === 'awaiting') this.#armIdleTimer();
@@ -480,7 +515,6 @@ export class ExerciseRunner {
       // and logged already, so re-presenting the question would ask it twice.
       this.#pausedInFeedback = false;
       this.phase = 'feedback';
-      this.#feedbackAt = this.#now();
       this.#armIdleTimer();
       this.#replayReveal();
       return;
@@ -789,7 +823,7 @@ export class ExerciseRunner {
       settings: this.definition.defaultSettings,
       rng: mulberry32(seed),
       seed,
-      range: this.#range(),
+      range: answerableRange(this.#range()),
       targetSkillId,
       history: { recentSkillIds: [...this.#recent] },
     });
@@ -862,7 +896,7 @@ export class ExerciseRunner {
     this.#clearTimer();
     this.#clearIdleTimer();
     // A graded answer is closed: a late note belongs to the feedback phase
-    // (where it advances the drill), never to the sequence just played.
+    // (free play), never to the sequence just played.
     this.#resetSequence();
 
     this.answerNotes = notes;
@@ -910,24 +944,16 @@ export class ExerciseRunner {
       return;
     }
 
+    // A closed question waits for the user (owner request, 2026-10-06): a
+    // correct answer no longer moves on by itself, so the user can play on
+    // freely until `NEXT_QUESTION_MIDI_NOTE`, `Enter`, `Space` or `Next`. It
+    // is therefore exactly where a drill gets abandoned, and the idle timer
+    // is what takes an abandoned one to `paused`.
     this.phase = 'feedback';
-    this.#feedbackAt = this.#now();
-    // A reveal waits for the user, so it is exactly where a drill gets
-    // abandoned — and until slice 9a nothing re-armed the idle timer here, so
-    // an abandoned reveal never reached `paused` and kept the audio context
-    // and the question on screen for good (pre-existing since slice 4).
     this.#armIdleTimer();
 
-    if (outcome === 'correct') {
-      // The drill speeds up as you get sharper (§4.3).
-      const delay =
-        this.streak >= STREAK_CALLOUT
-          ? FEEDBACK_STREAK_MS
-          : FEEDBACK_CORRECT_MS;
-      this.#setTimer(() => this.advance(), delay);
-      return;
-    }
-    // A skip waits for the user — but hears the right answer first.
+    if (outcome === 'correct') return;
+    // A skip hears the right answer first.
     this.#setTimer(() => this.#replayReveal(), REVEAL_DELAY_MS);
   }
 
@@ -990,6 +1016,18 @@ export class ExerciseRunner {
     clearTimeout(this.#idleTimer);
     this.#idleTimer = null;
   }
+}
+
+/**
+ * The range a question may be asked on: the keyboard, minus the next-question
+ * key and everything below it. A MIDI C1 is a control (`next-key.ts`), so a
+ * question whose answer needed it could not be answered from a piano; on any
+ * keyboard narrower than an 88-key piano this is the range unchanged.
+ */
+export function answerableRange(range: KeyRange): KeyRange {
+  return range.low > NEXT_QUESTION_MIDI_NOTE
+    ? range
+    : { low: NEXT_QUESTION_MIDI_NOTE + 1, high: range.high };
 }
 
 function ascendingUnique(notes: readonly Midi[]): Midi[] {
